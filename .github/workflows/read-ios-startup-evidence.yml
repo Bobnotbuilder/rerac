@@ -1,0 +1,58 @@
+name: Read ReRAC iOS startup evidence
+on:
+  workflow_dispatch:
+  push:
+    branches: ['ios/arm64-poc']
+    paths: ['.github/workflows/read-ios-startup-evidence.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  readback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Read original public build evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: ReRAC-iOS-arm64-build-evidence
+          run-id: 39020282748
+          github-token: ${{ github.token }}
+          path: readback/baseline
+      - name: Read corrected build evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: ReRAC-iOS-arm64-build-evidence
+          run-id: 39030237195
+          github-token: ${{ github.token }}
+          path: readback/current
+      - name: Print bounded synthetic-test diagnostics and original image identity
+        shell: python
+        run: |
+          import base64, pathlib, re
+          base = pathlib.Path("readback/baseline/device-load-commands.txt").read_text()
+          matches = re.findall(r"\buuid ([0-9A-Fa-f-]{36})", base, re.I)
+          print("BASELINE_EXECUTABLE_UUIDS", matches)
+          print("BASELINE_UUID_MATCHES_SUPPLIED_CRASH", any(
+              value.lower() == "11266921-ebda-3d4f-a34d-9714854decea" for value in matches))
+          current = pathlib.Path("readback/current")
+          for name, limit in [("ipa-verification.json", 10000),
+                              ("symbols-manifest.json", 5000),
+                              ("simulator-startup-result.json", 5000),
+                              ("simulator-startup.log", 10000),
+                              ("simulator-console-tail.log", 10000),
+                              ("simulator-cargo.log", 10000),
+                              ("simulator-xcodebuild.log", 10000)]:
+              path = current/name
+              print("EVIDENCE_FILE_BEGIN", name)
+              print(path.read_text(errors="replace")[-limit:] if path.exists() else "NOT_PRODUCED")
+              print("EVIDENCE_FILE_END", name)
+          image = current/"import-screen-ios27.png"
+          if image.exists() and image.stat().st_size <= 262144:
+              data = base64.b64encode(image.read_bytes()).decode("ascii")
+              print("SCREENSHOT_BASE64_BEGIN")
+              for offset in range(0, len(data), 4096):
+                  print("SCREENSHOT_CHUNK", data[offset:offset+4096])
+              print("SCREENSHOT_BASE64_END")
+          else:
+              print("SCREENSHOT_INLINE_UNAVAILABLE_OR_SIZE_BOUND_EXCEEDED")
