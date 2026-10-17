@@ -48,7 +48,8 @@ jobs:
               print(path.read_text(errors="replace")[-limit:] if path.exists() else "NOT_PRODUCED")
               print("EVIDENCE_FILE_END", name)
           image = current/"import-screen-ios27.png"
-          if image.exists() and image.stat().st_size <= 262144:
+          print("SCREENSHOT_BYTES", image.stat().st_size if image.exists() else 0)
+          if image.exists() and image.stat().st_size <= 1048576:
               data = base64.b64encode(image.read_bytes()).decode("ascii")
               print("SCREENSHOT_BASE64_BEGIN")
               for offset in range(0, len(data), 4096):
