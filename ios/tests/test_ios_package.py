@@ -41,13 +41,20 @@ class IOSPackage(unittest.TestCase):
         self.info = dict(CFBundleExecutable='ReRAC', CFBundlePackageType='APPL',
                          CFBundleShortVersionString='0.3.4', CFBundleSupportedPlatforms=['iPhoneOS'],
                          UIDeviceFamily=[1], UIFileSharingEnabled=True, LSSupportsOpeningDocumentsInPlace=True,
-                         MinimumOSVersion='16.0', UIRequiredDeviceCapabilities=['arm64', 'metal'])
+                         MinimumOSVersion='16.0', UIRequiredDeviceCapabilities=['arm64', 'metal'],
+                         UIApplicationSceneManifest={
+                             'UIApplicationSupportsMultipleScenes':False,
+                             'UISceneConfigurations':{'UIWindowSceneSessionRoleApplication':[
+                                 {'UISceneClassName':'UIWindowScene','UISceneConfigurationName':'ReRAC'}]}})
         (self.app/'Info.plist').write_bytes(plistlib.dumps(self.info))
         (self.app/'ReRAC').write_bytes(macho())
         (self.app/'ReRAC').chmod(0o755)
         (self.app/'LaunchScreen.storyboardc').mkdir()
         (self.app/'LaunchScreen.storyboardc/Info.plist').write_bytes(plistlib.dumps({}))
         self.source = self.root/'source'
+        (self.source/'ios').mkdir(parents=True)
+        (self.source/'ios/ThirdPartyNotices.txt').write_text('Synthetic dependency license')
+        (self.app/'ThirdPartyNotices.txt').write_text('Synthetic dependency license')
         shaders = self.source/'crates/rc-engine/assets/shaders'
         shaders.mkdir(parents=True)
         (shaders/'test.wgsl').write_text('// synthetic fixture')
@@ -119,6 +126,17 @@ class IOSPackage(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'CFBundleSupportedPlatforms'):
             self.files()
 
+    def test_legacy_lifecycle_manifest_rejected(self):
+        del self.info['UIApplicationSceneManifest']
+        (self.app/'Info.plist').write_bytes(plistlib.dumps(self.info))
+        with self.assertRaisesRegex(ValueError, 'scene manifest'):
+            self.files()
+
+    def test_missing_license_rejected(self):
+        (self.app/'ThirdPartyNotices.txt').unlink()
+        with self.assertRaisesRegex(ValueError, 'license'):
+            self.files()
+
     def archive(self, files, extra=None):
         target = self.root/'fixture.ipa'
         with zipfile.ZipFile(target, 'w') as archive:
@@ -159,7 +177,11 @@ class IOSPackage(unittest.TestCase):
                       'generic/platform=iOS', 'CODE_SIGNING_ALLOWED=NO', 'if: always()',
                       'ios/verify_ipa.py', 'shasum -a 256', '--version-json'):
             self.assertIn(value, workflow)
-        self.assertNotIn('--target aarch64-apple-ios-sim', workflow)
+        device_step = workflow.split('- name: Compile physical iPhone ARM64 game', 1)[1].split(
+            '- name: Build native unsigned iPhone app', 1)[0]
+        self.assertIn('--target aarch64-apple-ios -p rc-engine --bin rerac', device_step)
+        self.assertNotIn('--target aarch64-apple-ios-sim', device_step)
+        self.assertIn('python3 ios/simulator_startup_smoke.py', workflow)
         self.assertNotIn('upload-artifact@v4\n        with:\n          name: game-data', workflow)
 
     def test_desktop_startup_preserved_and_ios_validates_extraction(self):

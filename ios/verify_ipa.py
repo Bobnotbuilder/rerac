@@ -74,6 +74,14 @@ def bundle_files(app, source, version):
             raise ValueError('bundle plist mismatch: '+key)
     if info.get('MinimumOSVersion') != '16.0':
         raise ValueError('unexpected minimum iOS')
+    manifest = info.get('UIApplicationSceneManifest', {})
+    scenes = manifest.get('UISceneConfigurations', {}).get('UIWindowSceneSessionRoleApplication', [])
+    if manifest.get('UIApplicationSupportsMultipleScenes') is not False or len(scenes) != 1:
+        raise ValueError('single UIKit scene manifest required')
+    if scenes[0].get('UISceneClassName') != 'UIWindowScene':
+        raise ValueError('UIWindowScene class required')
+    if files.get('ThirdPartyNotices.txt') != (source/'ios/ThirdPartyNotices.txt').read_bytes():
+        raise ValueError('dependency license notices missing or changed')
     if info.get('UIRequiredDeviceCapabilities') != ['arm64', 'metal']:
         raise ValueError('ARM64/Metal capability declaration required')
     if not (app/'ReRAC').stat().st_mode & 0o111:
@@ -83,7 +91,7 @@ def bundle_files(app, source, version):
     if not shaders:
         raise ValueError('upstream shaders absent')
     for path, raw in files.items():
-        if path in ('ReRAC', 'Info.plist', 'PkgInfo'):
+        if path in ('ReRAC', 'Info.plist', 'PkgInfo', 'ThirdPartyNotices.txt'):
             continue
         if path.startswith('LaunchScreen.storyboardc/'):
             continue

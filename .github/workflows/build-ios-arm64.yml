@@ -29,6 +29,7 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.1
       CARGO_BUILD_JOBS: '3'
       CARGO_TERM_COLOR: never
+      RERAC_SOURCE_COMMIT: ${{ github.sha }}
       IPHONEOS_DEPLOYMENT_TARGET: '16.0'
       CARGO_TARGET_AARCH64_APPLE_IOS_RUSTFLAGS: '-C link-arg=-Wl,-no_adhoc_codesign'
     steps:
@@ -54,10 +55,12 @@ jobs:
       - name: Install exact Rust device target
         run: |
           set -euo pipefail
-          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --target aarch64-apple-ios
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --target aarch64-apple-ios --target aarch64-apple-ios-sim
           rustup run "$RUSTUP_TOOLCHAIN" rustc -vV | tee evidence/rustc.txt
           rustup target list --installed --toolchain "$RUSTUP_TOOLCHAIN" | tee evidence/rust-targets.txt
           python3 -m unittest discover -s ios/tests -v 2>&1 | tee evidence/poc-contract-tests.log
+          cargo metadata --locked --format-version 1 > evidence/cargo-metadata.json
+          cargo tree --locked -i winit | tee evidence/winit-resolution.txt
 
       - name: Compile unchanged desktop target and CLI contract
         run: |
@@ -67,6 +70,10 @@ jobs:
           python3 -c 'import json; d=json.load(open("evidence/desktop-version.json")); assert d==dict(name="rerac",version="0.3.4",game="rac1",data_format=1)'
 
       - name: Compile physical iPhone ARM64 game
+        env:
+          CARGO_PROFILE_RELEASE_DEBUG: '1'
+          CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: packed
+          CARGO_PROFILE_RELEASE_STRIP: none
         run: |
           set -euo pipefail
           SDKROOT="$(xcrun --sdk iphoneos --show-sdk-path)" cargo build --release --locked --target aarch64-apple-ios -p rc-engine --bin rerac 2>&1 | tee evidence/ios-rust-build.log
@@ -87,6 +94,11 @@ jobs:
           test ! -e "$app/embedded.mobileprovision"
           echo "RERAC_APP=$app" >> "$GITHUB_ENV"
 
+      - name: Collect matching device dSYM
+        run: |
+          set -euo pipefail
+          python3 ios/collect_symbols.py --app "$RERAC_APP" --rust-binary "$RERAC_RUST_EXECUTABLE" --output symbols --evidence evidence
+
       - name: Verify device app and package unsigned IPA
         run: |
           set -euo pipefail
@@ -103,6 +115,17 @@ jobs:
             dist/ReRAC-iOS-arm64-unsigned.ipa.sha256
           if-no-files-found: error
           retention-days: 14
+
+      - name: Retain UUID-matched device symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReRAC-iOS-arm64-symbols
+          path: symbols/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Launch actual import screen on iOS 27 simulator without game data
+        run: python3 ios/simulator_startup_smoke.py
 
       - name: Upload build evidence, also on failure
         if: always()

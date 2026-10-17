@@ -25,3 +25,11 @@ split-debuginfo = "packed"
 opt-level = 3
 # No debug info for external crates (Bevy, wgpu, ...): macOS unpacked debug objects grew target/ to 132 GB.
 debug = false
+
+# iOS 27 scene lifecycle backport; see ios/SCENE_LIFECYCLE_REPAIR.md.
+[patch.crates-io]
+winit = { git = "https://github.com/molenick/winit", rev = "94d6a23c425023810a0879aa7a03abb2e4f1decc" }
+
+# Keep the existing released dpi dependency; do not take the fork's path copy.
+[patch."https://github.com/molenick/winit"]
+dpi = { version = "=0.1.2" }

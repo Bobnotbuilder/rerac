@@ -129,13 +129,18 @@ struct ScreenshotRequest {
 
 fn main() -> anyhow::Result<()> {
     crash_log::install();
+    #[cfg(target_os = "ios")]
+    ios::begin_launch();
     // `--version-json` exits here; a missing or wrong data folder exits with a clear error (crate::disc_source).
     #[cfg(not(target_os = "ios"))]
     let root = disc_source::startup();
     #[cfg(target_os = "ios")]
     let root = match ios::prepare() {
         Ok(root) => root,
-        Err(error) => { ios::show_import_instructions(&error.to_string()); return Ok(()); }
+        Err(error) => {
+            ios::diagnostic("IMPORT_SCREEN_REQUESTED", &error.to_string());
+            ios::show_import_instructions(&error.to_string()); return Ok(());
+        }
     };
     let index = level_load::level_index();
     // The one level load (the boot's and every runtime level change's, crate::level_switch): the level data, the loader's
@@ -144,7 +149,19 @@ fn main() -> anyhow::Result<()> {
     // The boot's game state first: the level's spawn test reads its save bits (crate::gameplay::level_spawn_save).
     let boot = gameplay::boot_state(&root, index);
     let save = gameplay::level_spawn_save(boot.as_ref().map(|(gs, _)| gs), index);
-    let level_switch::LevelBundle { mut level, spawn, fog: fog_state, .. } = level_switch::load_bundle(&root, index, &save)?;
+    let loaded = level_switch::load_bundle(&root, index, &save);
+    #[cfg(not(target_os = "ios"))]
+    let bundle = loaded?;
+    #[cfg(target_os = "ios")]
+    let bundle = match loaded {
+        Ok(bundle) => bundle,
+        Err(error) => {
+            ios::diagnostic("BOOT_LEVEL_LOAD_FAILED", &error.to_string());
+            ios::show_import_instructions(&format!("Extracted game data could not load: {error}"));
+            return Ok(());
+        }
+    };
+    let level_switch::LevelBundle { mut level, spawn, fog: fog_state, .. } = bundle;
     let t = &level.timings;
     let bg = level.background;
     println!(
@@ -267,6 +284,12 @@ fn main() -> anyhow::Result<()> {
         let secs = std::env::var("RC_SCREENSHOT_DELAY").ok().and_then(|s| s.parse().ok()).unwrap_or(3.0);
         app.insert_resource(ScreenshotRequest { path: path.into(), delay: Duration::from_secs_f32(secs), min_frames: 30 })
             .add_systems(Update, take_screenshot);
+    }
+    #[cfg(target_os = "ios")]
+    {
+        ios::diagnostic("BEVY_GAME_RUN_REQUESTED", "");
+        app.add_systems(Startup, ios::startup_diagnostics)
+            .add_systems(Update, ios::update_diagnostics);
     }
     app.run();
     Ok(())
