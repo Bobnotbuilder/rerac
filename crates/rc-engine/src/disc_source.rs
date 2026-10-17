@@ -170,6 +170,16 @@ pub fn startup() -> PathBuf {
     ROOT.get_or_init(|| root).clone()
 }
 
+/// iOS uses the same strict extraction checks, without CLI parsing or process::exit.
+#[cfg(target_os = "ios")]
+pub fn mobile_startup(root: PathBuf) -> Result<PathBuf> {
+    check(&root, Origin::Env).map_err(|e| anyhow::anyhow!("{}", e.message))?;
+    if let Some(existing) = ROOT.get() {
+        anyhow::ensure!(existing == &root, "data root already initialized differently");
+    }
+    Ok(ROOT.get_or_init(|| root).clone())
+}
+
 /// The data root chosen by [`startup`]; before it (unit tests), the same order without `--data-dir` or checks.
 pub fn data_root() -> PathBuf {
     ROOT.get().cloned().unwrap_or_else(|| {

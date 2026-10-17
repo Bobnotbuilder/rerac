@@ -1,0 +1,114 @@
+name: ReRAC iOS ARM64 unsigned proof of concept
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['ios/arm64-poc']
+    paths:
+      - '.github/workflows/build-ios-arm64.yml'
+      - 'ios/**'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rerac-ios-poc-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  device:
+    runs-on: xcode-27
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      RUSTUP_TOOLCHAIN: 1.99.1
+      CARGO_BUILD_JOBS: '3'
+      CARGO_TERM_COLOR: never
+      IPHONEOS_DEPLOYMENT_TARGET: '16.0'
+      CARGO_TARGET_AARCH64_APPLE_IOS_RUSTFLAGS: '-C link-arg=-Wl,-no_adhoc_codesign'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Record exact source, runner and SDK evidence
+        run: |
+          set -euo pipefail
+          mkdir -p evidence dist
+          test "$(uname -m)" = arm64
+          git merge-base --is-ancestor 8b2c9a92c48661bdc04fecd87c7e199d376d0b6a HEAD
+          git rev-parse HEAD | tee evidence/source-commit.txt
+          git status --porcelain | tee evidence/source-status.txt
+          git diff 8b2c9a92c48661bdc04fecd87c7e199d376d0b6a --stat | tee evidence/source-changes.txt
+          sw_vers | tee evidence/runner.txt
+          xcodebuild -version | tee evidence/xcode.txt
+          xcrun --sdk iphoneos --show-sdk-version | tee evidence/iphoneos-sdk.txt
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/rerac-ios-target" >> "$GITHUB_ENV"
+
+      - name: Install exact Rust device target
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --target aarch64-apple-ios
+          rustup run "$RUSTUP_TOOLCHAIN" rustc -vV | tee evidence/rustc.txt
+          rustup target list --installed --toolchain "$RUSTUP_TOOLCHAIN" | tee evidence/rust-targets.txt
+          python3 -m unittest discover -s ios/tests -v 2>&1 | tee evidence/poc-contract-tests.log
+
+      - name: Compile unchanged desktop target and CLI contract
+        run: |
+          set -euo pipefail
+          cargo build --release --locked -p rc-engine --bin rerac 2>&1 | tee evidence/desktop-build.log
+          "$CARGO_TARGET_DIR/release/rerac" --version-json | tee evidence/desktop-version.json
+          python3 -c 'import json; d=json.load(open("evidence/desktop-version.json")); assert d==dict(name="rerac",version="0.3.4",game="rac1",data_format=1)'
+
+      - name: Compile physical iPhone ARM64 game
+        run: |
+          set -euo pipefail
+          SDKROOT="$(xcrun --sdk iphoneos --show-sdk-path)" cargo build --release --locked --target aarch64-apple-ios -p rc-engine --bin rerac 2>&1 | tee evidence/ios-rust-build.log
+          bin="$CARGO_TARGET_DIR/aarch64-apple-ios/release/rerac"
+          file "$bin" | tee evidence/device-file.txt
+          test "$(lipo -archs "$bin")" = arm64
+          otool -l "$bin" > evidence/device-load-commands.txt
+          otool -L "$bin" > evidence/device-frameworks.txt
+          echo "RERAC_RUST_EXECUTABLE=$bin" >> "$GITHUB_ENV"
+
+      - name: Build native unsigned iPhone app
+        run: |
+          set -euo pipefail
+          xcodebuild -project ios/ReRAC.xcodeproj -scheme ReRAC -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/rerac-ios-xcode" ARCHS=arm64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= build 2>&1 | tee evidence/xcodebuild.log
+          app="$RUNNER_TEMP/rerac-ios-xcode/Build/Products/Release-iphoneos/ReRAC.app"
+          plutil -lint "$app/Info.plist"
+          test ! -d "$app/_CodeSignature"
+          test ! -e "$app/embedded.mobileprovision"
+          echo "RERAC_APP=$app" >> "$GITHUB_ENV"
+
+      - name: Verify device app and package unsigned IPA
+        run: |
+          set -euo pipefail
+          python3 ios/verify_ipa.py --app "$RERAC_APP" --source . --version 0.3.4 --output dist --evidence evidence 2>&1 | tee evidence/package-verification.log
+          unzip -t dist/ReRAC-iOS-arm64-unsigned.ipa | tee evidence/ipa-zip-test.txt
+          shasum -a 256 dist/ReRAC-iOS-arm64-unsigned.ipa | tee evidence/ipa-sha256.txt
+
+      - name: Upload unsigned IPA and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReRAC-iOS-arm64-unsigned
+          path: |
+            dist/ReRAC-iOS-arm64-unsigned.ipa
+            dist/ReRAC-iOS-arm64-unsigned.ipa.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build evidence, also on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReRAC-iOS-arm64-build-evidence
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 14

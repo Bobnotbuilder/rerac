@@ -28,6 +28,9 @@
 //!   `RC_SETTINGS_PAGE=0` no "Port Options" page in the Options menu, crate::menu_render
 //! - `RC_SHADOWS=0|1`, `RC_SHADOW_DEBUG=1`, `RC_SHADOW_TRACE=1` the moby shadows, crate::shadow_render
 
+#[cfg(target_os = "ios")]
+mod ios;
+
 mod crash_log;
 mod asset_write;
 mod audio_out;
@@ -127,7 +130,13 @@ struct ScreenshotRequest {
 fn main() -> anyhow::Result<()> {
     crash_log::install();
     // `--version-json` exits here; a missing or wrong data folder exits with a clear error (crate::disc_source).
+    #[cfg(not(target_os = "ios"))]
     let root = disc_source::startup();
+    #[cfg(target_os = "ios")]
+    let root = match ios::prepare() {
+        Ok(root) => root,
+        Err(error) => { ios::show_import_instructions(&error.to_string()); return Ok(()); }
+    };
     let index = level_load::level_index();
     // The one level load (the boot's and every runtime level change's, crate::level_switch): the level data, the loader's
     // ship and the load-time update pass (crate::moby_spawn; RC_SPAWN_RULES=0 skips it), the fog zones and the
@@ -151,7 +160,14 @@ fn main() -> anyhow::Result<()> {
         DefaultPlugins
             .set(WindowPlugin {
                 // 4:3, as the TV showed the 512x416 GS draw buffer (crate::display; docs/plan/render_pipeline.md).
-                primary_window: Some(Window { title: "ReRAC".into(), resolution: (1024u32, 768u32).into(), ..default() }),
+                primary_window: Some(Window {
+                    title: "ReRAC".into(), resolution: (1024u32, 768u32).into(),
+                    #[cfg(target_os = "ios")]
+                    mode: bevy::window::WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
+                    #[cfg(target_os = "ios")]
+                    resizable: false,
+                    ..default()
+                }),
                 ..default()
             })
             .set(AssetPlugin { file_path: asset_dir(), ..default() })
