@@ -31,6 +31,9 @@
 #[cfg(target_os = "ios")]
 mod ios;
 
+#[cfg(target_os = "ios")]
+mod ios_gamepad;
+
 mod crash_log;
 mod asset_write;
 mod audio_out;
@@ -119,6 +122,14 @@ use tfrag_render::{game_to_bevy, TfragMaterial};
 #[derive(Resource)]
 struct Level(LoadedLevel);
 
+fn runtime_plugins() -> bevy::app::PluginGroupBuilder {
+    let plugins = DefaultPlugins.build();
+    // gilrs uses desktop HID. Only the native GameController adapter owns iOS pads.
+    #[cfg(target_os = "ios")]
+    let plugins = plugins.disable::<bevy::gilrs::GilrsPlugin>();
+    plugins
+}
+
 #[derive(Resource)]
 struct ScreenshotRequest {
     path: PathBuf,
@@ -131,6 +142,8 @@ fn main() -> anyhow::Result<()> {
     crash_log::install();
     #[cfg(target_os = "ios")]
     ios::begin_launch();
+    #[cfg(target_os = "ios")]
+    ios_gamepad::simulator_self_test();
     // `--version-json` exits here; a missing or wrong data folder exits with a clear error (crate::disc_source).
     #[cfg(not(target_os = "ios"))]
     let root = disc_source::startup();
@@ -174,7 +187,7 @@ fn main() -> anyhow::Result<()> {
 
     let mut app = App::new();
     app.add_plugins(
-        DefaultPlugins
+        runtime_plugins()
             .set(WindowPlugin {
                 // 4:3, as the TV showed the 512x416 GS draw buffer (crate::display; docs/plan/render_pipeline.md).
                 primary_window: Some(Window {
@@ -288,7 +301,8 @@ fn main() -> anyhow::Result<()> {
     #[cfg(target_os = "ios")]
     {
         ios::diagnostic("BEVY_GAME_RUN_REQUESTED", "");
-        app.add_systems(Startup, ios::startup_diagnostics)
+        app.add_plugins(ios_gamepad::IOSGameControllerPlugin)
+            .add_systems(Startup, ios::startup_diagnostics)
             .add_systems(Update, ios::update_diagnostics);
     }
     app.run();

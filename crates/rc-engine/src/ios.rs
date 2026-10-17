@@ -98,12 +98,13 @@ pub fn show_import_instructions(error: &str) {
     );
     let mut app = App::new();
     app
-        .add_plugins(DefaultPlugins.set(AssetPlugin { file_path: crate::asset_dir(), ..default() })
+        .add_plugins(crate::runtime_plugins().set(AssetPlugin { file_path: crate::asset_dir(), ..default() })
             .set(WindowPlugin { primary_window: Some(Window {
                 title: "ReRAC".into(),
                 mode: bevy::window::WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
                 resizable: false, ..default()
             }), ..default() }))
+        .add_plugins(crate::ios_gamepad::IOSGameControllerPlugin)
         .insert_resource(ClearColor(Color::srgb(0.04, 0.04, 0.06)))
         .add_systems(Startup, move |mut commands: Commands| {
             commands.spawn(Camera2d);

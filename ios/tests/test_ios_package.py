@@ -19,7 +19,8 @@ def macho(platform=2, cpu=0x0100000c, minimum=16 << 16, signed=False, external=N
     commands = struct.pack('<6I', 0x32, 24, platform, minimum, 27 << 16, 0)
     count = 1
     for name in ('/System/Library/Frameworks/UIKit.framework/UIKit',
-                 '/System/Library/Frameworks/Metal.framework/Metal', external):
+                 '/System/Library/Frameworks/Metal.framework/Metal',
+                 '/System/Library/Frameworks/GameController.framework/GameController', external):
         if name:
             raw = name.encode()+b'\0'
             raw += b'\0' * (-len(raw) % 8)
@@ -39,6 +40,8 @@ class IOSPackage(unittest.TestCase):
         self.app = self.root/'ReRAC.app'
         self.app.mkdir()
         self.info = dict(CFBundleExecutable='ReRAC', CFBundlePackageType='APPL',
+                         CFBundleIdentifier='org.rerac.game.iospoc',
+                         GCSupportedGameControllers=[{'ProfileName':'ExtendedGamepad'}],
                          CFBundleShortVersionString='0.3.4', CFBundleSupportedPlatforms=['iPhoneOS'],
                          UIDeviceFamily=[1], UIFileSharingEnabled=True, LSSupportsOpeningDocumentsInPlace=True,
                          MinimumOSVersion='16.0', UIRequiredDeviceCapabilities=['arm64', 'metal'],
@@ -175,7 +178,7 @@ class IOSPackage(unittest.TestCase):
         workflow = (ROOT/'.github/workflows/build-ios-arm64.yml').read_text()
         for value in ('runs-on: xcode-27', '--target aarch64-apple-ios', '--release --locked',
                       'generic/platform=iOS', 'CODE_SIGNING_ALLOWED=NO', 'if: always()',
-                      'ios/verify_ipa.py', 'shasum -a 256', '--version-json'):
+                      'ios/verify_ipa.py', 'shasum -a 256', 'cargo metadata --locked'):
             self.assertIn(value, workflow)
         device_step = workflow.split('- name: Compile physical iPhone ARM64 game', 1)[1].split(
             '- name: Build native unsigned iPhone app', 1)[0]

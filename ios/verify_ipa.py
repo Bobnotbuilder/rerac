@@ -67,6 +67,7 @@ def bundle_files(app, source, version):
         raise ValueError('missing app executable/plist')
     info = plistlib.loads(files['Info.plist'])
     for key, value in {'CFBundleExecutable':'ReRAC', 'CFBundlePackageType':'APPL',
+                       'CFBundleIdentifier':'org.rerac.game.iospoc',
                        'CFBundleShortVersionString':version,
                        'CFBundleSupportedPlatforms':['iPhoneOS'], 'UIDeviceFamily':[1],
                        'UIFileSharingEnabled':True, 'LSSupportsOpeningDocumentsInPlace':True}.items():
@@ -74,6 +75,8 @@ def bundle_files(app, source, version):
             raise ValueError('bundle plist mismatch: '+key)
     if info.get('MinimumOSVersion') != '16.0':
         raise ValueError('unexpected minimum iOS')
+    if info.get('GCSupportedGameControllers') != [{'ProfileName':'ExtendedGamepad'}]:
+        raise ValueError('native extended controller declaration missing')
     manifest = info.get('UIApplicationSceneManifest', {})
     scenes = manifest.get('UISceneConfigurations', {}).get('UIWindowSceneSessionRoleApplication', [])
     if manifest.get('UIApplicationSupportsMultipleScenes') is not False or len(scenes) != 1:
@@ -103,7 +106,7 @@ def bundle_files(app, source, version):
     if not any(p.startswith('LaunchScreen.storyboardc/') for p in files):
         raise ValueError('compiled launch storyboard absent')
     macho = device_macho(files['ReRAC'])
-    for framework in ('UIKit.framework/', 'Metal.framework/'):
+    for framework in ('UIKit.framework/', 'Metal.framework/', 'GameController.framework/'):
         if not any(framework in d for d in macho['dependencies']):
             raise ValueError('required system framework missing: '+framework)
     return files, macho

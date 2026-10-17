@@ -55,7 +55,11 @@ def main():
         run(['xcrun','simctl','boot',device])
         run(['xcrun','simctl','bootstatus',device,'-b'],timeout=240)
         run(['xcrun','simctl','install',device,str(app)])
-        launched = run(['xcrun','simctl','launch',device,'org.rerac.game.iospoc'])
+        launch_env = os.environ.copy()
+        launch_env['SIMCTL_CHILD_RERAC_IOS_CONTROLLER_SELFTEST'] = '1'
+        launched = subprocess.run(['xcrun','simctl','launch',device,'org.rerac.game.iospoc'],
+                                  env=launch_env,check=True,text=True,stdout=subprocess.PIPE,
+                                  stderr=subprocess.STDOUT,timeout=180).stdout
         (EVIDENCE/'simulator-launch.txt').write_text(launched)
         pid = int(re.search(r': (\d+)\s*$',launched).group(1))
         container = Path(run(['xcrun','simctl','get_app_container',device,
@@ -74,7 +78,8 @@ def main():
         text = startup.read_text()
         (EVIDENCE/'simulator-startup.log').write_text(text)
         for marker in ('IMPORT_SCREEN_REQUESTED','BEVY_STARTUP_SYSTEM_REACHED',
-                       'RENDER_DEVICE_READY','toc=false','extract_info=false'):
+                       'RENDER_DEVICE_READY','toc=false','extract_info=false',
+                       'GAMECONTROLLER_SYNTHETIC_SELFTEST_PASS','GAMECONTROLLER_READY'):
             if marker not in text:
                 raise RuntimeError('SIMULATOR_MISSING_MARKER '+marker)
         run(['xcrun','simctl','io',device,'screenshot',
@@ -82,7 +87,8 @@ def main():
         report = dict(simulator_runtime=runtime['version'],startup='PASS',
                       import_path_without_game_data='PASS',alive_after_first_update=True,
                       screenshot='import-screen-ios27.png',physical_device='NOT_TESTED',
-                      gameplay='NOT_TESTED')
+                      gameplay='NOT_TESTED',backbone_physical='NOT_TESTED',
+                      native_controller_to_bevy_to_pad_synthetic='PASS')
         (EVIDENCE/'simulator-startup-result.json').write_text(json.dumps(report,indent=2)+'\n')
         print(json.dumps(report))
     finally:

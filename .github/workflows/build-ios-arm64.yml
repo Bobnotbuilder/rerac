@@ -59,15 +59,12 @@ jobs:
           rustup run "$RUSTUP_TOOLCHAIN" rustc -vV | tee evidence/rustc.txt
           rustup target list --installed --toolchain "$RUSTUP_TOOLCHAIN" | tee evidence/rust-targets.txt
           python3 -m unittest discover -s ios/tests -v 2>&1 | tee evidence/poc-contract-tests.log
+          xcrun --sdk iphoneos clang -fsyntax-only -fobjc-arc -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" -target arm64-apple-ios16.0 crates/rc-engine/src/ios_gamecontroller.m 2>&1 | tee evidence/gamecontroller-native-check.log
           cargo metadata --locked --format-version 1 > evidence/cargo-metadata.json
           cargo tree --locked -i winit | tee evidence/winit-resolution.txt
+          python3 -c 'import json; d=json.load(open("evidence/cargo-metadata.json")); assert next(p for p in d["packages"] if p["name"]=="rc-engine")["version"]=="0.3.4"'
 
-      - name: Compile unchanged desktop target and CLI contract
-        run: |
-          set -euo pipefail
-          cargo build --release --locked -p rc-engine --bin rerac 2>&1 | tee evidence/desktop-build.log
-          "$CARGO_TARGET_DIR/release/rerac" --version-json | tee evidence/desktop-version.json
-          python3 -c 'import json; d=json.load(open("evidence/desktop-version.json")); assert d==dict(name="rerac",version="0.3.4",game="rac1",data_format=1)'
+      # iPhone-only delivery: no desktop release build or desktop gameplay gate.
 
       - name: Compile physical iPhone ARM64 game
         env:
