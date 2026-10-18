@@ -377,6 +377,7 @@ fn setup(
             GlobalZIndex(i32::MAX - 1),
             Visibility::Hidden,
             MenuLayerNode,
+            crate::display::PresentationUi,
             Name::new("menu layer (snapshot, black, frame mobys)"),
         ))
         .id();
@@ -509,7 +510,10 @@ fn frame_render(
     FrameRender { extra, entities, slots, lights, model, camera }
 }
 
-fn target_main_camera(mut commands: Commands, nodes: Query<Entity, (With<MenuLayerNode>, Without<UiTargetCamera>)>, cams: Query<Entity, With<crate::fly_cam::FlyCam>>) {
+fn target_main_camera(mut commands: Commands, nodes: Query<Entity, (With<MenuLayerNode>, Without<UiTargetCamera>)>,
+    #[cfg(not(target_os = "ios"))] cams: Query<Entity, With<crate::fly_cam::FlyCam>>,
+    #[cfg(target_os = "ios")] cams: Query<Entity, With<crate::display::PresentCamera>>,
+) {
     let Some(cam) = cams.iter().next() else { return };
     for n in &nodes { commands.entity(n).insert(UiTargetCamera(cam)); }
 }
@@ -745,7 +749,7 @@ fn menu_frame(
                 read_graphics_rows(menu, &mut gfx, &gfx_before, frame);
                 // The display (crate::display): the game frame's resolution and the window mode.
                 let want = (
-                    menu.port_value(Setting::Aspect).map(crate::display::Aspect::from_index),
+                    menu.port_value(Setting::Aspect).map(|v| if v == display.aspect.index() { display.aspect } else { crate::display::Aspect::from_index(v) }),
                     menu.port_value(Setting::Resolution).map(crate::display::Resolution::from_index),
                     menu.port_value(Setting::Fullscreen).map(|v| v == 1),
                 );

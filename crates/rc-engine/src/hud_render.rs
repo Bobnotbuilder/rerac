@@ -715,7 +715,7 @@ fn setup(
     let full = || Node { position_type: PositionType::Absolute, left: Val::Px(0.0), top: Val::Px(0.0), width: Val::Percent(100.0), height: Val::Percent(100.0), ..default() };
     // On the frame's 4:3 box (crate::display: in 16:9 the 512×416 screen is centred, the world widens around it).
     // The whole frame (crate::display): the 512×416 screen in its middle, wider in 16:9 ([`HudRuntime::extra`]).
-    let hud_node = commands.spawn((full(), MaterialNode(composites.add(HudComposite { image: target.clone(), scaling: sc })), GlobalZIndex(i32::MAX), HudCompositeNode, Name::new("hud composite"))).id();
+    let hud_node = commands.spawn((full(), MaterialNode(composites.add(HudComposite { image: target.clone(), scaling: sc })), GlobalZIndex(i32::MAX), HudCompositeNode, crate::display::PresentationUi, Name::new("hud composite"))).id();
     // The 512×416 screen's box inside it: the parent of the canvases composed with the HUD (crate::screen_canvas).
     commands.spawn((full(), crate::display::UiBoxed, HudBoxNode, ChildOf(hud_node), Name::new("hud box")));
     // The static layer: its own 512×416 target, three meshes in pass order (Transparent2d sorts by z), a node over
@@ -787,7 +787,10 @@ fn setup(
 }
 
 /// The composite node goes to the main (fly) camera's UI pass.
-fn target_main_camera(mut commands: Commands, nodes: Query<Entity, (With<HudCompositeNode>, Without<UiTargetCamera>)>, cams: Query<Entity, With<crate::fly_cam::FlyCam>>) {
+fn target_main_camera(mut commands: Commands, nodes: Query<Entity, (With<HudCompositeNode>, Without<UiTargetCamera>)>,
+    #[cfg(not(target_os = "ios"))] cams: Query<Entity, With<crate::fly_cam::FlyCam>>,
+    #[cfg(target_os = "ios")] cams: Query<Entity, With<crate::display::PresentCamera>>,
+) {
     let Some(cam) = cams.iter().next() else { return };
     for n in &nodes { commands.entity(n).insert(UiTargetCamera(cam)); }
 }
@@ -809,6 +812,7 @@ fn tick_and_build(
     dyn_images: Option<Res<crate::hud_images::HudImages>>,
     (display, mut images): (Option<Res<crate::display::DisplaySettings>>, ResMut<Assets<Image>>),
     (mut composites, mut static_composites, mut targets): (ResMut<Assets<HudComposite>>, ResMut<Assets<HudStaticComposite>>, Query<&mut RenderTarget>),
+    #[cfg(target_os = "ios")] device: Res<crate::ios_runtime::DeviceState>,
 ) {
     let Some(mut rt) = rt else { return };
     let rt = &mut *rt;
@@ -929,9 +933,17 @@ fn tick_and_build(
     }
     // HudDraw 0x24fb50 skips the HUD in a frame whose tick set 0x17e988 (the Visibomb's flight: crate::visibomb_view).
     let hud_off = crate::visibomb_view::hud_off(play.as_deref());
+    #[cfg(target_os = "ios")]
+    let hud_start=rt.hud2d.prims.len();
     if !hook.replace_hud && !scene.hide_hud && !hud_off { crate::text_render::execute(&mut rt.hud2d, &mut st, &rt.glyphs, &rt.draws); }
+    #[cfg(target_os = "ios")]
+    let hud_end=rt.hud2d.prims.len();
     rt.hud2d.prims.extend(hook.prims.iter().copied());
     rt.hud2d.prims.extend(scene.prims.iter().copied());
+    // Only HUD controls and explicitly boxed menu primitives move into the safe
+    // area. World-projected markers/vendor screens and full-screen fades do not.
+    #[cfg(target_os = "ios")]
+    safe_ui_prims(&mut rt.hud2d.prims,&mut rt.hud2d.fine,hud_start..hud_end,device.ui_scale);
     let dyns = dyn_images.as_deref().map_or([None; crate::hud_images::SLOTS], |d| d.rects());
     let e = rt.extra;
     // Only the meshes whose inputs changed ([`Built`]).
@@ -939,7 +951,43 @@ fn tick_and_build(
         let _ = meshes.insert(&rt.mesh, build_mesh(&rt.hud2d.prims, &rt.hud2d.fine, &rt.hud2d.add, &rt.atlas_frames, &rt.atlas_fx, &dyns, e));
     }
     for ((m, prims), b) in rt.static_meshes.iter().zip(&hook.statics).zip(&mut rt.built[1..]) {
+        #[cfg(target_os = "ios")]
+        let safe;
+        #[cfg(target_os = "ios")]
+        let prims=if device.ui_scale<1.0 && prims.iter().any(|p|p.boxed) {
+            let mut copy=prims.clone(); safe_ui_prims(&mut copy,&mut [],0..0,device.ui_scale);
+            safe=copy; &safe
+        } else { prims };
         if b.update(prims, &[], &[], &dyns, e) { let _ = meshes.insert(m, build_mesh(prims, &[], &[], &rt.atlas_frames, &rt.atlas_fx, &dyns, e)); }
+    }
+}
+
+#[cfg(target_os = "ios")]
+fn safe_ui_prims(prims: &mut [Prim], fine: &mut [(usize,[[i32;2];4])], hud: std::ops::Range<usize>, scale: f32) {
+    if scale>=1.0 { return; }
+    let selected=|i:usize,p:&Prim| {
+        let lo=p.pos.iter().map(|v|v[0]).min().unwrap_or(0);
+        let hi=p.pos.iter().map(|v|v[0]).max().unwrap_or(0);
+        (hud.contains(&i)||p.boxed) && !(lo<=0 && hi>=W)
+    };
+    for (index,points) in fine {
+        if prims.get(*index).is_some_and(|p|selected(*index,p)) {
+            for p in points { let q=crate::ios_display_math::ui_point(p[0] as f32/16.0,p[1] as f32/16.0,scale); *p=q.map(|v|(v*16.0).round() as i32); }
+        }
+    }
+    for (i,p) in prims.iter_mut().enumerate() {
+        if !selected(i,p) { continue; }
+        for q in &mut p.pos { *q=crate::ios_display_math::ui_point(q[0] as f32,q[1] as f32,scale).map(|v|v.round() as i32); }
+        if p.scissor[0]!=0 || p.scissor[1]!=W-1 {
+            let a=crate::ios_display_math::ui_point(p.scissor[0] as f32,0.0,scale);
+            let b=crate::ios_display_math::ui_point(p.scissor[1] as f32,0.0,scale);
+            (p.scissor[0],p.scissor[1])=(a[0].floor() as i32,b[0].ceil() as i32);
+        }
+        if p.scissor[2]!=0 || p.scissor[3]!=H-1 {
+            let a=crate::ios_display_math::ui_point(0.0,p.scissor[2] as f32,scale);
+            let b=crate::ios_display_math::ui_point(0.0,p.scissor[3] as f32,scale);
+            (p.scissor[2],p.scissor[3])=(a[1].floor() as i32,b[1].ceil() as i32);
+        }
     }
 }
 
@@ -1103,6 +1151,21 @@ fn apply_fx_cuts(rt: Option<ResMut<HudRuntime>>, level: Res<crate::Level>, play:
     }
 }
 
+
+#[cfg(target_abi = "sim")]
+pub(crate) fn simulator_safe_ui_contracts() {
+    let mut h=Hud2d::default();
+    h.rect(100,110,200,210,0x80808080); // world marker: never reprojected by safe UI
+    h.rect(10,20,10,20,0x80808080); // HUD control
+    h.rect(0,416,0,512,0x80808080); // full-screen fade: must still cover entire world
+    let old=h.prims.clone();
+    safe_ui_prims(&mut h.prims,&mut h.fine,1..3,0.85);
+    assert_eq!(h.prims[0],old[0]);
+    assert_ne!(h.prims[1],old[1]);
+    assert_eq!(h.prims[2],old[2]);
+    assert!(h.prims[1].pos.iter().all(|p|p[0]>=10 && p[1]>=10));
+    crate::ios::diagnostic("IOS_SAFE_UI_CONTRACTS_PASS","controls_inset markers_unmodified fullscreen_fades_unmodified");
+}
 
 #[cfg(test)]
 mod tests {

@@ -54,7 +54,21 @@ def main():
     try:
         run(['xcrun','simctl','boot',device])
         run(['xcrun','simctl','bootstatus',device,'-b'],timeout=240)
-        run(['xcrun','simctl','install',device,str(app)])
+        # Prior build hit a CoreSimulator install timeout before app launch.
+        # Retry only our newly-created CI device, never erase a user simulator.
+        for attempt in range(2):
+            try:
+                output=run(['xcrun','simctl','install',device,str(app)],timeout=300)
+                (EVIDENCE/'simulator-install.log').write_text(output)
+                break
+            except (subprocess.TimeoutExpired,subprocess.CalledProcessError) as error:
+                (EVIDENCE/'simulator-install.log').write_text(
+                    'attempt='+str(attempt+1)+' '+str(error)+'\n'+str(getattr(error,'output',''))[-8192:])
+                if attempt==1:
+                    raise
+                run(['xcrun','simctl','shutdown',device],timeout=90,check=False)
+                run(['xcrun','simctl','boot',device],timeout=90)
+                run(['xcrun','simctl','bootstatus',device,'-b'],timeout=300)
         launch_env = os.environ.copy()
         launch_env['SIMCTL_CHILD_RERAC_IOS_CONTROLLER_SELFTEST'] = '1'
         launched = subprocess.run(['xcrun','simctl','launch',device,'org.rerac.game.iospoc'],
@@ -68,7 +82,7 @@ def main():
         deadline = time.monotonic()+90
         while time.monotonic()<deadline:
             text = startup.read_text() if startup.exists() else ''
-            if 'FIRST_UPDATE_REACHED' in text:
+            if 'FIRST_UPDATE_REACHED' in text and 'IOS_RENDER_RESIZE_PROBE_PASS' in text:
                 break
             time.sleep(1)
         else:
@@ -79,7 +93,9 @@ def main():
         (EVIDENCE/'simulator-startup.log').write_text(text)
         for marker in ('IMPORT_SCREEN_REQUESTED','BEVY_STARTUP_SYSTEM_REACHED',
                        'RENDER_DEVICE_READY','toc=false','extract_info=false',
-                       'GAMECONTROLLER_SYNTHETIC_SELFTEST_PASS','GAMECONTROLLER_READY'):
+                       'GAMECONTROLLER_SYNTHETIC_SELFTEST_PASS','GAMECONTROLLER_READY',
+                       'IOS_DISPLAY_CONTRACTS_PASS','IOS_SAFE_UI_CONTRACTS_PASS',
+                       'IOS_RENDER_RESIZE_PROBE_PASS'):
             if marker not in text:
                 raise RuntimeError('SIMULATOR_MISSING_MARKER '+marker)
         run(['xcrun','simctl','io',device,'screenshot',
@@ -89,10 +105,15 @@ def main():
                       screenshot='import-screen-ios27.png',physical_device='NOT_TESTED',
                       gameplay='NOT_TESTED',backbone_physical='NOT_TESTED',
                       native_controller_to_bevy_to_pad_synthetic='PASS')
+        report['native_display_projection_safe_ui_and_render_resize']='PASS'
         (EVIDENCE/'simulator-startup-result.json').write_text(json.dumps(report,indent=2)+'\n')
         print(json.dumps(report))
     finally:
         try:
+            # Preserve the first real assertion/panic even if First Update was
+            # never reached; the earlier harness lost this log on failed startup.
+            if 'startup' in locals() and startup.exists():
+                (EVIDENCE/'simulator-startup.log').write_text(startup.read_text())
             logs = run(['xcrun','simctl','spawn',device,'log','show','--last','2m',
                         '--style','compact','--predicate','process == "ReRAC"'],check=False)
             (EVIDENCE/'simulator-console-tail.log').write_text(logs[-65536:])

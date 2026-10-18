@@ -63,7 +63,15 @@ impl Plugin for FramePacePlugin {
 }
 
 /// This frame's ticks (module docs).
-fn steps(mut pace: ResMut<Pace>, mut strategy: ResMut<TimeUpdateStrategy>) {
+pub(crate) fn steps(mut pace: ResMut<Pace>, mut strategy: ResMut<TimeUpdateStrategy>,
+    #[cfg(target_os = "ios")] device: Res<crate::ios_runtime::DeviceState>,
+) {
+    #[cfg(target_os = "ios")]
+    if !device.active {
+        pace.last=None; pace.next=None; pace.acc=0.0;
+        *strategy=TimeUpdateStrategy::FixedTimesteps(0);
+        return;
+    }
     let now = Instant::now();
     let Some(last) = pace.last.replace(now) else {
         *strategy = TimeUpdateStrategy::FixedTimesteps(1);
@@ -96,8 +104,14 @@ fn period_for(mhz: Option<u32>) -> Option<Duration> {
 }
 
 /// The limiter (module docs).
-fn wait(mut pace: ResMut<Pace>, monitors: Query<&Monitor, With<PrimaryMonitor>>) {
+pub(crate) fn wait(mut pace: ResMut<Pace>, monitors: Query<&Monitor, With<PrimaryMonitor>>,
+    #[cfg(target_os = "ios")] device: Res<crate::ios_runtime::DeviceState>,
+) {
+    #[cfg(target_os = "ios")]
+    if !device.active { pace.next=None; return; }
     let period = period_for(monitors.iter().next().and_then(|m| m.refresh_rate_millihertz));
+    // Keep the existing display-aligned period: FIFO alone at ~60 Hz, 60 Hz cap
+    // on ProMotion/unknown refresh. A second clock at 60 Hz would beat with vsync.
     if period != pace.period {
         pace.period = period;
         pace.next = None;
@@ -109,9 +123,14 @@ fn wait(mut pace: ResMut<Pace>, monitors: Query<&Monitor, With<PrimaryMonitor>>)
         Some(d) if d + period > now => d,
         _ => now,
     };
-    let spin = Duration::from_micros(300);
-    if deadline > now + spin { std::thread::sleep(deadline - now - spin); }
-    while Instant::now() < deadline { std::thread::yield_now(); }
+    #[cfg(target_os = "ios")]
+    if deadline > now { std::thread::sleep(deadline - now); }
+    #[cfg(not(target_os = "ios"))]
+    {
+        let spin = Duration::from_micros(300);
+        if deadline > now + spin { std::thread::sleep(deadline - now - spin); }
+        while Instant::now() < deadline { std::thread::yield_now(); }
+    }
     pace.next = Some(deadline + period);
 }
 

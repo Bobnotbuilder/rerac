@@ -34,6 +34,10 @@ mod ios;
 #[cfg(target_os = "ios")]
 mod ios_gamepad;
 
+mod ios_display_math;
+#[cfg(target_os = "ios")]
+mod ios_runtime;
+
 mod crash_log;
 mod asset_write;
 mod audio_out;
@@ -196,6 +200,12 @@ fn main() -> anyhow::Result<()> {
                     mode: bevy::window::WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
                     #[cfg(target_os = "ios")]
                     resizable: false,
+                    #[cfg(target_os = "ios")]
+                    prefers_status_bar_hidden: true,
+                    #[cfg(target_os = "ios")]
+                    prefers_home_indicator_hidden: true,
+                    #[cfg(target_os = "ios")]
+                    present_mode: bevy::window::PresentMode::Fifo,
                     ..default()
                 }),
                 ..default()
@@ -301,7 +311,7 @@ fn main() -> anyhow::Result<()> {
     #[cfg(target_os = "ios")]
     {
         ios::diagnostic("BEVY_GAME_RUN_REQUESTED", "");
-        app.add_plugins(ios_gamepad::IOSGameControllerPlugin)
+        app.add_plugins((ios_gamepad::IOSGameControllerPlugin, ios_runtime::IOSRuntimePlugin))
             .add_systems(Startup, ios::startup_diagnostics)
             .add_systems(Update, ios::update_diagnostics);
     }

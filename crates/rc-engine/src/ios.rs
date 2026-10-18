@@ -102,9 +102,12 @@ pub fn show_import_instructions(error: &str) {
             .set(WindowPlugin { primary_window: Some(Window {
                 title: "ReRAC".into(),
                 mode: bevy::window::WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
-                resizable: false, ..default()
+                resizable: false, prefers_status_bar_hidden: true,
+                prefers_home_indicator_hidden: true,
+                present_mode: bevy::window::PresentMode::Fifo, ..default()
             }), ..default() }))
-        .add_plugins(crate::ios_gamepad::IOSGameControllerPlugin)
+        .add_plugins((crate::ios_gamepad::IOSGameControllerPlugin, crate::ios_runtime::IOSRuntimePlugin))
+        .add_plugins((crate::display::DisplayPlugin, crate::frame_pace::FramePacePlugin))
         .insert_resource(ClearColor(Color::srgb(0.04, 0.04, 0.06)))
         .add_systems(Startup, move |mut commands: Commands| {
             commands.spawn(Camera2d);
@@ -117,5 +120,7 @@ pub fn show_import_instructions(error: &str) {
         .add_systems(Startup, startup_diagnostics)
         .add_systems(Update, update_diagnostics);
     diagnostic("BEVY_IMPORT_RUN_REQUESTED", "");
+    #[cfg(target_abi = "sim")]
+    crate::ios_runtime::install_simulator_probe(&mut app);
     app.run();
 }

@@ -104,6 +104,8 @@ fn poll(mut native: NonSendMut<NativeController>, mut commands: Commands,
 pub fn simulator_self_test() {
     #[cfg(target_abi = "sim")]
     if std::env::var("RERAC_IOS_CONTROLLER_SELFTEST").as_deref() == Ok("1") {
+        crate::display::simulator_contracts();
+        crate::hud_render::simulator_safe_ui_contracts();
         use rc_game::pad::{button, PadState};
         let mut app = App::new();
         app.add_plugins(bevy::input::InputPlugin)

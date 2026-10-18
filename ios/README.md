@@ -1,121 +1,86 @@
-# ReRAC native iPhone ARM64 proof of concept
+# ReRAC native iPhone ARM64 port
 
-Status: source implementation and synthetic checks only. Not compiled, installed,
-launched, or gameplay-tested. No real IPA exists yet.
+## Verified baseline and current work
 
-## Baseline and approach
+The user physically verified version 0.3.4 build 3, source
+c9df823e939446e97b255af1a9d5ca28db874d79: native iPhone launch, Backbone One menu
+navigation, gameplay and progression to planet three. This is not a claim that
+the entire game is complete. The previous build and matching symbols remain in:
+https://github.com/Bobnotbuilder/rerac/actions/runs/39077637396
 
-Official source: https://github.com/re-rac/rerac
+Build 4 adds native drawable aspect, safe HUD/menu placement and an initial
+bounded power/diagnostics pass. Its physical fullscreen, gameplay regression,
+thermal and battery acceptance must be repeated. See [FULLSCREEN_POWER.md](FULLSCREEN_POWER.md)
+for source findings, tests, measurement limits and the iPhone comparison checklist.
 
-ReRAC 0.3.4, commit 8b2c9a92c48661bdc04fecd87c7e199d376d0b6a.
-This is also the inspected Bobnotbuilder/rerac fork baseline. Bevy is 0.19.1,
-wgpu is 29.0.4. Rust 1.99.1 is pinned for the proposed hosted build.
+Preserve the existing Rust/Bevy architecture. No Swift/C++ game rewrite, emulator,
+GameStudio engine change or Shared Core promotion is part of this port.
 
-This source overlay requires the full repository at that exact baseline. It is
-not a standalone source checkout, executable or IPA. Apply its files to a clean
-checkout of the fork after reviewing the two modified Rust modules. Do not
-overwrite newer upstream work with the overlay without rebasing it.
+## Architecture and preserved fixes
 
-The application uses the ordinary Rust binary/Xcode application-target pattern
-documented by the matching Bevy mobile example, not a new engine or emulator:
+Upstream game version 0.3.4; original upstream baseline:
+8b2c9a92c48661bdc04fecd87c7e199d376d0b6a.
+Bevy 0.19.1, wgpu 29.0.4 and Rust 1.99.1 remain pinned by the existing workspace/lock.
+Keep the scene lifecycle backport and packaged licence notices described in
+[SCENE_LIFECYCLE_REPAIR.md](SCENE_LIFECYCLE_REPAIR.md).
+The physical startup failure was UIKit's missing UIScene adoption; it must not be
+reintroduced. [BACKBONE_INPUT.md](BACKBONE_INPUT.md) describes the retained native
+Apple GameController -> Bevy -> libpad2 input path.
 
-- https://github.com/bevyengine/bevy/tree/v0.19.1/examples/mobile
-- https://github.com/bevyengine/bevy/blob/v0.19.1/examples/mobile/build_rust_deps.sh
-- https://doc.rust-lang.org/rustc/platform-support/apple-ios.html
+The Xcode application target embeds the ordinary Rust executable using Bevy's
+mobile pattern. The physical target is aarch64-apple-ios (not simulator/Catalyst),
+device family iPhone, minimum requested iOS 16.0, with Metal required.
+This is not an assertion that every iOS 16 phone meets game memory/performance needs.
 
-The new ios.rs module is compiled only on iOS. Desktop retains disc_source::startup,
-CLI handling and window behavior. iOS uses the same extraction checks without
-exiting immediately when data is missing; it opens a Bevy instructions screen.
-The gameplay, graphics plugin chain, WGSL shaders, audio mixer, data decoder and
-existing input/controller code remain unchanged. There is no added touch-control
-overlay. Controller operation on iPhone is not yet proven.
+## Build and package
 
-## Native app build
+Use the existing .github/workflows/build-ios-arm64.yml on ios/arm64-poc.
+Manual dispatch and implementation-path pushes on this branch are supported.
+The hosted xcode-27 ARM64 runner builds the physical device executable and native
+unsigned Xcode app. There is no desktop game release/Intel compatibility gate.
 
-The Xcode target is ReRAC, SDK iphoneos, device family iPhone, architecture arm64.
-The Rust target is strictly aarch64-apple-ios, never simulator or Catalyst.
-The chosen proof-of-concept deployment target is iOS 16.0; this does not claim
-that every device on iOS 16 supports the renderer's features or memory needs.
+Artifacts:
+- ReRAC-iOS-arm64-unsigned.ipa and its SHA-256 file
+- UUID-matched device dSYM, retained 90 days
+- source/runner/toolchain/build/package evidence and simulator diagnostics
+- separate headless engine/UI regression results using the documented xtask tier
 
-The workflow .github/workflows/build-ios-arm64.yml runs on xcode-27, which GitHub
-lists as an ARM64 hosted runner. It first compiles the desktop runtime and checks
-its version CLI, then compiles the physical-device binary, builds the unsigned
-Xcode app with bundled upstream shaders and a compiled launch storyboard, verifies
-the actual Mach-O platform/dependencies, and produces:
+The physical package verifier requires true ARM64 iOS Mach-O, the unchanged
+org.rerac.game.iospoc bundle ID, system framework linkage, scene configuration,
+file sharing, upstream shader bytes and licence notices. It rejects simulator/
+Mac/Catalyst binaries, unbundled dylibs, embedded signatures/provisioning,
+unexpected payloads, game data and archive traversal.
+The IPA always contains Payload/ReRAC.app; the simulator never supplies its binary.
 
-  ReRAC-iOS-arm64-unsigned.ipa
-  ReRAC-iOS-arm64-unsigned.ipa.sha256
+The source branch is isolated. Do not merge to main or modify release.yml merely
+to produce an iPhone test artifact. Refer to Actions for the exact source SHA and
+each actual result, not a prospective status copied from an older handoff.
 
-It records exact source HEAD, baseline diff, runner/SDK/toolchain information,
-Cargo and Xcode logs, and bundle/IPA verification in a separate evidence artifact.
-Build failures also upload available logs. It does not upload Documents, extracted
-data, ISOs, signing credentials or game assets.
+## Signing, game files and saves
 
-Code signing is disabled in Xcode and the device linker. The verifier rejects a
-code signature, embedded provisioning/signature payloads, wrong CPU/platform,
-non-system dynamic dependencies and extra payload files. System UIKit/Metal/audio
-frameworks are linked from iOS, not copied out of an SDK into the IPA. No unbundled
-Bevy dynamic library is permitted.
+Sign/provision the unsigned IPA using Sideloadly. For updates use the same account
+and effective signed bundle identifier; do not uninstall first. Signing changes
+the unsigned checksum. No signing credentials are requested by the workflow.
 
-An unsigned IPA cannot be installed directly on an ordinary iPhone. Legitimate
-device signing/provisioning is a separate user-owned step; no Apple signing
-credentials are requested or embedded in this workflow. Re-signing changes the
-artifact checksum.
+The user supplies their own supported NTSC-U SCUS_971.99 extracted data.
+Close ReRAC and copy the CONTENTS of the extractor output into:
+Files -> On My iPhone -> ReRAC -> ReRACData.
+toc.bin and extract-info.json must be directly inside it alongside levels/,
+global/, boot/ and all other extracted directories. Do not copy an ISO or nest
+another extracted folder. Complete transfer before launching.
 
-Runner reference:
-https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md
+Saves/settings/local diagnostics remain in Documents/ReRACSupport (memory cards:
+memcard). Back up this folder through Files before updates. Nothing in build 4
+deletes or migrates game input or saved progress. Missing/invalid input uses the
+existing clear import/error screen rather than intentionally exiting.
 
-## Loading your own extracted game data
+No proprietary game data, device reports, credentials or signing material are
+uploaded by CI. No on-device ISO extraction or automatic asset download is added.
 
-1. Sign/provision the built app legitimately and install it.
-2. Launch once. With no data it should show transfer instructions, create
-   Documents/ReRACData, and make its Documents folder available for file sharing.
-   This screen itself still requires a functioning Metal device/Bevy startup.
-3. Close ReRAC. Using Finder Files sharing or the iPhone Files app, copy the
-   CONTENTS of your existing rerac-extract output into:
-   On My iPhone → ReRAC → ReRACData.
-4. Ensure toc.bin and extract-info.json are directly inside ReRACData alongside
-   levels/, global/ and all other extracted directories. Do not add an extra
-   nested extracted/ directory. Complete transfer before launching the game.
-5. Relaunch. The engine performs its normal strict data_format check and reads
-   only persistent sandbox data, never an ISO in the app bundle.
+## Acceptance boundary
 
-Upstream currently documents user-owned NTSC-U SCUS_971.99 input. Extract it on
-your desktop using the existing extractor/launcher. Do not upload it to GitHub.
-The existing lazy cache can be built under ReRACData/cache; a prepared desktop
-cache may also be transferred, subject to upstream validation/rebuild rules.
-Saves and settings live in Documents/ReRACSupport. Keep the app closed while
-changing shared files; live external file coordination/import is not implemented.
-No cloud-download, on-device ISO extraction or runtime network access is added.
-
-File sharing follows Apple's documented keys:
-https://developer.apple.com/documentation/fileprovider
-
-## Publishing and hosted execution
-
-The connection was reauthenticated and the isolated ios/arm64-poc branch was
-created successfully. Implementation changes are published only on that branch,
-preserving main and release.yml. No tokens are requested or recorded.
-The current connector does not expose workflow dispatch, so a narrowly scoped
-push trigger for ios/arm64-poc starts the build when its implementation changes.
-Manual workflow_dispatch remains available after GitHub registers the workflow.
-Record actual publication and execution evidence separately from this handoff.
-
-## Evidence boundary
-
-Local tests are synthetic Mach-O/IPA fixtures and source/configuration contracts.
-They are not a real device build. Plist, project and YAML parsing is not Xcode
-compilation. Rust and Cargo are unavailable locally; no local engine compilation
-was attempted. GitHub compilation has not yet run at source-handoff time.
-
-Outstanding validation includes Rust dependency cross-compilation, Xcode 27
-packaging/linking and UIKit lifecycle, Metal shader/feature/limit support, memory,
-asset loading, audio/background behavior, controller input, data transfer,
-physical installation, graphics and gameplay. No such result is claimed.
-
-## Resume sequence
-
-Publish isolated development branch → inspect branch-triggered Actions build →
-inspect real compiler/build logs → fix actual failures → verify downloadable IPA
-and checksum → legitimately sign/install → test on a real iPhone with user-owned
-data. No platform-engine or DevStudio changes are part of this work.
+Native compilation, package contracts, host headless tests and simulator fixtures
+are distinct from iPhone gameplay. Data-dependent headless tests can skip without
+extracted input. Hosted machines cannot establish physical Backbone operation,
+actual presented FPS, iPhone battery/thermal behaviour or another planet-three
+playthrough. Keep those outcomes separate in reports.

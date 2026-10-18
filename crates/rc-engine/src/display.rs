@@ -50,12 +50,14 @@ pub enum Aspect {
     Original,
     Wide16x10,
     Wide16x9,
+    /// Actual drawable identity, refreshed in First on resize/orientation changes.
+    Native { width: u32, height: u32 },
 }
 
 impl Aspect {
     /// The Port Options row's values, in order.
-    pub const ALL: [Aspect; 3] = [Aspect::Original, Aspect::Wide16x10, Aspect::Wide16x9];
-    pub fn index(self) -> u8 { Self::ALL.iter().position(|&a| a == self).unwrap_or(0) as u8 }
+    pub const ALL: [Aspect; 4] = [Aspect::Original, Aspect::Wide16x10, Aspect::Wide16x9, Aspect::Native { width: 16, height: 9 }];
+    pub fn index(self) -> u8 { if matches!(self, Self::Native { .. }) { 3 } else { Self::ALL.iter().position(|&a| a == self).unwrap_or(0) as u8 } }
     pub fn from_index(i: u8) -> Self { Self::ALL.get(i as usize).copied().unwrap_or(Aspect::Original) }
     /// Width / height.
     pub fn ratio(self) -> f32 {
@@ -63,6 +65,7 @@ impl Aspect {
             Aspect::Original => 4.0 / 3.0,
             Aspect::Wide16x10 => 16.0 / 10.0,
             Aspect::Wide16x9 => 16.0 / 9.0,
+            Aspect::Native { width, height } => width.max(1) as f32 / height.max(1) as f32,
         }
     }
     fn parse(v: &str) -> Option<Self> { Self::ALL.into_iter().find(|a| a.key() == v.trim()) }
@@ -71,6 +74,7 @@ impl Aspect {
             Aspect::Original => "4:3",
             Aspect::Wide16x10 => "16:10",
             Aspect::Wide16x9 => "16:9",
+            Aspect::Native { .. } => "native",
         }
     }
 }
@@ -130,16 +134,24 @@ pub struct DisplaySettings {
 }
 
 impl Default for DisplaySettings {
-    fn default() -> Self { DisplaySettings { aspect: Aspect::Original, resolution: Resolution::Window, fullscreen: false } }
+    fn default() -> Self {
+        #[cfg(target_os = "ios")]
+        return DisplaySettings { aspect: Aspect::Native { width: 16, height: 9 }, resolution: Resolution::Height(720), fullscreen: true };
+        #[cfg(not(target_os = "ios"))]
+        DisplaySettings { aspect: Aspect::Original, resolution: Resolution::Window, fullscreen: false }
+    }
 }
 
 impl DisplaySettings {
     /// The settings file's values, then `RC_ASPECT` / `RC_RESOLUTION` / `RC_FULLSCREEN` over them.
     pub fn startup() -> Self {
         let mut s = DisplaySettings::default();
-        if let Some(a) = crate::render_settings::load_key("aspect").as_deref().and_then(Aspect::parse) { s.aspect = a; }
+        // New iOS-only keys avoid inheriting the old desktop 4:3/Retina defaults.
+        let aspect_key = if cfg!(target_os = "ios") { "ios_aspect" } else { "aspect" };
+        let resolution_key = if cfg!(target_os = "ios") { "ios_resolution" } else { "resolution" };
+        if let Some(a) = crate::render_settings::load_key(aspect_key).as_deref().and_then(Aspect::parse) { s.aspect = a; }
         if let Some(a) = std::env::var("RC_ASPECT").ok().as_deref().and_then(Aspect::parse) { s.aspect = a; }
-        if let Some(r) = crate::render_settings::load_key("resolution").as_deref().and_then(Resolution::parse) { s.resolution = r; }
+        if let Some(r) = crate::render_settings::load_key(resolution_key).as_deref().and_then(Resolution::parse) { s.resolution = r; }
         if let Some(f) = crate::render_settings::load_key("fullscreen") { s.fullscreen = f.trim() == "1"; }
         if let Some(r) = std::env::var("RC_RESOLUTION").ok().as_deref().and_then(Resolution::parse) { s.resolution = r; }
         if let Ok(f) = std::env::var("RC_FULLSCREEN") { s.fullscreen = f.trim() == "1"; }
@@ -148,8 +160,8 @@ impl DisplaySettings {
 
     /// Writes the keys into the port settings file.
     pub fn save(&self) {
-        crate::render_settings::save_key("aspect", self.aspect.key());
-        crate::render_settings::save_key("resolution", &self.resolution.key());
+        crate::render_settings::save_key(if cfg!(target_os = "ios") { "ios_aspect" } else { "aspect" }, self.aspect.key());
+        crate::render_settings::save_key(if cfg!(target_os = "ios") { "ios_resolution" } else { "resolution" }, &self.resolution.key());
         crate::render_settings::save_key("fullscreen", if self.fullscreen { "1" } else { "0" });
     }
 }
@@ -157,6 +169,12 @@ impl DisplaySettings {
 /// The frame's size for `res` and `aspect` in a window of `window` physical pixels: the largest rectangle of the
 /// aspect that fits, or one of the chosen height.
 pub fn frame_size(res: Resolution, aspect: Aspect, window: UVec2) -> UVec2 {
+    if matches!(aspect, Aspect::Native { .. }) {
+        return match res {
+            Resolution::Window => window.max(UVec2::ONE),
+            Resolution::Height(h) => UVec2::from(crate::ios_display_math::pixels(window.x, window.y, h as u32, 8192)),
+        };
+    }
     let a = aspect.ratio();
     match res {
         Resolution::Height(h) => {
@@ -189,6 +207,11 @@ pub fn fit(frame: UVec2, window: Vec2) -> Vec2 {
 #[derive(Component)]
 pub struct UiBoxed;
 
+/// Final-window UI roots follow the presented game rectangle, not the internal
+/// 3D pixel count. Only iOS moves these roots onto the present camera.
+#[derive(Component)]
+pub struct PresentationUi;
+
 /// A 3D camera that draws the game's 512×416 screen (the menu's frame mobys): its viewport is the frame's 4:3 box.
 #[derive(Component)]
 pub struct BoxedView;
@@ -220,7 +243,7 @@ impl Plugin for DisplayPlugin {
             .add_systems(Startup, spawn_present)
             .add_systems(First, sync_frame)
             .add_systems(Update, (toggle_fullscreen, apply_mode, fit_present).chain())
-            .add_systems(PostUpdate, (place_boxed, box_views, fly_view, refresh_resized_targets
+            .add_systems(PostUpdate, (place_presentation_ui.before(bevy::ui::UiSystems::Layout), place_boxed.before(bevy::ui::UiSystems::Layout), box_views, fly_view, refresh_resized_targets
                 .after(ResizeTargets)
                 .before(bevy::camera::CameraUpdateSystems)));
     }
@@ -259,11 +282,23 @@ fn spawn_present(mut commands: Commands, frame: Res<GameFrame>) {
 }
 
 /// Keeps the frame at the size the settings and the window ask for.
-fn sync_frame(mut frame: ResMut<GameFrame>, settings: Res<DisplaySettings>, window: Option<Single<&Window, With<PrimaryWindow>>>, mut images: ResMut<Assets<Image>>) {
+pub(crate) fn sync_frame(mut frame: ResMut<GameFrame>, mut settings: ResMut<DisplaySettings>, window: Option<Single<&Window, With<PrimaryWindow>>>, mut images: ResMut<Assets<Image>>,
+    #[cfg(target_os = "ios")] device: Res<crate::ios_runtime::DeviceState>,
+) {
     let Some(w) = window else { return };
     let ws = w.physical_size();
     if ws.x == 0 || ws.y == 0 { return; }
-    let want = frame_size(settings.resolution, settings.aspect, ws);
+    if matches!(settings.aspect, Aspect::Native { .. }) {
+        let aspect = Aspect::Native { width: ws.x, height: ws.y };
+        if settings.aspect != aspect { settings.aspect = aspect; }
+    }
+    let resolution = settings.resolution;
+    #[cfg(target_os = "ios")]
+    let resolution = match resolution {
+        Resolution::Height(720) => Resolution::Height(device.render_height as u16),
+        other => other,
+    };
+    let want = frame_size(resolution, settings.aspect, ws);
     if want == frame.size { return; }
     if let Some(mut img) = images.get_mut(&frame.image) { img.resize(Extent3d { width: want.x, height: want.y, depth_or_array_layers: 1 }); }
     frame.size = want;
@@ -306,7 +341,7 @@ fn toggle_fullscreen(keys: Res<ButtonInput<KeyCode>>, mut settings: ResMut<Displ
 /// The window mode follows the setting.
 fn apply_mode(settings: Res<DisplaySettings>, mut window: Option<Single<&mut Window, With<PrimaryWindow>>>) {
     let Some(w) = window.as_deref_mut() else { return };
-    let want = if settings.fullscreen { WindowMode::BorderlessFullscreen(MonitorSelection::Current) } else { WindowMode::Windowed };
+    let want = if cfg!(target_os = "ios") || settings.fullscreen { WindowMode::BorderlessFullscreen(MonitorSelection::Current) } else { WindowMode::Windowed };
     if w.mode != want { w.mode = want; }
 }
 
@@ -323,9 +358,27 @@ fn place_boxed(frame: Res<GameFrame>, mut nodes: Query<&mut Node, With<UiBoxed>>
     }
 }
 
+fn place_presentation_ui(frame: Res<GameFrame>, settings: Res<DisplaySettings>,
+    window: Option<Single<&Window,With<PrimaryWindow>>>, mut nodes: Query<&mut Node,With<PresentationUi>>) {
+    if !cfg!(target_os = "ios") { return; }
+    let Some(w)=window else { return; };
+    let window=Vec2::new(w.width().max(1.0),w.height().max(1.0));
+    let size=if matches!(settings.aspect,Aspect::Native { .. }) { window } else { fit(frame.size,window) };
+    let origin=(window-size)*0.5;
+    let want=(Val::Percent(origin.x/window.x*100.0),Val::Percent(origin.y/window.y*100.0),
+        Val::Percent(size.x/window.x*100.0),Val::Percent(size.y/window.y*100.0));
+    for mut n in &mut nodes {
+        if (n.left,n.top,n.width,n.height)!=want { (n.left,n.top,n.width,n.height)=want; }
+    }
+}
+
 /// The [`BoxedView`] cameras' viewport: the 4:3 box (none when it is the whole frame).
-fn box_views(frame: Res<GameFrame>, mut cams: Query<&mut Camera, With<BoxedView>>) {
+fn box_views(frame: Res<GameFrame>, mut cams: Query<&mut Camera, With<BoxedView>>,
+    #[cfg(target_os = "ios")] device: Res<crate::ios_runtime::DeviceState>,
+) {
     let (o, s) = ui_box(frame.size);
+    #[cfg(target_os = "ios")]
+    let (o, s) = ((frame.size.as_vec2() - s * device.ui_scale) * 0.5, s * device.ui_scale);
     let want = (s.x < frame.size.x as f32).then(|| bevy::camera::Viewport { physical_position: o.as_uvec2(), physical_size: s.as_uvec2().max(UVec2::ONE), ..default() });
     for mut c in &mut cams {
         let same = match (&c.viewport, &want) {
@@ -360,12 +413,39 @@ fn fly_view(settings: Res<DisplaySettings>, source: Option<Res<crate::game_camer
 }
 
 /// The frame's sprite fills the window at the frame's aspect, centred (the camera clears the rest to black).
-fn fit_present(frame: Res<GameFrame>, window: Option<Single<&Window, With<PrimaryWindow>>>, mut sprites: Query<&mut Sprite, With<PresentSprite>>) {
+fn fit_present(frame: Res<GameFrame>, settings: Res<DisplaySettings>, window: Option<Single<&Window, With<PrimaryWindow>>>, mut sprites: Query<&mut Sprite, With<PresentSprite>>) {
     let Some(w) = window else { return };
-    let size = fit(frame.size, Vec2::new(w.width(), w.height()));
+    let window = Vec2::new(w.width(), w.height());
+    let size = if matches!(settings.aspect, Aspect::Native { .. }) { window } else { fit(frame.size, window) };
     for mut s in &mut sprites {
         if s.custom_size != Some(size) { s.custom_size = Some(size); }
     }
+}
+
+#[cfg(target_abi = "sim")]
+pub(crate) fn simulator_contracts() {
+    use bevy::camera::CameraProjection;
+    for size in [UVec2::new(2556,1179),UVec2::new(2796,1290),UVec2::new(1920,1080)] {
+        let a=Aspect::Native { width:size.x,height:size.y };
+        assert_eq!(frame_size(Resolution::Window,a,size),size);
+        assert_eq!(frame_size(Resolution::Height(720),a,size).y,720);
+        let original=crate::game_camera::GameProjection::default();
+        let mut projection=Projection::custom(original);
+        assert!(set_view_tans(&mut projection,original.tan_x,a));
+        let Projection::Custom(c)=&projection else { unreachable!() };
+        let widened=c.get::<crate::game_camera::GameProjection>().unwrap();
+        assert_eq!(widened.tan_y,original.tan_y);
+        assert_eq!((widened.near,widened.far),(original.near,original.far));
+        let matrix=widened.get_clip_from_view();
+        let base=original.get_clip_from_view();
+        assert!((matrix.x_axis.x*hor_scale(a)-base.x_axis.x).abs()<1e-5);
+        assert_eq!((matrix.y_axis,matrix.z_axis,matrix.w_axis),(base.y_axis,base.z_axis,base.w_axis));
+        let corners=widened.get_frustum_corners(-1.0,-100.0);
+        assert!((corners[0].x.abs()-widened.tan_x).abs()<1e-5);
+        assert!(!set_view_tans(&mut projection,original.tan_x,a));
+    }
+    assert_eq!(frame_size(Resolution::Window,Aspect::Original,UVec2::new(1920,1080)),UVec2::new(1440,1080));
+    crate::ios::diagnostic("IOS_DISPLAY_CONTRACTS_PASS","native_aspect projection frustum near_far resize original_4_3 preserved");
 }
 
 #[cfg(test)]

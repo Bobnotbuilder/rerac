@@ -225,11 +225,14 @@ fn setup(mut commands: Commands, mut state: ResMut<MovieState>, mut images: ResM
     let picture = commands.spawn((full(), ImageNode::new(state.image.clone()), Visibility::Hidden, crate::display::UiBoxed, Name::new("movie picture"))).id();
     let fade = commands.spawn((full(), BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)), Name::new("movie fade"))).id();
     // Above the HUD composite (same global z, higher local z).
-    let root = commands.spawn((full(), BackgroundColor(Color::BLACK), GlobalZIndex(i32::MAX), ZIndex(1), Visibility::Hidden, MovieUi, Name::new("movie"), crate::level_switch::KeepAcrossLevels)).add_children(&[picture, fade]).id();
+    let root = commands.spawn((full(), BackgroundColor(Color::BLACK), GlobalZIndex(i32::MAX), ZIndex(1), Visibility::Hidden, MovieUi, crate::display::PresentationUi, Name::new("movie"), crate::level_switch::KeepAcrossLevels)).add_children(&[picture, fade]).id();
     (state.root, state.picture, state.fade) = (Some(root), Some(picture), Some(fade));
 }
 
-fn target_main_camera(mut commands: Commands, nodes: Query<Entity, (With<MovieUi>, Without<UiTargetCamera>)>, cams: Query<Entity, With<FlyCam>>) {
+fn target_main_camera(mut commands: Commands, nodes: Query<Entity, (With<MovieUi>, Without<UiTargetCamera>)>,
+    #[cfg(not(target_os = "ios"))] cams: Query<Entity, With<crate::fly_cam::FlyCam>>,
+    #[cfg(target_os = "ios")] cams: Query<Entity, With<crate::display::PresentCamera>>,
+) {
     let Some(cam) = cams.iter().next() else { return };
     for n in &nodes { commands.entity(n).insert(UiTargetCamera(cam)); }
 }

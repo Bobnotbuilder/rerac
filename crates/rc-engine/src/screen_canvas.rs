@@ -163,6 +163,7 @@ pub(crate) fn apply(
     hud: Query<Entity, With<crate::hud_render::HudBoxNode>>,
     parents: Query<(), With<ChildOf>>,
     mut images: ResMut<Assets<Image>>,
+    #[cfg(target_os = "ios")] device: Res<crate::ios_runtime::DeviceState>,
 ) {
     let Some(main_t) = main.iter().next().map(|(_, t)| *t) else { return };
     // The game frame's 4:3 box (crate::display): the canvas image covers it, the 512×416 screen stretched onto it.
@@ -184,6 +185,14 @@ pub(crate) fn apply(
             if let Ok((_, _, mut vis)) = nodes.get_mut(s.node) { vis.set_if_neq(Visibility::Hidden); }
             continue;
         };
+        #[cfg(target_os = "ios")]
+        let v=if s.composite==Composite::OverHud {
+            let scale=device.ui_scale;
+            let origin=crate::ios_display_math::ui_point(v.rect[0],v.rect[1],scale);
+            let centre=crate::ios_display_math::ui_point(v.centre[0],v.centre[1],scale);
+            CanvasView { rect:[origin[0],origin[1],v.rect[2]*scale,v.rect[3]*scale],
+                centre, focal:[v.focal[0]*scale,v.focal[1]*scale], ..v }
+        } else { v };
         let same = images.get(&s.image).is_some_and(|i| i.texture_descriptor.size.width == size.x && i.texture_descriptor.size.height == size.y);
         // A fresh image of the new size (crate::display::fresh_target): the node shows it, the camera is spawned again on it.
         if !same {
@@ -194,7 +203,11 @@ pub(crate) fn apply(
             }
         }
         let (mut tan_x, mut tan_y, offset) = v.camera();
-        if let Some(t) = s.tan { (tan_x, tan_y) = t; }
+        if let Some(t) = s.tan {
+            (tan_x, tan_y) = t;
+            #[cfg(target_os = "ios")]
+            if s.composite==Composite::OverHud { tan_x/=device.ui_scale; tan_y/=device.ui_scale; }
+        }
         let sub = SubCameraView { full_size: UVec2::new(SCREEN_W as u32, SCREEN_H as u32), offset, size: UVec2::new(SCREEN_W as u32, SCREEN_H as u32) };
         let proj = GameProjection { tan_x, tan_y, ..GameProjection::default() };
         match s.cam {

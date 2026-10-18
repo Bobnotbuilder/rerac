@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 class GameController(unittest.TestCase):
     def test_existing_bundle_identity_and_scene_lifecycle_preserved(self):
         info = plistlib.loads((ROOT/'ios/Info.plist').read_bytes())
-        self.assertEqual(info['CFBundleVersion'], '3')
+        self.assertEqual(info['CFBundleVersion'], '4')
         self.assertEqual(info['GCSupportedGameControllers'], [{'ProfileName':'ExtendedGamepad'}])
         self.assertTrue(info['GCSupportsControllerUserInteraction'])
         self.assertIn('UIApplicationSceneManifest', info)
@@ -36,8 +36,8 @@ class GameController(unittest.TestCase):
         main = (ROOT/'crates/rc-engine/src/main.rs').read_text()
         host = (ROOT/'crates/rc-engine/src/ios.rs').read_text()
         self.assertIn('disable::<bevy::gilrs::GilrsPlugin>()', main)
-        self.assertIn('app.add_plugins(ios_gamepad::IOSGameControllerPlugin)', main)
-        self.assertIn('.add_plugins(crate::ios_gamepad::IOSGameControllerPlugin)', host)
+        self.assertIn('app.add_plugins((ios_gamepad::IOSGameControllerPlugin, ios_runtime::IOSRuntimePlugin))', main)
+        self.assertIn('.add_plugins((crate::ios_gamepad::IOSGameControllerPlugin, crate::ios_runtime::IOSRuntimePlugin))', host)
         self.assertIn('crate::runtime_plugins()', host)
 
     def test_device_delivery_not_gated_on_desktop_build(self):
