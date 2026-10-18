@@ -31,7 +31,7 @@ const TICK: f64 = 1.0 / crate::determinism::TICK_HZ;
 pub struct FramePacePlugin;
 
 #[derive(Resource)]
-struct Pace {
+pub(crate) struct Pace {
     limit: bool,
     /// The last frame's start (the ticks' clock).
     last: Option<Instant>,
