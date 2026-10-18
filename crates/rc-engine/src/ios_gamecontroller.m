@@ -77,7 +77,13 @@ int rr_gc_simulated_snapshot(uint32_t mask, const float axes[4], RRControllerSna
             pad.buttonMenu, pad.buttonOptions, pad.leftThumbstickButton, pad.rightThumbstickButton,
             pad.dpad.up, pad.dpad.down, pad.dpad.left, pad.dpad.right
         };
-        for (int i = 0; i < 16; ++i) [inputs[i] setValue:(mask & (1u << i)) ? 1.0f : 0.0f];
+        // Snapshot D-pad directions share axes. Writing Up then Down=0 clears
+        // Up on current iOS; set both axes atomically after ordinary buttons.
+        // https://developer.apple.com/documentation/gamecontroller/gccontrollerdirectionpad/setvalueforxaxis(_:yaxis:)
+        for (int i = 0; i < 12; ++i) [inputs[i] setValue:(mask & (1u << i)) ? 1.0f : 0.0f];
+        const float dx = !!(mask & (1u << 15)) - !!(mask & (1u << 14));
+        const float dy = !!(mask & (1u << 12)) - !!(mask & (1u << 13));
+        [pad.dpad setValueForXAxis:dx yAxis:dy];
         memset(out, 0, sizeof(*out));
         snapshot(pad, 1, out);
         return 1;

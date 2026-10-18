@@ -114,6 +114,7 @@ def main():
             # never reached; the earlier harness lost this log on failed startup.
             if 'startup' in locals() and startup.exists():
                 (EVIDENCE/'simulator-startup.log').write_text(startup.read_text())
+                print('SIMULATOR_STARTUP_LOG_TAIL\n'+startup.read_text()[-16384:],flush=True)
             logs = run(['xcrun','simctl','spawn',device,'log','show','--last','2m',
                         '--style','compact','--predicate','process == "ReRAC"'],check=False)
             (EVIDENCE/'simulator-console-tail.log').write_text(logs[-65536:])

@@ -7,6 +7,18 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class GameController(unittest.TestCase):
+    def test_simulator_dpad_snapshot_updates_shared_axes_atomically(self):
+        native = (ROOT/'crates/rc-engine/src/ios_gamecontroller.m').read_text()
+        production, synthetic = native.split('#if TARGET_OS_SIMULATOR', 1)
+        self.assertIn('setValueForXAxis:dx yAxis:dy', synthetic)
+        self.assertIn('i < 12', synthetic)
+        self.assertNotIn('setValueForXAxis', production)
+        for direction in range(12, 16):
+            mask = 1 << direction
+            dx = bool(mask & (1 << 15)) - bool(mask & (1 << 14))
+            dy = bool(mask & (1 << 12)) - bool(mask & (1 << 13))
+            self.assertEqual((dx, dy), ((0,1),(0,-1),(-1,0),(1,0))[direction-12])
+
     def test_existing_bundle_identity_and_scene_lifecycle_preserved(self):
         info = plistlib.loads((ROOT/'ios/Info.plist').read_bytes())
         self.assertEqual(info['CFBundleVersion'], '4')
