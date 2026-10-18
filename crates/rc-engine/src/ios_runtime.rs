@@ -99,12 +99,15 @@ fn begin(
     let now = Instant::now();
     host.update_start = now;
     let mut info = DeviceInfo::default();
-    if unsafe { rr_ios_info(&mut info, 0) } != 1 {
+    let status = unsafe { rr_ios_info(&mut info, 0) };
+    if status <= 0 {
         return;
     }
-    let scale = crate::ios_display_math::safe_scale(info.safe);
-    if state.ui_scale != scale {
-        state.ui_scale = scale;
+    if status == 1 {
+        let scale = crate::ios_display_math::safe_scale(info.safe);
+        if state.ui_scale != scale {
+            state.ui_scale = scale;
+        }
     }
     let active = info.active != 0;
     if state.active != active {
@@ -183,7 +186,7 @@ fn finish(
         return;
     }
     let mut info = DeviceInfo::default();
-    let valid = unsafe { rr_ios_info(&mut info, 1) } == 1;
+    let valid = unsafe { rr_ios_info(&mut info, 1) } > 0;
     let stats = |v: &mut Vec<f64>| {
         if v.is_empty() {
             return (0.0, 0.0, 0.0);

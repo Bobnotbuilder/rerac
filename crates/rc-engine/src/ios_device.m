@@ -31,12 +31,14 @@ int rr_ios_info(RRDeviceInfo *out, int expensive) {
             if (window) break;
         }
         UIView *view = window.rootViewController.view;
-        if (!view || view.bounds.size.width < 1 || view.bounds.size.height < 1) return 0;
-        UIEdgeInsets s = view.safeAreaInsets;
-        // Four points of breathing room, symmetrised by the Rust UI policy.
-        float w = (float)view.bounds.size.width, h = (float)view.bounds.size.height;
-        out->safe[0] = (s.left + 4) / w; out->safe[1] = (s.top + 4) / h;
-        out->safe[2] = (s.right + 4) / w; out->safe[3] = (s.bottom + 4) / h;
+        BOOL layout = view && view.bounds.size.width >= 1 && view.bounds.size.height >= 1;
+        if (layout) {
+            UIEdgeInsets s = view.safeAreaInsets;
+            // Four points of breathing room, symmetrised by the Rust UI policy.
+            float w = (float)view.bounds.size.width, h = (float)view.bounds.size.height;
+            out->safe[0] = (s.left + 4) / w; out->safe[1] = (s.top + 4) / h;
+            out->safe[2] = (s.right + 4) / w; out->safe[3] = (s.bottom + 4) / h;
+        }
         if (expensive) {
             task_vm_info_data_t info;
             mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
@@ -46,6 +48,8 @@ int rr_ios_info(RRDeviceInfo *out, int expensive) {
             device.batteryMonitoringEnabled = YES;
             out->battery = device.batteryLevel;
         }
-        return 1;
+        // App state/thermal/memory remain valid without a foreground key window.
+        // Status 2 preserves the previous layout while still pausing inactive work.
+        return layout ? 1 : 2;
     }
 }

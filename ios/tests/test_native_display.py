@@ -86,4 +86,12 @@ class NativeDisplay(unittest.TestCase):
         smoke=(ROOT/'ios/simulator_startup_smoke.py').read_text()
         self.assertIn("'IOS_RENDER_RESIZE_PROBE_PASS' in text",smoke)
 
+    def test_missing_key_window_does_not_gate_app_lifecycle(self):
+        native=self.source('ios_device.m')
+        rust=self.source('ios_runtime.rs')
+        self.assertIn('return layout ? 1 : 2;',native)
+        self.assertNotIn('return 0;',native)
+        self.assertIn('if status == 1',rust)
+        self.assertIn('let active = info.active != 0',rust)
+
 if __name__=='__main__': unittest.main()

@@ -16,7 +16,9 @@ permissions:
 
 concurrency:
   group: rerac-ios-poc-${{ github.ref }}
-  cancel-in-progress: false
+  # Superseded builds on this isolated development branch are replaceable; keep
+  # the final SHA's device/symbol/test evidence together instead of queueing stale builds.
+  cancel-in-progress: true
 
 jobs:
   headless-regressions:
