@@ -23,7 +23,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ReRAC-iOS-arm64-build-evidence
-          run-id: 39030237195
+          run-id: 39084361850
           github-token: ${{ github.token }}
           path: readback/current
       - name: Print bounded synthetic-test diagnostics and original image identity
@@ -40,7 +40,7 @@ jobs:
                               ("symbols-manifest.json", 5000),
                               ("simulator-startup-result.json", 5000),
                               ("simulator-startup.log", 10000),
-                              ("simulator-console-tail.log", 10000),
+                              ("simulator-console-tail.log", 65536),
                               ("simulator-cargo.log", 10000),
                               ("simulator-xcodebuild.log", 10000)]:
               path = current/name
