@@ -8,10 +8,12 @@ navigation, gameplay and progression to planet three. This is not a claim that
 the entire game is complete. The previous build and matching symbols remain in:
 https://github.com/Bobnotbuilder/rerac/actions/runs/39077637396
 
-Build 4 adds native drawable aspect, safe HUD/menu placement and an initial
-bounded power/diagnostics pass. Its physical fullscreen, gameplay regression,
-thermal and battery acceptance must be repeated. See [FULLSCREEN_POWER.md](FULLSCREEN_POWER.md)
-for source findings, tests, measurement limits and the iPhone comparison checklist.
+Build 4 added native drawable aspect, safe HUD/menu placement and bounded power
+diagnostics; its complete hosted run passed at commit 80d2fb1. Build 5 extends that
+baseline with command-encoding/resource reuse, fixed resolution comparisons and
+additional local counters. See [THERMAL_ENCODING.md](THERMAL_ENCODING.md) for the
+user's A15 HUD observations, source findings, exact comparison protocol and
+measurement limitations. No build-5 physical power improvement is claimed.
 
 Preserve the existing Rust/Bevy architecture. No Swift/C++ game rewrite, emulator,
 GameStudio engine change or Shared Core promotion is part of this port.

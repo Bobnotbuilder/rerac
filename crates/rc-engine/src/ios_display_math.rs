@@ -40,8 +40,8 @@ pub fn ui_point(x: f32, y: f32, scale: f32) -> [f32; 2] {
 /// pressure changes only pixel workload, never the 60 Hz simulation clock.
 pub fn thermal_height(nominal: u32, thermal: i32) -> u32 {
     match thermal {
-        3 => nominal.min(480),
-        2 => nominal.min(576),
+        3 => nominal.min(416),
+        2 => nominal.min(540),
         _ => nominal,
     }
 }
@@ -49,24 +49,36 @@ pub fn thermal_height(nominal: u32, thermal: i32) -> u32 {
 pub struct ResolutionGovernor {
     pub height: u32,
     cool_since_ms: Option<u64>,
+    fair_since_ms: Option<u64>,
 }
 impl Default for ResolutionGovernor {
     fn default() -> Self {
         Self {
             height: 720,
             cool_since_ms: None,
+            fair_since_ms: None,
         }
     }
 }
 impl ResolutionGovernor {
     pub fn update(&mut self, elapsed_ms: u64, thermal: i32) -> u32 {
-        let target = thermal_height(720, thermal);
+        // Fair is pressure evidence, not a temperature prediction. Require a
+        // sustained 10 s signal before lowering nominal quality to 576 lines.
+        let mut target = thermal_height(720, thermal);
+        if thermal == 1 {
+            let since = *self.fair_since_ms.get_or_insert(elapsed_ms);
+            if elapsed_ms.saturating_sub(since) >= 10_000 {
+                target = 576;
+            }
+        } else {
+            self.fair_since_ms = None;
+        }
         if target < self.height {
             self.height = target;
             self.cool_since_ms = None;
         } else if target > self.height {
             let since = *self.cool_since_ms.get_or_insert(elapsed_ms);
-            if elapsed_ms.saturating_sub(since) >= 30_000 {
+            if elapsed_ms.saturating_sub(since) >= 60_000 {
                 self.height = target;
                 self.cool_since_ms = None;
             }
@@ -130,22 +142,34 @@ mod tests {
     fn resolution_changes_do_not_modify_logic_rate() {
         assert_eq!(thermal_height(720, 0), 720);
         assert_eq!(thermal_height(720, 1), 720);
-        assert_eq!(thermal_height(720, 2), 576);
-        assert_eq!(thermal_height(720, 3), 480);
+        assert_eq!(thermal_height(720, 2), 540);
+        assert_eq!(thermal_height(720, 3), 416);
         assert_eq!(thermal_height(416, 3), 416);
     }
 
     #[test]
     fn recovery_requires_continuous_cool_period() {
         let mut g = ResolutionGovernor::default();
-        assert_eq!(g.update(0, 2), 576);
-        assert_eq!(g.update(1000, 0), 576);
-        assert_eq!(g.update(29_000, 0), 576);
-        assert_eq!(g.update(30_000, 2), 576); // pressure resets recovery clock
-        assert_eq!(g.update(31_000, 0), 576);
-        assert_eq!(g.update(61_000, 0), 720);
-        assert_eq!(g.update(62_000, 3), 480);
-        assert_eq!(g.update(63_000, 2), 480);
-        assert_eq!(g.update(93_000, 2), 576);
+        assert_eq!(g.update(0, 2), 540);
+        assert_eq!(g.update(1000, 0), 540);
+        assert_eq!(g.update(59_000, 0), 540);
+        assert_eq!(g.update(60_000, 2), 540); // pressure resets recovery clock
+        assert_eq!(g.update(61_000, 0), 540);
+        assert_eq!(g.update(121_000, 0), 720);
+        assert_eq!(g.update(122_000, 3), 416);
+        assert_eq!(g.update(123_000, 2), 416);
+        assert_eq!(g.update(183_000, 2), 540);
+    }
+    #[test]
+    fn fair_pressure_is_sustained_and_recovery_does_not_flap() {
+        let mut g = ResolutionGovernor::default();
+        assert_eq!(g.update(0, 1), 720);
+        assert_eq!(g.update(9999, 1), 720);
+        assert_eq!(g.update(10_000, 1), 576);
+        assert_eq!(g.update(11_000, 0), 576);
+        assert_eq!(g.update(50_000, 1), 576);
+        assert_eq!(g.update(60_000, 1), 576);
+        assert_eq!(g.update(61_000, 0), 576);
+        assert_eq!(g.update(121_000, 0), 720);
     }
 }

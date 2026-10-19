@@ -19,7 +19,7 @@ use bevy::render::render_resource::binding_types::{sampler, texture_2d, uniform_
 use bevy::render::render_resource::{
     BindGroup, BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries, CachedRenderPipelineId, ColorTargetState,
     ColorWrites, FragmentState, Operations, PipelineCache, RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
-    Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages, TextureFormat, TextureSampleType, TextureViewId,
+    Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages, TextureFormat, TextureSampleType, TextureViewId, BufferId,
 };
 use bevy::render::renderer::{RenderContext, RenderDevice, ViewQuery};
 use bevy::render::view::{ExtractedView, ViewTarget};
@@ -28,10 +28,14 @@ use bevy::shader::ShaderRef;
 use std::marker::PhantomData;
 
 /// Registers pass `T` (Bevy's `FullscreenMaterialPlugin` with a per-type pipeline component).
-pub struct GsPostPlugin<T>(PhantomData<T>);
+pub struct GsPostPlugin<T>(PhantomData<T>, bool);
 
 impl<T> Default for GsPostPlugin<T> {
-    fn default() -> Self { GsPostPlugin(PhantomData) }
+    fn default() -> Self { GsPostPlugin(PhantomData, true) }
+}
+impl<T> GsPostPlugin<T> {
+    /// Preparation is identical; a caller may batch consecutive passes in one context.
+    pub fn prepare_only()->Self {Self(PhantomData,false)}
 }
 
 impl<T: FullscreenMaterial> Plugin for GsPostPlugin<T> {
@@ -43,7 +47,7 @@ impl<T: FullscreenMaterial> Plugin for GsPostPlugin<T> {
             (prepare_pipelines::<T>.in_set(RenderSystems::Prepare), prepare_bind_groups::<T>.in_set(RenderSystems::PrepareBindGroups)),
         );
         let system = T::schedule_configs(pass::<T>.into_configs());
-        render_app.add_systems(T::schedule(), system);
+        if self.1 { render_app.add_systems(T::schedule(), system); }
     }
 }
 
@@ -66,6 +70,7 @@ pub struct PassPipeline<T>(CachedRenderPipelineId, PhantomData<T>);
 pub struct PassBindGroups<T> {
     a: (TextureViewId, BindGroup),
     b: (TextureViewId, BindGroup),
+    uniform: BufferId,
     _marker: PhantomData<T>,
 }
 
@@ -126,21 +131,25 @@ fn prepare_bind_groups<T: FullscreenMaterial>(
 ) {
     let Some(pipelines) = pipelines else { return };
     let Some(binding) = uniforms.uniforms().binding() else { return };
+    let Some(uniform) = uniforms.uniforms().buffer().map(|b|b.id()) else {return};
     for (e, target, groups, material) in &mut views {
         if material.is_none() {
             commands.entity(e).remove::<PassBindGroups<T>>();
             continue;
         }
         let make = |tex: &bevy::render::render_resource::TextureView| {
+            crate::render_work::count(crate::render_work::POST_GROUP,1);
             (tex.id(), render_device.create_bind_group("gs_post_bind_group", &cache.get_bind_group_layout(&pipelines.layout), &BindGroupEntries::sequential((tex, &pipelines.sampler, binding.clone()))))
         };
         let (main, other) = (target.main_texture_view(), target.main_texture_other_view());
         match groups {
             Some(mut g) => {
-                if g.a.0 != main.id() { g.a = make(main); }
-                if g.b.0 != other.id() { g.b = make(other); }
+                // Ping-pong roles can swap; the groups are keyed by identity, not position.
+                if !crate::render_policy::same_pair(g.a.0,g.b.0,main.id(),other.id()) || g.uniform != uniform {
+                    g.a=make(main); g.b=make(other); g.uniform=uniform;
+                }
             }
-            None => { commands.entity(e).insert(PassBindGroups::<T> { a: make(main), b: make(other), _marker: PhantomData }); }
+            None => { commands.entity(e).insert(PassBindGroups::<T> { a: make(main), b: make(other), uniform, _marker: PhantomData }); }
         }
     }
 }
@@ -152,12 +161,30 @@ pub fn pass<T: FullscreenMaterial>(
     mut ctx: RenderContext,
 ) {
     let (target, index, groups, pipeline) = view.into_inner();
+    encode::<T>(target,index,groups,pipeline,&cache,&mut ctx);
+    #[cfg(all(target_os="ios",target_abi="sim"))]
+    if std::any::TypeId::of::<T>()==std::any::TypeId::of::<crate::aa_blit::CopyDown>() && ready(pipeline,&cache) {
+        use std::sync::atomic::{AtomicU64,Ordering};
+        static PASSES:AtomicU64=AtomicU64::new(0);
+        if PASSES.fetch_add(1,Ordering::Relaxed)==29 {
+            crate::ios::diagnostic("IOS_AA_UNBATCHED_PROBE_PASS","four_original_shader_passes four_render_contexts physical_gameplay=NOT_TESTED");
+        }
+    }
+}
+
+pub fn ready<T>(pipeline:&PassPipeline<T>,cache:&PipelineCache)->bool {
+    cache.get_render_pipeline(pipeline.0).is_some()
+}
+
+pub fn encode<T: FullscreenMaterial>(target:&ViewTarget,index:&DynamicUniformIndex<T>,groups:&PassBindGroups<T>,pipeline:&PassPipeline<T>,cache:&PipelineCache,ctx:&mut RenderContext) {
     let Some(pipeline) = cache.get_render_pipeline(pipeline.0) else { return };
+    let _time=crate::render_work::Scope::new(0);
+    crate::render_work::count(crate::render_work::POST_PASS,1);
     let post = target.post_process_write();
     let (source, destination) = (post.source, post.destination);
     let (_, group) = if groups.a.0 == source.id() { &groups.a } else { &groups.b };
     let desc = RenderPassDescriptor {
-        label: Some("gs_post_pass"),
+        label: Some(std::any::type_name::<T>()),
         color_attachments: &[Some(RenderPassColorAttachment { view: destination, depth_slice: None, resolve_target: None, ops: Operations::default() })],
         depth_stencil_attachment: None,
         timestamp_writes: None,

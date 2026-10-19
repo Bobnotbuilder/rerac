@@ -90,6 +90,8 @@ jobs:
           python3 -m unittest discover -s ios/tests -v 2>&1 | tee evidence/poc-contract-tests.log
           rustc --edition 2021 --test crates/rc-engine/src/ios_display_math.rs -o "$RUNNER_TEMP/ios-display-math-tests"
           "$RUNNER_TEMP/ios-display-math-tests" --nocapture 2>&1 | tee evidence/ios-display-math-tests.log
+          rustc --edition 2021 --test crates/rc-engine/src/render_policy.rs -o "$RUNNER_TEMP/render-policy-tests"
+          "$RUNNER_TEMP/render-policy-tests" --nocapture 2>&1 | tee evidence/render-policy-tests.log
           xcrun --sdk iphoneos clang -fsyntax-only -fobjc-arc -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" -target arm64-apple-ios16.0 crates/rc-engine/src/ios_gamecontroller.m 2>&1 | tee evidence/gamecontroller-native-check.log
           xcrun --sdk iphoneos clang -fsyntax-only -fobjc-arc -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" -target arm64-apple-ios16.0 crates/rc-engine/src/ios_device.m 2>&1 | tee evidence/ios-device-native-check.log
           cargo metadata --locked --format-version 1 > evidence/cargo-metadata.json
@@ -154,7 +156,9 @@ jobs:
           retention-days: 90
 
       - name: Launch actual import screen on iOS 27 simulator without game data
-        run: python3 ios/simulator_startup_smoke.py
+        run: |
+          python3 ios/simulator_startup_smoke.py
+          RERAC_SIM_AA_MODE=unbatched python3 ios/simulator_startup_smoke.py
 
       - name: Upload build evidence, also on failure
         if: always()

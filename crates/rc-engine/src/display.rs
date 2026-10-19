@@ -93,10 +93,13 @@ pub fn side_extra(aspect: Aspect) -> i32 { ((SCREEN_W * hor_scale(aspect) - SCRE
 pub enum Resolution {
     Window,
     Height(u16),
+    /// Explicit A/B measurement override, never thermally scaled.
+    Fixed720,
 }
 
 impl Resolution {
     /// The Port Options row's values, in order.
+    #[cfg(not(target_os="ios"))]
     pub const ALL: [Resolution; 6] = [
         Resolution::Window,
         Resolution::Height(416),
@@ -105,6 +108,8 @@ impl Resolution {
         Resolution::Height(1440),
         Resolution::Height(2160),
     ];
+    #[cfg(target_os="ios")]
+    pub const ALL: [Resolution;9]=[Self::Window,Self::Height(416),Self::Height(720),Self::Height(1080),Self::Height(1440),Self::Height(2160),Self::Height(540),Self::Height(576),Self::Fixed720];
 
     pub fn index(self) -> u8 { Self::ALL.iter().position(|&r| r == self).unwrap_or(0) as u8 }
     pub fn from_index(i: u8) -> Self { Self::ALL.get(i as usize).copied().unwrap_or(Resolution::Window) }
@@ -112,6 +117,8 @@ impl Resolution {
     /// `window`, or a height of the list (`720p` or `720`).
     fn parse(v: &str) -> Option<Self> {
         let v = v.trim();
+        #[cfg(target_os="ios")]
+        if v=="720-fixed" {return Some(Self::Fixed720);}
         if v == "window" { return Some(Resolution::Window); }
         let h = v.strip_suffix('p').unwrap_or(v).parse::<u16>().ok()?;
         Self::ALL.into_iter().find(|&r| r == Resolution::Height(h))
@@ -121,6 +128,7 @@ impl Resolution {
         match self {
             Resolution::Window => "window".into(),
             Resolution::Height(h) => format!("{h}p"),
+            Resolution::Fixed720 => "720-fixed".into(),
         }
     }
 }
@@ -173,10 +181,12 @@ pub fn frame_size(res: Resolution, aspect: Aspect, window: UVec2) -> UVec2 {
         return match res {
             Resolution::Window => window.max(UVec2::ONE),
             Resolution::Height(h) => UVec2::from(crate::ios_display_math::pixels(window.x, window.y, h as u32, 8192)),
+            Resolution::Fixed720 => UVec2::from(crate::ios_display_math::pixels(window.x,window.y,720,8192)),
         };
     }
     let a = aspect.ratio();
     match res {
+        Resolution::Fixed720 => frame_size(Resolution::Height(720),aspect,window),
         Resolution::Height(h) => {
             let h = h as f32;
             UVec2::new((h * a).round() as u32, h as u32)

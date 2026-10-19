@@ -108,6 +108,19 @@ pub struct AaBlitPlugin;
 impl Plugin for AaBlitPlugin {
     fn build(&self, app: &mut App) {
         use crate::gs_post::GsPostPlugin;
+        #[cfg(target_os="ios")]
+        if batching_enabled() {
+            app.add_plugins((
+                GsPostPlugin::<BlitAcross>::prepare_only(),
+                GsPostPlugin::<BlitDown>::prepare_only(),
+                GsPostPlugin::<CopyAcross>::prepare_only(),
+                GsPostPlugin::<CopyDown>::prepare_only(),
+            )).add_systems(PostUpdate,follow_option);
+            if let Some(r)=app.get_sub_app_mut(bevy::render::RenderApp) {
+                r.add_systems(bevy::core_pipeline::Core3d, after_world(batched.into_configs()));
+            }
+            return;
+        }
         app.add_plugins((
             GsPostPlugin::<BlitAcross>::default(),
             GsPostPlugin::<BlitDown>::default(),
@@ -116,6 +129,52 @@ impl Plugin for AaBlitPlugin {
         ))
         .add_systems(PostUpdate, follow_option);
     }
+}
+
+#[cfg(target_os="ios")]
+fn batching_enabled()->bool {
+    #[cfg(target_abi="sim")]
+    if std::env::var("RERAC_SIM_AA_MODE").as_deref()==Ok("unbatched") {return false;}
+    crate::render_settings::load_key("ios_batch_aa").as_deref()!=Some("off")
+}
+
+/// Same four shaders, parameters, ping-pong writes and render passes. Bevy 0.19
+/// flushes each RenderContext at system end; one system avoids three command
+/// buffers without fusing filters or changing their colour/edge behaviour.
+#[cfg(target_os="ios")]
+#[allow(clippy::type_complexity)]
+fn batched(
+    view: bevy::render::renderer::ViewQuery<(
+        &bevy::render::view::ViewTarget,
+        &bevy::render::extract_component::DynamicUniformIndex<BlitAcross>,
+        &crate::gs_post::PassBindGroups<BlitAcross>, &crate::gs_post::PassPipeline<BlitAcross>,
+        &bevy::render::extract_component::DynamicUniformIndex<BlitDown>,
+        &crate::gs_post::PassBindGroups<BlitDown>, &crate::gs_post::PassPipeline<BlitDown>,
+        &bevy::render::extract_component::DynamicUniformIndex<CopyAcross>,
+        &crate::gs_post::PassBindGroups<CopyAcross>, &crate::gs_post::PassPipeline<CopyAcross>,
+        &bevy::render::extract_component::DynamicUniformIndex<CopyDown>,
+        &crate::gs_post::PassBindGroups<CopyDown>, &crate::gs_post::PassPipeline<CopyDown>,
+    )>,
+    cache: Res<bevy::render::render_resource::PipelineCache>,
+    mut ctx: bevy::render::renderer::RenderContext,
+) {
+    let (t,ai,ag,ap,bi,bg,bp,ci,cg,cp,di,dg,dp)=view.into_inner();
+    // Never write a partial filter chain while pipelines warm up.
+    if !crate::gs_post::ready(ap,&cache)||!crate::gs_post::ready(bp,&cache)
+        ||!crate::gs_post::ready(cp,&cache)||!crate::gs_post::ready(dp,&cache) {return;}
+    crate::render_work::count(crate::render_work::AA_BATCH,1);
+    #[cfg(target_abi="sim")]
+    {
+        use std::sync::atomic::{AtomicU64,Ordering};
+        static BATCHES:AtomicU64=AtomicU64::new(0);
+        if BATCHES.fetch_add(1,Ordering::Relaxed)==29 {
+            crate::ios::diagnostic("IOS_AA_BATCH_PROBE_PASS","four_original_shader_passes one_render_context physical_gameplay=NOT_TESTED");
+        }
+    }
+    crate::gs_post::encode(t,ai,ag,ap,&cache,&mut ctx);
+    crate::gs_post::encode(t,bi,bg,bp,&cache,&mut ctx);
+    crate::gs_post::encode(t,ci,cg,cp,&cache,&mut ctx);
+    crate::gs_post::encode(t,di,dg,dp,&cache,&mut ctx);
 }
 
 /// The four draws on the main camera while the option is Original.

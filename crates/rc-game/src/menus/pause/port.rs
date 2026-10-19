@@ -71,6 +71,9 @@ pub mod text {
     pub const RES_1080: i32 = -0x134;
     pub const RES_1440: i32 = -0x135;
     pub const RES_2160: i32 = -0x136;
+    pub const RES_540: i32 = -0x137;
+    pub const RES_576: i32 = -0x138;
+    pub const RES_FIXED720: i32 = -0x139;
     pub const FULLSCREEN: i32 = -0x140;
     pub const ASPECT: i32 = -0x150;
     pub const ASPECT_4_3: i32 = -0x151;
@@ -106,7 +109,10 @@ pub mod text {
             RESOLUTION => b"Resolution",
             RES_WINDOW => b"Window",
             RES_416 => b"416p",
-            RES_720 => b"720p",
+            RES_720 => if cfg!(target_os="ios") {b"720p auto"} else {b"720p"},
+            RES_540 => b"540p",
+            RES_576 => b"576p",
+            RES_FIXED720 => b"720p fixed",
             RES_1080 => b"1080p",
             RES_1440 => b"1440p",
             RES_2160 => b"2160p",
@@ -180,7 +186,10 @@ pub const ENTRIES: &[Entry] = &[
     Entry { setting: Setting::Aspect, label: text::ASPECT, values: &[text::ASPECT_4_3, text::ASPECT_16_10, text::ASPECT_16_9] },
     #[cfg(target_os = "ios")]
     Entry { setting: Setting::Aspect, label: text::ASPECT, values: &[text::ASPECT_4_3, text::ASPECT_16_10, text::ASPECT_16_9, text::ASPECT_NATIVE] },
+    #[cfg(not(target_os="ios"))]
     Entry { setting: Setting::Resolution, label: text::RESOLUTION, values: &[text::RES_WINDOW, text::RES_416, text::RES_720, text::RES_1080, text::RES_1440, text::RES_2160] },
+    #[cfg(target_os="ios")]
+    Entry { setting: Setting::Resolution, label: text::RESOLUTION, values: &[text::RES_WINDOW, text::RES_416, text::RES_720, text::RES_1080, text::RES_1440, text::RES_2160,text::RES_540,text::RES_576,text::RES_FIXED720] },
     Entry { setting: Setting::Fullscreen, label: text::FULLSCREEN, values: &[text::OFF, text::ON] },
 ];
 

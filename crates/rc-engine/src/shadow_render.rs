@@ -42,13 +42,13 @@ use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
 use bevy::render::render_resource::binding_types::{texture_2d, texture_2d_multisampled, uniform_buffer};
 use bevy::render::render_resource::{
     BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries, BlendComponent, BlendFactor, BlendOperation, BlendState,
-    Buffer, BufferInitDescriptor, BufferUsages, CachedRenderPipelineId, ColorTargetState, ColorWrites, CompareFunction,
+    Buffer, BufferDescriptor, BufferUsages, CachedRenderPipelineId, ColorTargetState, ColorWrites, CompareFunction,
     DepthStencilState, Extent3d, FragmentState, LoadOp, MultisampleState, Operations, PipelineCache, PrimitiveState,
     RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor, ShaderStages, StoreOp, TextureDescriptor,
     TextureDimension, TextureFormat, TextureSampleType, TextureUsages, VertexAttribute, VertexFormat,
-    VertexState, VertexStepMode,
+    VertexState, VertexStepMode, BindGroup, UniformBuffer, TextureViewId,
 };
-use bevy::render::renderer::{RenderContext, RenderDevice, ViewQuery};
+use bevy::render::renderer::{RenderContext, RenderDevice, RenderQueue, ViewQuery};
 use bevy::render::texture::{CachedTexture, TextureCache};
 use bevy::render::view::{ExtractedView, ViewDepthTexture, ViewTarget};
 use bevy::render::{Render, RenderApp, RenderStartup, RenderSystems};
@@ -137,13 +137,26 @@ impl Plugin for ShadowPlugin {
             .add_systems(Update, tag_camera)
             .add_systems(Last, collect);
         if crate::gameplay::enabled() { app.add_systems(FixedUpdate, shadow_tick.after(crate::gameplay::GameTick).after(crate::scene_render::actor_mobys)); }
+        install_gpu(app);
+    }
+}
+
+fn install_gpu(app:&mut App) {
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else { return };
         render_app
             .init_resource::<ShadowGpu>()
             .add_systems(RenderStartup, init_pipelines)
             .add_systems(Render, prepare.in_set(RenderSystems::PrepareResources))
             .add_systems(Core3d, shadow_pass.after(main_opaque_pass_3d).before(main_transparent_pass_3d).in_set(Core3dSystems::MainPass).in_set(ShadowPassSet));
-    }
+}
+
+/// Legal procedural GPU fixture only; never loads a game or changes device work.
+#[cfg(all(target_os="ios",target_abi="sim"))]
+pub(crate) fn simulator_install(app:&mut App) {
+    let mut v=ShadowVolumes::default();
+    v.tris=Arc::new(vec![[-0.3,-0.3,0.0],[0.3,-0.3,0.0],[0.0,0.3,0.0]]);
+    app.insert_resource(v).add_plugins((ExtractResourcePlugin::<ShadowVolumes>::default(),ExtractComponentPlugin::<ShadowCamera>::default()));
+    install_gpu(app);
 }
 
 fn setup(mut commands: Commands, level: Res<crate::Level>) {
@@ -335,6 +348,8 @@ pub fn collect(
 #[derive(Resource, Default)]
 struct ShadowGpu {
     buffer: Option<Buffer>,
+    capacity: u64,
+    bytes: Vec<u8>,
     vertices: u32,
     debug: bool,
 }
@@ -352,6 +367,15 @@ struct ShadowPipelines {
 /// Per shadow view: the count target.
 #[derive(Component)]
 struct ShadowCount(CachedTexture);
+
+#[derive(Component)]
+struct ShadowBindings {
+    uniform: UniformBuffer<Mat4>,
+    view: BindGroup,
+    count: BindGroup,
+    count_id: TextureViewId,
+    samples: u32,
+}
 
 fn init_pipelines(mut commands: Commands, assets: Res<AssetServer>, fullscreen: Res<FullscreenShader>) {
     commands.insert_resource(ShadowPipelines {
@@ -450,20 +474,30 @@ fn prepare(
     volumes: Option<Res<ShadowVolumes>>,
     mut gpu: ResMut<ShadowGpu>,
     device: Res<RenderDevice>,
+    queue: Res<RenderQueue>,
     cache: Res<PipelineCache>,
     pipes: Option<Res<ShadowPipelines>>,
     mut textures: ResMut<TextureCache>,
-    views: Query<(Entity, &ExtractedCamera, &ViewTarget), With<ShadowCamera>>,
+    mut views: Query<(Entity, &ExtractedCamera, &ViewTarget, &ExtractedView, Option<&mut ShadowBindings>), With<ShadowCamera>>,
 ) {
+    let _time=crate::render_work::Scope::new(1);
     let Some(pipes) = pipes else { return };
     let tris = volumes.as_ref().map(|v| v.tris.clone()).unwrap_or_default();
     gpu.debug = volumes.as_ref().is_some_and(|v| v.debug);
     gpu.vertices = tris.len() as u32;
-    gpu.buffer = (!tris.is_empty()).then(|| {
-        let bytes: Vec<u8> = tris.iter().flat_map(|p| p.iter().flat_map(|x| x.to_le_bytes())).collect();
-        device.create_buffer_with_data(&BufferInitDescriptor { label: Some("shadow volumes"), contents: &bytes, usage: BufferUsages::VERTEX })
-    });
-    for (e, cam, target) in &views {
+    if tris.is_empty() {return;}
+    let gpu=&mut *gpu;
+    gpu.bytes.clear();
+    gpu.bytes.extend(tris.iter().flat_map(|p|p.iter().flat_map(|x|x.to_le_bytes())));
+    let capacity=crate::render_policy::capacity(gpu.capacity,gpu.bytes.len() as u64);
+    if gpu.buffer.is_none() || capacity!=gpu.capacity {
+        gpu.buffer=Some(device.create_buffer(&BufferDescriptor {label:Some("shadow volumes reusable"),size:capacity,usage:BufferUsages::VERTEX|BufferUsages::COPY_DST,mapped_at_creation:false}));
+        gpu.capacity=capacity;
+        crate::render_work::count(crate::render_work::SHADOW_ALLOC,1);
+    }
+    queue.write_buffer(gpu.buffer.as_ref().unwrap(),0,&gpu.bytes);
+    crate::render_work::count(crate::render_work::SHADOW_UPLOAD,gpu.bytes.len() as u64);
+    for (e, cam, target, ev, bindings) in &mut views {
         let samples = target.sampled_main_texture().map_or(1, |t| t.sample_count());
         let format = target.main_texture_format();
         // Queued every frame (cheap once cached), so the first shadow never waits for a compile of all three.
@@ -482,6 +516,26 @@ fn prepare(
                 view_formats: &[],
             },
         );
+        if cache.get_render_pipeline(pipes.id(&cache,VOLUME,samples,format)).is_none()
+            ||cache.get_render_pipeline(pipes.id(&cache,DARKEN,samples,format)).is_none() {continue;}
+        let clip=ev.clip_from_world.unwrap_or_else(||ev.clip_from_view*ev.world_from_view.to_matrix().inverse());
+        let make_count=|| {
+            crate::render_work::count(crate::render_work::SHADOW_GROUP,1);
+            device.create_bind_group("shadow count cached",&cache.get_bind_group_layout(&pipes.count_layout[(samples>1) as usize]),&BindGroupEntries::single(&count.default_view))
+        };
+        if let Some(mut b)=bindings {
+            if b.uniform.get()!=&clip {b.uniform.set(clip);b.uniform.write_buffer(&device,&queue);}
+            if b.count_id!=count.default_view.id()||b.samples!=samples {
+                b.count=make_count();b.count_id=count.default_view.id();b.samples=samples;
+            }
+        } else {
+            let mut uniform=UniformBuffer::from(clip);
+            uniform.set_label(Some("shadow view reusable"));
+            uniform.write_buffer(&device,&queue);
+            let view=device.create_bind_group("shadow view cached",&cache.get_bind_group_layout(&pipes.view_layout),&BindGroupEntries::single(uniform.binding().unwrap()));
+            crate::render_work::count(crate::render_work::SHADOW_GROUP,1);
+            commands.entity(e).insert(ShadowBindings {uniform,view,count:make_count(),count_id:count.default_view.id(),samples});
+        }
         commands.entity(e).insert(ShadowCount(count));
     }
 }
@@ -489,14 +543,16 @@ fn prepare(
 /// The shadow pass of a shadow view (module docs): volumes into the count target, then the resolve.
 #[allow(clippy::too_many_arguments)]
 fn shadow_pass(
-    view: ViewQuery<(&ExtractedCamera, &ExtractedView, &ViewTarget, &ViewDepthTexture, &ShadowCount), With<ShadowCamera>>,
+    view: ViewQuery<(&ExtractedCamera, &ViewTarget, &ViewDepthTexture, &ShadowCount, &ShadowBindings), With<ShadowCamera>>,
     gpu: Res<ShadowGpu>,
     pipes: Option<Res<ShadowPipelines>>,
     cache: Res<PipelineCache>,
     mut ctx: RenderContext,
 ) {
+    let _time=crate::render_work::Scope::new(2);
+    if gpu.vertices==0 {return;}
     let (Some(buffer), Some(pipes)) = (gpu.buffer.as_ref(), pipes) else { return };
-    let (camera, ev, target, depth, count) = view.into_inner();
+    let (camera, target, depth, count, bindings) = view.into_inner();
     let samples = target.sampled_main_texture().map_or(1, |t| t.sample_count());
     let format = target.main_texture_format();
     let resolve_kind = if gpu.debug { DEBUG } else { DARKEN };
@@ -506,12 +562,15 @@ fn shadow_pass(
     ) else {
         return;
     };
-    let clip_from_world = ev.clip_from_world.unwrap_or_else(|| ev.clip_from_view * ev.world_from_view.to_matrix().inverse());
-    let device = ctx.render_device().clone();
-    let bytes: Vec<u8> = clip_from_world.to_cols_array().iter().flat_map(|x| x.to_le_bytes()).collect();
-    let uniform = device.create_buffer_with_data(&BufferInitDescriptor { label: Some("shadow view"), contents: &bytes, usage: BufferUsages::UNIFORM });
-    let view_group = device.create_bind_group("shadow view", &cache.get_bind_group_layout(&pipes.view_layout), &BindGroupEntries::single(uniform.as_entire_binding()));
-    let count_group = device.create_bind_group("shadow count", &cache.get_bind_group_layout(&pipes.count_layout[(samples > 1) as usize]), &BindGroupEntries::single(&count.0.default_view));
+    crate::render_work::count(crate::render_work::SHADOW_PASS,2);
+    #[cfg(all(target_os="ios",target_abi="sim"))]
+    {
+        use std::sync::atomic::{AtomicU64,Ordering};
+        static DRAWS:AtomicU64=AtomicU64::new(0);
+        if DRAWS.fetch_add(1,Ordering::Relaxed)==29 {
+            crate::ios::diagnostic("IOS_SHADOW_REUSE_PROBE_PASS","real_shadow_gpu_passes cached_bindings reusable_vertex_buffer physical_gameplay=NOT_TESTED");
+        }
+    }
     let viewport = camera.viewport.clone();
     {
         let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
@@ -529,7 +588,7 @@ fn shadow_pass(
         });
         if let Some(v) = &viewport { pass.set_camera_viewport(v); }
         pass.set_render_pipeline(vol_pipe);
-        pass.set_bind_group(0, &view_group, &[]);
+        pass.set_bind_group(0, &bindings.view, &[]);
         pass.set_vertex_buffer(0, buffer.slice(..));
         pass.draw(0..gpu.vertices, 0..1);
     }
@@ -543,7 +602,7 @@ fn shadow_pass(
     });
     if let Some(v) = &viewport { pass.set_camera_viewport(v); }
     pass.set_render_pipeline(res_pipe);
-    pass.set_bind_group(0, &count_group, &[]);
+    pass.set_bind_group(0, &bindings.count, &[]);
     pass.draw(0..3, 0..1);
 }
 

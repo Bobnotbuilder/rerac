@@ -8,7 +8,9 @@ import subprocess
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-EVIDENCE = ROOT/'evidence'
+UNBATCHED=os.environ.get('RERAC_SIM_AA_MODE')=='unbatched'
+EVIDENCE = ROOT/'evidence'/('simulator-unbatched' if UNBATCHED else 'simulator-batched')
+AA_MARKER='IOS_AA_UNBATCHED_PROBE_PASS' if UNBATCHED else 'IOS_AA_BATCH_PROBE_PASS'
 
 
 def run(args, timeout=180, check=True):
@@ -17,7 +19,7 @@ def run(args, timeout=180, check=True):
 
 
 def main():
-    EVIDENCE.mkdir(exist_ok=True)
+    EVIDENCE.mkdir(exist_ok=True,parents=True)
     env = os.environ.copy()
     env['SDKROOT'] = run(['xcrun','--sdk','iphonesimulator','--show-sdk-path']).strip()
     env['CARGO_PROFILE_RELEASE_DEBUG'] = '0'
@@ -71,6 +73,7 @@ def main():
                 run(['xcrun','simctl','bootstatus',device,'-b'],timeout=300)
         launch_env = os.environ.copy()
         launch_env['SIMCTL_CHILD_RERAC_IOS_CONTROLLER_SELFTEST'] = '1'
+        launch_env['SIMCTL_CHILD_RERAC_SIM_AA_MODE']='unbatched' if UNBATCHED else 'batched'
         launched = subprocess.run(['xcrun','simctl','launch',device,'org.rerac.game.iospoc'],
                                   env=launch_env,check=True,text=True,stdout=subprocess.PIPE,
                                   stderr=subprocess.STDOUT,timeout=180).stdout
@@ -79,10 +82,11 @@ def main():
         container = Path(run(['xcrun','simctl','get_app_container',device,
                               'org.rerac.game.iospoc','data']).strip())
         startup = container/'Documents/ReRACSupport/startup.log'
-        deadline = time.monotonic()+90
+        deadline = time.monotonic()+150
         while time.monotonic()<deadline:
             text = startup.read_text() if startup.exists() else ''
-            if 'FIRST_UPDATE_REACHED' in text and 'IOS_RENDER_RESIZE_PROBE_PASS' in text:
+            if ('FIRST_UPDATE_REACHED' in text and 'IOS_RENDER_RESIZE_PROBE_PASS' in text
+                and AA_MARKER in text and 'IOS_SHADOW_REUSE_PROBE_PASS' in text):
                 break
             time.sleep(1)
         else:
@@ -95,7 +99,8 @@ def main():
                        'RENDER_DEVICE_READY','toc=false','extract_info=false',
                        'GAMECONTROLLER_SYNTHETIC_SELFTEST_PASS','GAMECONTROLLER_READY',
                        'IOS_DISPLAY_CONTRACTS_PASS','IOS_SAFE_UI_CONTRACTS_PASS',
-                       'IOS_RENDER_RESIZE_PROBE_PASS'):
+                       'IOS_RENDER_RESIZE_PROBE_PASS',AA_MARKER,
+                       'IOS_SHADOW_REUSE_PROBE_PASS'):
             if marker not in text:
                 raise RuntimeError('SIMULATOR_MISSING_MARKER '+marker)
         run(['xcrun','simctl','io',device,'screenshot',
@@ -106,6 +111,8 @@ def main():
                       gameplay='NOT_TESTED',backbone_physical='NOT_TESTED',
                       native_controller_to_bevy_to_pad_synthetic='PASS')
         report['native_display_projection_safe_ui_and_render_resize']='PASS'
+        report['original_aa_batched_and_shadow_reuse_gpu_probes']='PASS'
+        report['aa_mode']='unbatched' if UNBATCHED else 'batched'
         (EVIDENCE/'simulator-startup-result.json').write_text(json.dumps(report,indent=2)+'\n')
         print(json.dumps(report))
     finally:

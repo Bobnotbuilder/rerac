@@ -71,7 +71,8 @@ impl Default for MainThread {
 pub struct IOSRuntimePlugin;
 impl Plugin for IOSRuntimePlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<DeviceState>()
+        app.add_plugins(crate::render_work::RenderWorkPlugin)
+            .init_resource::<DeviceState>()
             .insert_non_send_resource(MainThread::default())
             // Stop the default 60 Hz unfocused wakeups. UIKit/winit suspend the renderer
             // in the background; no UIBackgroundModes/audio background entitlement is added.
@@ -206,6 +207,7 @@ fn finish(
         "app_fps={:.2} frame_ms_mean={mean:.2} p50={p50:.2} p95={p95:.2} main_schedule_wall_ms={update_mean:.2} main_schedule_p95={update_p95:.2} gpu_ms=UNMEASURED display={}x{} render={}x{} settings={settings:?} thermal={} footprint_bytes={} battery_fraction={} inactive_updates={} ui_scale={:.3} presented_fps=UNMEASURED",
         if mean>0.0 {1000.0/mean} else {0.0},drawable.x,drawable.y,size.x,size.y,
         state.thermal,if valid {info.footprint} else {0},if valid {info.battery} else {-1.0},host.inactive_updates,state.ui_scale));
+    crate::ios::diagnostic("IOS_RENDER_WORK",&crate::render_work::take_report());
     host.last_report = now;
     host.interval_ms.clear();
     host.update_ms.clear();
@@ -219,13 +221,16 @@ pub(crate) fn install_simulator_probe(app: &mut App) {
     if std::env::var("RERAC_IOS_CONTROLLER_SELFTEST").as_deref() != Ok("1") {
         return;
     }
+    app.init_resource::<crate::graphics::GraphicsSettings>()
+        .add_plugins(crate::aa_blit::AaBlitPlugin);
+    crate::shadow_render::simulator_install(app);
     app.add_systems(
         Startup,
         |mut commands: Commands,
          mut meshes: ResMut<Assets<Mesh>>,
          mut materials: ResMut<Assets<StandardMaterial>>| {
             for (order, layer) in [(10, 50), (11, 51)] {
-                commands.spawn((
+                let mut camera=commands.spawn((
                     Camera3d::default(),
                     Camera {
                         order,
@@ -242,6 +247,11 @@ pub(crate) fn install_simulator_probe(app: &mut App) {
                     Transform::from_xyz(0.0, 0.0, 3.0).looking_at(Vec3::ZERO, Vec3::Y),
                     DisplayProbe,
                 ));
+                if order==10 {
+                    camera.insert((crate::shadow_render::ShadowCamera,
+                        crate::aa_blit::BlitAcross::default(),crate::aa_blit::BlitDown::default(),
+                        crate::aa_blit::CopyAcross::default(),crate::aa_blit::CopyDown::default()));
+                }
             }
             commands.spawn((
                 Mesh3d(meshes.add(Cuboid::new(0.4, 0.4, 0.4))),
@@ -291,14 +301,19 @@ fn probe(
             settings.resolution = Resolution::Height(576);
         }
         120 => {
-            settings.resolution = Resolution::Height(720);
+            settings.resolution = Resolution::Height(540);
         }
-        180 => {
+        150 => {
+            settings.resolution = Resolution::Fixed720;
+        }
+        180 => {crate::render_work::take_report();}
+        240 => {
             for (camera, _) in &mut cameras {
                 assert_eq!(camera.physical_target_size(), Some(frame.size));
                 assert!(frame.size.x > 0 && frame.size.y > 0);
             }
-            crate::ios::diagnostic("IOS_RENDER_RESIZE_PROBE_PASS","actual_simulator_graph shared_target native_4_3_16_9_576_720 physical_gameplay=NOT_TESTED");
+            crate::ios::diagnostic("IOS_RENDER_RESIZE_PROBE_PASS","actual_simulator_graph shared_target native_4_3_16_9_416_540_576_720_fixed physical_gameplay=NOT_TESTED");
+            crate::ios::diagnostic("IOS_RENDER_WORK_STEADY_PROBE",&crate::render_work::take_report());
         }
         _ => {}
     }

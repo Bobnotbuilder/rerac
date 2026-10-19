@@ -35,6 +35,8 @@ mod ios;
 mod ios_gamepad;
 
 mod ios_display_math;
+mod render_policy;
+mod render_work;
 #[cfg(target_os = "ios")]
 mod ios_runtime;
 
