@@ -74,7 +74,9 @@ pub struct PassBindGroups<T> {
     _marker: PhantomData<T>,
 }
 
-fn init<T: FullscreenMaterial>(mut commands: Commands, render_device: Res<RenderDevice>, asset_server: Res<AssetServer>, fullscreen: Res<FullscreenShader>) {
+fn init<T: FullscreenMaterial>(mut commands: Commands, render_device: Res<RenderDevice>, asset_server: Res<AssetServer>, fullscreen: Res<FullscreenShader>, groups:Query<Entity,With<PassBindGroups<T>>>) {
+    // RenderStartup can repeat after device recovery; never keep old-device groups.
+    for e in &groups {commands.entity(e).remove::<PassBindGroups<T>>();}
     let layout = BindGroupLayoutDescriptor::new(
         "gs_post_layout",
         &BindGroupLayoutEntries::sequential(

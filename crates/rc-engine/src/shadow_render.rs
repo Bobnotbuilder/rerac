@@ -377,7 +377,10 @@ struct ShadowBindings {
     samples: u32,
 }
 
-fn init_pipelines(mut commands: Commands, assets: Res<AssetServer>, fullscreen: Res<FullscreenShader>) {
+fn init_pipelines(mut commands: Commands, assets: Res<AssetServer>, fullscreen: Res<FullscreenShader>, bindings:Query<Entity,With<ShadowBindings>>) {
+    // A replaced RenderDevice invalidates our cached buffers/groups too.
+    commands.insert_resource(ShadowGpu::default());
+    for e in &bindings {commands.entity(e).remove::<(ShadowBindings,ShadowCount)>();}
     commands.insert_resource(ShadowPipelines {
         view_layout: BindGroupLayoutDescriptor::new("shadow volume view", &BindGroupLayoutEntries::single(ShaderStages::VERTEX, uniform_buffer::<Mat4>(false))),
         count_layout: [

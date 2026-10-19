@@ -6,6 +6,12 @@ ROOT=Path(__file__).resolve().parents[2]
 def source(name): return (ROOT/'crates/rc-engine/src'/name).read_text()
 
 class RenderEfficiency(unittest.TestCase):
+    def test_render_startup_invalidates_owned_device_resources(self):
+        self.assertIn('remove::<PassBindGroups<T>>()',source('gs_post.rs'))
+        shadow=source('shadow_render.rs')
+        self.assertIn('commands.insert_resource(ShadowGpu::default())',shadow)
+        self.assertIn('remove::<(ShadowBindings,ShadowCount)>()',shadow)
+
     def test_batch_preserves_order_and_pipeline_readiness(self):
         s=source('aa_blit.rs')
         calls=['encode(t,ai,ag,ap','encode(t,bi,bg,bp','encode(t,ci,cg,cp','encode(t,di,dg,dp']
