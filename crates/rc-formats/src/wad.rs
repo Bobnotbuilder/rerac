@@ -15,12 +15,18 @@ pub fn compressed_size(b: &[u8]) -> Result<u32> {
 }
 
 pub fn decompress(bytes: &[u8]) -> Result<Vec<u8>> {
+    decompress_bounded(bytes, usize::MAX)
+}
+
+/// Decode an untrusted stream without exceeding the caller's output budget.
+/// Existing RAC1 callers retain their original decoding contract.
+pub fn decompress_bounded(bytes: &[u8], max_output: usize) -> Result<Vec<u8>> {
     let total = compressed_size(bytes)? as usize;
     if total < WAD_HEADER_SIZE || total > bytes.len() { return invalid("WAD: compressed size exceeds buffer"); }
     let stream = Buf(&bytes[WAD_HEADER_SIZE..total]);
     let end = stream.len();
     let mut ptr = 0usize;
-    let mut out: Vec<u8> = Vec::with_capacity(total * 2);
+    let mut out: Vec<u8> = Vec::with_capacity(total.saturating_mul(2).min(max_output));
 
     let next = |ptr: &mut usize| -> Result<u8> {
         if *ptr >= end { return invalid("WAD: read past end of stream"); }
@@ -30,12 +36,14 @@ pub fn decompress(bytes: &[u8]) -> Result<Vec<u8>> {
     };
     let literals = |ptr: &mut usize, out: &mut Vec<u8>, n: usize| -> Result<()> {
         if end - *ptr < n { return invalid("WAD: literal runs past end of stream"); }
+        if n > max_output.saturating_sub(out.len()) { return invalid("WAD: output budget exceeded"); }
         out.extend_from_slice(&stream.0[*ptr..*ptr + n]);
         *ptr += n;
         Ok(())
     };
     let copy_match = |out: &mut Vec<u8>, displacement: usize, len: usize| -> Result<()> {
         if displacement == 0 || displacement > out.len() { return invalid("WAD: match source before start of output"); }
+        if len > max_output.saturating_sub(out.len()) { return invalid("WAD: output budget exceeded"); }
         let src = out.len() - displacement;
         for i in 0..len { let v = out[src + i]; out.push(v); }   // overlapping copies are run-length expansion
         Ok(())
@@ -102,6 +110,13 @@ mod tests {
     fn literal_then_little_match() {
         let out = decompress(&wad(&[0x01, b'a', b'b', b'c', b'd', 0xC0, 0x00])).unwrap();
         assert_eq!(out, b"abcdddddddd");
+    }
+    #[test]
+    fn bounded_output_includes_overlapping_matches() {
+        let v = wad(&[0x01, b'a', b'b', b'c', b'd', 0xC0, 0x00]);
+        assert!(decompress_bounded(&v, 10).is_err());
+        assert!(decompress_bounded(&v, 3).is_err());
+        assert_eq!(decompress_bounded(&v, 11).unwrap(), decompress(&v).unwrap());
     }
     #[test]
     fn medium_match_with_little_literal() {

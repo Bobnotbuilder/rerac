@@ -13,6 +13,7 @@ pub mod export;
 pub mod extract;
 pub mod identify;
 pub mod inspection;
+pub mod rc2_assets;
 pub mod json;
 pub mod prepare;
 /// SHA-1, shared with the loader snapshots (it lives in rc-formats).

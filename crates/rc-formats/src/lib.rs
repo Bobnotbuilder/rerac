@@ -11,6 +11,7 @@ pub mod toc;
 pub mod iso9660;
 pub mod disc;
 pub mod level;
+pub mod rc2;
 pub mod texture;
 pub mod vif;
 pub mod tfrag;

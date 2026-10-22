@@ -11,6 +11,8 @@ use std::time::Instant;
 
 const USAGE: &str = "\
 usage:
+  rerac-extract prepare-rc2 --iso <image> --out <NEW private directory> --level <archive slot> [--json]
+                           (experimental terrain/object metadata conversion, NOT a complete game package)
   rerac-extract inspect  --iso <image> [--json]   (read-only identification, hash and filesystem inventory)
   rerac-extract identify --iso <image> [--json]
   rerac-extract extract  --iso <image> --out <data dir> [--ntsc-only] [--json]   (ends with prepare)
@@ -29,7 +31,7 @@ options:
   rerac-extract --help | --version";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Cmd { Identify, Inspect, Extract, Verify, Prepare, Export, Table, Help, Version }
+enum Cmd { Identify, Inspect, Extract, Verify, Prepare, PrepareRc2, Export, Table, Help, Version }
 
 #[derive(Debug, PartialEq, Eq)]
 struct Args {
@@ -56,6 +58,7 @@ fn parse_args(argv: &[OsString], env_iso: Option<OsString>) -> Result<Args, Stri
         Some("extract") => Cmd::Extract,
         Some("verify") => Cmd::Verify,
         Some("prepare") => Cmd::Prepare,
+        Some("prepare-rc2") => Cmd::PrepareRc2,
         Some("export") => Cmd::Export,
         Some("table") => Cmd::Table,
         Some("--help" | "-h" | "help") => return Ok(a),
@@ -99,12 +102,13 @@ fn parse_args(argv: &[OsString], env_iso: Option<OsString>) -> Result<Args, Stri
     match a.cmd {
         Cmd::Identify | Cmd::Inspect => need(a.iso.is_some(), "--iso (or RC_ISO)")?,
         Cmd::Extract => { need(a.iso.is_some(), "--iso (or RC_ISO)")?; need(a.out.is_some(), "--out")?; }
+        Cmd::PrepareRc2 => { need(a.iso.is_some(), "--iso (or RC_ISO)")?; need(a.out.is_some(), "--out")?; need(a.level.is_some(), "--level (archive slot)")?; }
         Cmd::Verify | Cmd::Prepare | Cmd::Export => need(a.out.is_some(), "--out")?,
         Cmd::Table => { need(a.iso.is_some(), "--iso (or RC_ISO)")?; need(a.output.is_some(), "--output")?; }
         Cmd::Help | Cmd::Version => {}
     }
     if a.ntsc_only && a.cmd != Cmd::Extract { return Err("--ntsc-only applies to extract only".into()); }
-    if a.cmd != Cmd::Export && (a.to.is_some() || a.level.is_some() || a.what != Kinds::ALL) { return Err("--to, --what and --level apply to export only".into()); }
+    if a.cmd != Cmd::Export && (a.to.is_some() || (a.level.is_some() && a.cmd != Cmd::PrepareRc2) || a.what != Kinds::ALL) { return Err("--to/--what require export; --level requires export or prepare-rc2".into()); }
     Ok(a)
 }
 
@@ -197,6 +201,7 @@ fn main() {
 fn run(a: &Args, emit: &mut dyn FnMut(Event)) -> Result<String, Error> {
     let t0 = Instant::now();
     match a.cmd {
+        Cmd::PrepareRc2 => rc_extract::rc2_assets::prepare(a.iso.as_ref().unwrap(),a.out.as_ref().unwrap(),a.level.unwrap(),emit),
         Cmd::Inspect => {
             let report = rc_extract::inspection::inspect(a.iso.as_ref().unwrap(), BUILDS, emit)?;
             // An inspection object is output even for recognised unsupported titles.
@@ -249,6 +254,8 @@ mod tests {
 
     #[test]
     fn parses_the_contract_command_lines() {
+        let p=args(&["prepare-rc2","--iso","owned.iso","--out","new-private-folder","--level","0"]).unwrap();
+        assert_eq!(p.cmd,Cmd::PrepareRc2); assert_eq!(p.level,Some(0));
         let a = args(&["identify", "--iso", "/x/My Disc.iso", "--json"]).unwrap();
         assert_eq!((a.cmd, a.iso.as_deref(), a.json), (Cmd::Identify, Some(std::path::Path::new("/x/My Disc.iso")), true));
         let a = args(&["extract", "--iso", "d.iso", "--out", "/data", "--ntsc-only", "--json"]).unwrap();
@@ -273,6 +280,7 @@ mod tests {
     fn rejects_bad_command_lines() {
         for bad in [
             &[][..], &["frobnicate"], &["identify"], &["extract", "--iso", "a"], &["verify"], &["prepare"], &["prepare", "--out", "o", "--ntsc-only"], &["identify", "--iso"],
+            &["prepare-rc2","--iso","a","--out","b"],
             &["identify", "--iso", "a", "--bogus"], &["verify", "--out", "o", "--ntsc-only"], &["verify", "--out", "o", "--threads", "0"],
             &["table", "--iso", "a"], &["identify", "--iso", "a", "--json=1"], &["export"], &["export", "--out", "o", "--what", "meshes"],
             &["export", "--out", "o", "--level", "x"], &["verify", "--out", "o", "--to", "t"], &["prepare", "--out", "o", "--level", "1"],

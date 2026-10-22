@@ -17,6 +17,7 @@
 //! stamp, lump checks), and a crate without Bevy keeps the extractor free of the engine and its tests fast.
 
 pub mod cache;
+pub mod rc2;
 pub mod xxh64;
 
 pub use cache::{Cache, Error};

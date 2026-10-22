@@ -191,6 +191,13 @@ pub fn decode_tfrag_mip_levels(core: &LevelCore, core_data: &[u8], gs_ram: &[u8]
 pub fn tfrag_mip_images<'a>(core: &LevelCore, core_data: &'a [u8], gs_ram: &'a [u8], e: &TextureEntry) -> Result<Vec<IndexedImage<'a>>> {
     let Some(blk) = core.blocks.iter().find(|b| b.name == "textures") else { return invalid("level core has no textures block"); };
     let tex = Buf(core_data).sub(blk.offset, blk.size, "textures block")?;
+    tfrag_mip_images_in(tex.bytes(), gs_ram, e)
+}
+
+/// Shared indexed-terrain image representation. Callers must establish their
+/// title's container offsets first; this does not parse or approve a game.
+pub fn tfrag_mip_images_in<'a>(texture_bytes: &'a [u8], gs_ram: &'a [u8], e: &TextureEntry) -> Result<Vec<IndexedImage<'a>>> {
+    let tex = Buf(texture_bytes);
     let gs = Buf(gs_ram);
     if e.width <= 0 || e.height <= 0 || e.data_offset < 0 || e.palette < 0 { return invalid("texture entry has no pixels"); }
     if !(1..=4).contains(&e.ty) { return invalid("tfrag texture level count outside 1..=4"); }
