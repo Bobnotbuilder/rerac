@@ -11,61 +11,8 @@
 //! (`rerac-extract table --iso <image> --output data/<serial>.tsv`), `supported: true` and, for a new region, the
 //! runtime's address maps.
 
-/// Which game a disc is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Game {
-    Rac1,
-    Rac2,
-    Rac3,
-    Deadlocked,
-    Unknown,
-}
-
-impl Game {
-    /// Id used in the contract (`"game":"rac1"`).
-    pub fn id(self) -> &'static str {
-        match self { Game::Rac1 => "rac1", Game::Rac2 => "rac2", Game::Rac3 => "rac3", Game::Deadlocked => "racdl", Game::Unknown => "unknown" }
-    }
-    pub fn title(self) -> &'static str {
-        match self {
-            Game::Rac1 => "Ratchet & Clank",
-            Game::Rac2 => "Ratchet & Clank: Going Commando",
-            Game::Rac3 => "Ratchet & Clank: Up Your Arsenal",
-            Game::Deadlocked => "Ratchet: Deadlocked",
-            Game::Unknown => "",
-        }
-    }
-}
-
-/// A known product serial (the boot ELF's file name).
-#[derive(Clone, Copy, Debug)]
-pub struct Title {
-    pub serial: &'static str,
-    pub game: Game,
-    /// Free text: which edition (from disc_layout.md §2.6).
-    pub edition: &'static str,
-}
-
-const fn t(serial: &'static str, game: Game, edition: &'static str) -> Title { Title { serial, game, edition } }
-
-pub const TITLES: &[Title] = &[
-    t("SCUS_971.99", Game::Rac1, "original / Greatest Hits"),
-    t("SCUS_972.09", Game::Rac1, "demo 1"),
-    t("SCUS_972.40", Game::Rac1, "demo 2"),
-    t("SCES_509.16", Game::Rac1, "Black Label / Platinum"),
-    t("SCED_510.75", Game::Rac1, "demo"),
-    t("SCPS_150.37", Game::Rac1, "original"),
-    t("SCPS_150.56", Game::Rac2, ""), t("SCES_516.07", Game::Rac2, ""), t("SCUS_972.68", Game::Rac2, ""),
-    t("SCUS_973.22", Game::Rac2, ""), t("SCUS_973.23", Game::Rac2, ""), t("SCUS_973.74", Game::Rac2, ""),
-    t("SCKA_200.11", Game::Rac2, ""),
-    t("PAPX_905.20", Game::Rac3, ""), t("SCED_528.47", Game::Rac3, ""), t("SCED_528.48", Game::Rac3, ""),
-    t("SCES_524.56", Game::Rac3, ""), t("SCPS_150.84", Game::Rac3, ""), t("SCUS_973.53", Game::Rac3, ""),
-    t("SCUS_974.11", Game::Rac3, ""), t("SCUS_974.13", Game::Rac3, ""), t("TCES_524.56", Game::Rac3, ""),
-    t("SCKA_200.37", Game::Rac3, ""),
-    t("PCPX_980.17", Game::Deadlocked, ""), t("SCED_536.60", Game::Deadlocked, ""), t("SCES_532.85", Game::Deadlocked, ""),
-    t("SCPS_150.99", Game::Deadlocked, ""), t("SCPS_151.00", Game::Deadlocked, ""), t("SCUS_974.65", Game::Deadlocked, ""),
-    t("SCUS_974.85", Game::Deadlocked, ""), t("SCUS_974.87", Game::Deadlocked, ""), t("SCKA_200.60", Game::Deadlocked, ""),
-];
+// Shared identity metadata is also used by the native runtime's launch gate.
+pub use rc_formats::game_id::{Game, Title, TITLES, normalize_serial, title, region_of, game_from_elf};
 
 /// One exact build: serial + boot-ELF SHA-1.
 #[derive(Clone, Copy, Debug)]
@@ -95,37 +42,6 @@ pub const BUILDS: &[Build<'static>] = &[Build {
     supported: true,
     table: Some(include_str!("../data/scus_971_99.tsv")),
 }];
-
-/// Lowercase with everything but `[a-z0-9]` removed: `SCUS-97199`, `SCUS_971.99` and `scus97199` compare equal.
-pub fn normalize_serial(s: &str) -> String { s.chars().filter(|c| c.is_ascii_alphanumeric()).map(|c| c.to_ascii_lowercase()).collect() }
-
-pub fn title(serial: &str) -> Option<&'static Title> {
-    let n = normalize_serial(serial);
-    TITLES.iter().find(|t| normalize_serial(t.serial) == n)
-}
-
-/// Region from the product-code prefix (`SCUS` → NTSC-U, `SCES`/`SCED` → PAL, `SCPS` → NTSC-J, `SCKA` → NTSC-K).
-pub fn region_of(serial: &str) -> Option<&'static str> {
-    let p: String = serial.chars().take(4).collect::<String>().to_ascii_uppercase();
-    Some(match p.as_str() {
-        "SCUS" | "SLUS" => "NTSC-U",
-        "SCES" | "SCED" | "SLES" | "TCES" => "PAL",
-        "SCPS" | "SLPS" | "SLPM" | "PAPX" | "PCPX" => "NTSC-J",
-        "SCKA" | "SLKA" => "NTSC-K",
-        _ => return None,
-    })
-}
-
-/// When the serial is unknown: the game from the boot ELF's strings, in the order of disc_layout.md §2.6
-/// (the sequels also contain "Ratchet & Clank").
-pub fn game_from_elf(elf: &[u8]) -> Game {
-    let has = |s: &str| elf.windows(s.len()).any(|w| w == s.as_bytes());
-    if has("Deadlocked") { Game::Deadlocked }
-    else if has("Up Your Arsenal") { Game::Rac3 }
-    else if has("Going Commando") { Game::Rac2 }
-    else if has("Ratchet & Clank") { Game::Rac1 }
-    else { Game::Unknown }
-}
 
 /// The ready-to-paste [`BUILDS`] row for a build not in the DB (OpenGOAL's `log_potential_new_db_entry`).
 pub fn db_row(serial: &str, version: &str, region: &str, elf_size: u64, elf_sha1: &str, image_sectors: u32) -> String {

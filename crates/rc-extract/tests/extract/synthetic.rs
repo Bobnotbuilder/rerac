@@ -147,6 +147,45 @@ fn error_codes_for_bad_images() {
 }
 
 #[test]
+fn inspection_of_rac2_is_read_only_and_never_uses_rac1_extraction() {
+    let dir = scratch("rac2-inspection");
+    let image = iso(64, "SCUS_972.68", &elf("Going Commando"));
+    // Filename is deliberately not the title. Identification uses SYSTEM.CNF.
+    let path = write(&dir, "arbitrary-name.iso", &image);
+    let report = rc_extract::inspection::inspect(&path, build_db::BUILDS, &mut |_| {}).unwrap();
+    let obj = json::parse_object(&report).unwrap();
+    for (k,v) in [("game","rac2"), ("region","NTSC-U"), ("serial","SCUS_972.68"),
+                  ("image_sha1",&hex(&sha1(&image)))] {
+        assert_eq!(json::get(&obj,k), Some(&Value::Str(v.into())));
+    }
+    assert_eq!(json::get(&obj,"image_bytes"),Some(&Value::Num(image.len() as i64)));
+    for k in ["extraction_supported","native_module_implemented","runtime_executed"] {
+        assert_eq!(json::get(&obj,k),Some(&Value::Bool(false)));
+    }
+    assert_eq!(json::get(&obj,"FIRST_FATAL_BLOCKER"),Some(&Value::Null));
+    assert!(matches!(json::get(&obj,"KNOWN_MISSING_CAPABILITIES"), Some(Value::StrList(v)) if v.len()==3));
+    let out = dir.join("must-not-extract");
+    let error = extract::extract(&path, &out, build_db::BUILDS, &Options::default(), &mut |_| {}).unwrap_err();
+    assert_eq!(error.code, Code::Unsupported);
+    assert!(!out.exists());
+    assert_eq!(std::fs::read(&path).unwrap(),image);
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(),1);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn inspection_rejects_missing_corrupt_and_truncated_images() {
+    let dir = scratch("inspect-errors");
+    assert!(rc_extract::inspection::inspect(&dir.join("missing.iso"),build_db::BUILDS,&mut |_|{}).is_err());
+    let img = iso(64,"SCUS_972.68",&elf("Going Commando"));
+    for (name, bytes) in [("cut.iso", &img[..30*SS]),("bad.iso", &b"invalid"[..])] {
+        let path=write(&dir,name,bytes);
+        assert!(rc_extract::inspection::inspect(&path,build_db::BUILDS,&mut |_|{}).is_err());
+    }
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn identify_extract_verify_on_a_synthetic_rc1_disc() {
     let dir = scratch("e2e");
     let img = rc1_disc("Ratchet & Clank");

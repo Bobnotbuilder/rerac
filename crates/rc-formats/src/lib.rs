@@ -5,6 +5,7 @@
 //! check their output against the committed snapshot table `data/loader_snapshots.tsv` (`tests/formats/golden.rs`).
 
 pub mod buf;
+pub mod game_id;
 pub mod wad;
 pub mod toc;
 pub mod iso9660;

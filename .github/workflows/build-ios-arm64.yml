@@ -3,7 +3,7 @@ name: ReRAC iOS ARM64 unsigned proof of concept
 on:
   workflow_dispatch:
   push:
-    branches: ['ios/arm64-poc']
+    branches: ['ios/arm64-poc', 'ios/rc2-native']
     paths:
       - '.github/workflows/build-ios-arm64.yml'
       - 'ios/**'
@@ -41,6 +41,7 @@ jobs:
           mkdir -p evidence
           rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
           cargo xtask test-job engine ui --cargo-test 2>&1 | tee evidence/headless-regressions.log
+          cargo xtask test-job formats extract data --cargo-test 2>&1 | tee evidence/extraction-regressions.log
       - name: Retain regression results
         if: always()
         uses: actions/upload-artifact@v4
@@ -88,6 +89,8 @@ jobs:
           rustup run "$RUSTUP_TOOLCHAIN" rustc -vV | tee evidence/rustc.txt
           rustup target list --installed --toolchain "$RUSTUP_TOOLCHAIN" | tee evidence/rust-targets.txt
           python3 -m unittest discover -s ios/tests -v 2>&1 | tee evidence/poc-contract-tests.log
+          rustc --edition 2021 --test crates/rc-formats/src/game_id.rs -o "$RUNNER_TEMP/native-game-id-tests"
+          "$RUNNER_TEMP/native-game-id-tests" --nocapture 2>&1 | tee evidence/native-game-id-tests.log
           rustc --edition 2021 --test crates/rc-engine/src/ios_display_math.rs -o "$RUNNER_TEMP/ios-display-math-tests"
           "$RUNNER_TEMP/ios-display-math-tests" --nocapture 2>&1 | tee evidence/ios-display-math-tests.log
           rustc --edition 2021 --test crates/rc-engine/src/render_policy.rs -o "$RUNNER_TEMP/render-policy-tests"

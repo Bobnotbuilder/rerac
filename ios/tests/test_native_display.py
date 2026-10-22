@@ -62,7 +62,7 @@ class NativeDisplay(unittest.TestCase):
             self.assertIn(token,s)
         info=plistlib.loads((ROOT/'ios/Info.plist').read_bytes())
         self.assertNotIn('UIBackgroundModes',info)
-        self.assertEqual(info['CFBundleVersion'],'5')
+        self.assertEqual(info['CFBundleVersion'],'6')
 
     def test_sandbox_saves_and_input_contract_preserved(self):
         s=self.source('ios.rs')

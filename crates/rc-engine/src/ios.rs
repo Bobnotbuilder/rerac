@@ -107,6 +107,7 @@ pub fn show_import_instructions(error: &str) {
                 present_mode: bevy::window::PresentMode::Fifo, ..default()
             }), ..default() }))
         .add_plugins((crate::ios_gamepad::IOSGameControllerPlugin, crate::ios_runtime::IOSRuntimePlugin))
+        .add_plugins(crate::ios_library::GameLibraryPlugin)
         .add_plugins((crate::display::DisplayPlugin, crate::frame_pace::FramePacePlugin))
         .insert_resource(ClearColor(Color::srgb(0.04, 0.04, 0.06)))
         .add_systems(Startup, move |mut commands: Commands| {

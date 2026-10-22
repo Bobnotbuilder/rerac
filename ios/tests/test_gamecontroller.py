@@ -21,7 +21,7 @@ class GameController(unittest.TestCase):
 
     def test_existing_bundle_identity_and_scene_lifecycle_preserved(self):
         info = plistlib.loads((ROOT/'ios/Info.plist').read_bytes())
-        self.assertEqual(info['CFBundleVersion'], '5')
+        self.assertEqual(info['CFBundleVersion'], '6')
         self.assertEqual(info['GCSupportedGameControllers'], [{'ProfileName':'ExtendedGamepad'}])
         self.assertTrue(info['GCSupportsControllerUserInteraction'])
         self.assertIn('UIApplicationSceneManifest', info)

@@ -32,6 +32,9 @@
 mod ios;
 
 #[cfg(target_os = "ios")]
+mod ios_library;
+
+#[cfg(target_os = "ios")]
 mod ios_gamepad;
 
 mod ios_display_math;
@@ -314,6 +317,7 @@ fn main() -> anyhow::Result<()> {
     {
         ios::diagnostic("BEVY_GAME_RUN_REQUESTED", "");
         app.add_plugins((ios_gamepad::IOSGameControllerPlugin, ios_runtime::IOSRuntimePlugin))
+            .add_plugins(ios_library::GameLibraryPlugin)
             .add_systems(Startup, ios::startup_diagnostics)
             .add_systems(Update, ios::update_diagnostics);
     }

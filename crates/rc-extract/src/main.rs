@@ -11,6 +11,7 @@ use std::time::Instant;
 
 const USAGE: &str = "\
 usage:
+  rerac-extract inspect  --iso <image> [--json]   (read-only identification, hash and filesystem inventory)
   rerac-extract identify --iso <image> [--json]
   rerac-extract extract  --iso <image> --out <data dir> [--ntsc-only] [--json]   (ends with prepare)
   rerac-extract verify   --out <data dir> [--json]
@@ -28,7 +29,7 @@ options:
   rerac-extract --help | --version";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Cmd { Identify, Extract, Verify, Prepare, Export, Table, Help, Version }
+enum Cmd { Identify, Inspect, Extract, Verify, Prepare, Export, Table, Help, Version }
 
 #[derive(Debug, PartialEq, Eq)]
 struct Args {
@@ -51,6 +52,7 @@ fn parse_args(argv: &[OsString], env_iso: Option<OsString>) -> Result<Args, Stri
     let Some(first) = it.next() else { return Err("no command".into()) };
     a.cmd = match first.to_str() {
         Some("identify") => Cmd::Identify,
+        Some("inspect") => Cmd::Inspect,
         Some("extract") => Cmd::Extract,
         Some("verify") => Cmd::Verify,
         Some("prepare") => Cmd::Prepare,
@@ -95,7 +97,7 @@ fn parse_args(argv: &[OsString], env_iso: Option<OsString>) -> Result<Args, Stri
     if a.iso.is_none() { a.iso = env_iso.filter(|v| !v.is_empty()).map(PathBuf::from); }
     let need = |ok: bool, what: &str| if ok { Ok(()) } else { Err(format!("{what} is required")) };
     match a.cmd {
-        Cmd::Identify => need(a.iso.is_some(), "--iso (or RC_ISO)")?,
+        Cmd::Identify | Cmd::Inspect => need(a.iso.is_some(), "--iso (or RC_ISO)")?,
         Cmd::Extract => { need(a.iso.is_some(), "--iso (or RC_ISO)")?; need(a.out.is_some(), "--out")?; }
         Cmd::Verify | Cmd::Prepare | Cmd::Export => need(a.out.is_some(), "--out")?,
         Cmd::Table => { need(a.iso.is_some(), "--iso (or RC_ISO)")?; need(a.output.is_some(), "--output")?; }
@@ -195,6 +197,13 @@ fn main() {
 fn run(a: &Args, emit: &mut dyn FnMut(Event)) -> Result<String, Error> {
     let t0 = Instant::now();
     match a.cmd {
+        Cmd::Inspect => {
+            let report = rc_extract::inspection::inspect(a.iso.as_ref().unwrap(), BUILDS, emit)?;
+            // An inspection object is output even for recognised unsupported titles.
+            // It explicitly does not mark extraction or execution as passed.
+            println!("{report}");
+            Ok(String::new())
+        }
         Cmd::Identify => {
             identify::identify(a.iso.as_ref().unwrap(), BUILDS, emit)?;
             Ok(String::new())

@@ -127,11 +127,17 @@ fn check(root: &Path, origin: Origin) -> std::result::Result<String, DataError> 
         }
     };
     match json_uint(&info, "data_format") {
-        Some(DATA_FORMAT) => Ok(format!(
+        Some(DATA_FORMAT) => {
+            rc_formats::game_id::require_native_game(
+                json_str(&info, "disc").unwrap_or(""), json_str(&info, "game"),
+            ).map_err(|reason| DataError { code: EXIT_DATA_FORMAT,
+                message: format!("{reason}: this native build runs Ratchet & Clank NTSC-U SCUS_971.99 only. Another game's data cannot use its loaders or saves.") })?;
+            Ok(format!(
             "data: {} ({}; disc {}, data_format {DATA_FORMAT}, extractor {}, {} files)",
             root.display(), origin.describe(), json_str(&info, "disc").unwrap_or("?"),
             json_str(&info, "extractor_version").unwrap_or("?"), json_uint(&info, "files").map_or("?".into(), |n| n.to_string())
-        )),
+        ))
+        },
         found => Err(DataError {
             code: EXIT_DATA_FORMAT,
             message: format!(
@@ -144,6 +150,12 @@ fn check(root: &Path, origin: Origin) -> std::result::Result<String, DataError> 
 }
 
 static ROOT: OnceLock<PathBuf> = OnceLock::new();
+
+/// Read-only library check: does not change the active root or create data.
+#[cfg(target_os = "ios")]
+pub(crate) fn inspect_mobile_data(root: &Path) -> Result<()> {
+    check(root, Origin::Env).map(|_| ()).map_err(|e| anyhow::anyhow!("{}", e.message))
+}
 
 /// The process start (`main`, first line): handles `--version-json`, resolves and checks the data root, and
 /// remembers it for [`data_root`]. Prints and exits on any failure; never returns without a usable folder.
@@ -283,5 +295,24 @@ mod tests {
         assert_eq!(read_path(&d, &d.join("levels/01/gs_ram.bin")).unwrap(), b"abc");
         assert!(read(&d, "toc.bin").is_err());
         std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn another_game_cannot_use_rac1_loaders_or_saves() {
+        let d = temp("title-gate");
+        std::fs::write(d.join("toc.bin"), [0u8;4]).unwrap();
+        for (disc, game, reason) in [
+            ("SCUS_972.68", "rac2", "NATIVE_GAME_MODULE_NOT_IMPLEMENTED"),
+            ("SCUS_972.68", "rac1", "GAME_MANIFEST_IDENTITY_MISMATCH"),
+            ("SCUS_971.99", "rac2", "GAME_MANIFEST_IDENTITY_MISMATCH"),
+            ("SCES_509.16", "rac1", "NATIVE_GAME_BUILD_NOT_SUPPORTED"),
+            ("unknown", "rac1", "GAME_IDENTITY_UNKNOWN"),
+        ] {
+            std::fs::write(d.join("extract-info.json"),format!(r#"{{"disc":"{disc}","game":"{game}","data_format":1}}"#)).unwrap();
+            let error = check(&d,Origin::Env).unwrap_err();
+            assert!(error.message.contains(reason), "{}",error.message);
+        }
+        assert!(!d.join("memcard").exists());
+        std::fs::remove_dir_all(d).unwrap();
     }
 }
