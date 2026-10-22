@@ -56,4 +56,10 @@ class NativeGames(unittest.TestCase):
                        'verify_ipa.py', 'game_id.rs']:
             self.assertIn(marker,src)
 
+    def test_import_metadata_is_not_ready_game_and_camera_component_is_not_moved_twice(self):
+        src = (ROOT/'crates/rc-engine/src/ios_library.rs').read_text()
+        self.assertIn('game: Option<Res<crate::Level>>',src)
+        self.assertIn('game.is_some() && matches!(rac1_status, Some(Ok(())))',src)
+        self.assertIn('Action::Open, target.clone()',src)
+
 if __name__=='__main__': unittest.main()

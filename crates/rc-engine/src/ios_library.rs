@@ -15,11 +15,12 @@ struct LibraryPanel;
 #[derive(Component)]
 enum Action { Open, Close }
 
-fn setup(mut commands: Commands, camera: Single<Entity, With<crate::display::PresentCamera>>) {
+fn setup(mut commands: Commands, camera: Single<Entity, With<crate::display::PresentCamera>>,
+         game: Option<Res<crate::Level>>) {
     // Render at display resolution with conservative landscape safe margins,
     // independent of the internal world target. Root survives planet changes.
     let target = UiTargetCamera(*camera);
-    commands.spawn((Button, Action::Open, target,
+    commands.spawn((Button, Action::Open, target.clone(),
         crate::level_switch::KeepAcrossLevels,
         Node { position_type: PositionType::Absolute, right: percent(6), top: percent(5),
             padding: UiRect::all(px(8)), ..default() },
@@ -28,9 +29,10 @@ fn setup(mut commands: Commands, camera: Single<Entity, With<crate::display::Pre
     let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
     let rac1 = home.map(|h| h.join("Documents/ReRACData"));
     let rac1_status = rac1.as_deref().map(crate::disc_source::inspect_mobile_data);
-    let ready = matches!(rac1_status, Some(Ok(())));
-    let text = format!("Game Library\n\nRatchet & Clank 1\n{}\nDocuments/ReRACData\nSaves: ReRACSupport/memcard (unchanged)\n\nRatchet & Clank 2\nNative module: {}\nExtraction/cache converters: not implemented\nNot launchable. Do not place RC2 data in ReRACData.\n\nUse the desktop extractor with your own disc. No game data is bundled.",
-        if ready { "Data checks passed. Current native module: RAC1." } else { "Game data required — see import instructions." },
+    // Metadata alone cannot make an import-error screen claim the game is ready.
+    let ready = game.is_some() && matches!(rac1_status, Some(Ok(())));
+    let text = format!("Game Library\n\nRatchet & Clank 1\n{}\nData: ReRACData | Saves unchanged\n\nRatchet & Clank 2 — native module: {}\nVerified extraction/cache support missing.\nNot launchable. Never replace RAC1 data.\n\nUse your owned disc with the desktop extractor.",
+        if ready { "Current native game loaded." } else { "Resources required — see import instructions." },
         if native_module_available(Game::Rac2) { "available" } else { "NOT IMPLEMENTED" });
     commands.spawn((LibraryPanel, target, crate::level_switch::KeepAcrossLevels,
         Node { display: Display::None, position_type: PositionType::Absolute,
