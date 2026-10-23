@@ -87,6 +87,21 @@ copied/linked. Independent format parser, no CPU/VU emulation or rasteriser.
 
 ## Required comparison before native scene integration
 
+Static comparison is now reproducible with the opt-in source example:
+
+```
+cargo run -p rc-trace --example rc2_vu_identity -- '<owned RAC1 ISO>' '<owned GC ISO>'
+```
+
+It verifies exact boot hashes, resolves93 original upload chunks via DVP overlay
+metadata and ELF PT_LOAD and compares payload bytes privately. Terrain candidate
+55907 (14944bytes) and903379 (7632bytes) match exactly. The earlier comparison
+of custom debug-section file ranges was invalid and withdrawn; those bytes
+are not the loaded instructions. Only metadata/hashes are output or committed.
+No game code executes. A matching resident program does not prove its selection
+on Aranos, identical EE matrices/light/fog/GS inputs or native shader parity.
+Do not substitute this static receipt for the requested dynamic capture.
+
 | Topic | Needed original evidence | Native comparison target | Current status |
 |---|---|---|---|
 | Terrain attribution | Matched Aranos frame + texture/packet/fragment identity |833 cached fragments/93 materials |Not captured |

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "scope": "STATIC_LOADABLE_UPLOAD_PAYLOAD_IDENTITY_NOT_EXECUTION_PARITY",
+  "method": "Independently follow DVP overlay names/table EE addresses through ELF PT_LOAD, concatenate chunks in VU offset order and compare exact bytes",
+  "tool": "tools/trace/examples/rc2_vu_identity.rs",
+  "rac1_boot_sha1": "72fd1de379dafd8f243dceeb3be50980f3fd3cd5",
+  "rc2_boot_sha1": "4124a79c1e5a1ceb56f514df0dbbc11f072af56f",
+  "programs_observed": {"rac1": 12, "rc2": 13},
+  "upload_chunks_resolved_through_load_map": 93,
+  "custom_debug_section_file_ranges_do_not_match_loaded_payload": 93,
+  "exact_equal_programs": [104691, 28259, 55907, 56467, 57843, 903379, 912339],
+  "terrain_candidates": [
+    {"program_id":55907,"chunks":8,"bytes":14944,"sha1":"d11612095be3c87fa88b42ea4757ba010fa7686d","exact_loaded_payload_equal":true},
+    {"program_id":903379,"chunks":4,"bytes":7632,"sha1":"3f4a2acd5f61846203122f739fb7230587f8a3f9","exact_loaded_payload_equal":true}
+  ],
+  "not_proven": [
+    "GC_ARANOS_RUNTIME_PROGRAM_SELECTION",
+    "EE_UPLOADED_MATRIX_AND_VIEW_CONSTANTS",
+    "LIGHTING_AND_FOG_INPUTS",
+    "LIVE_GS_DRAW_STATE_AND_ORDER",
+    "NATIVE_SHADER_VS_ORIGINAL_OUTPUT",
+    "GPU_RENDERING_OR_VISIBLE_SCENE"
+  ],
+  "rejected_research": "Initial section-file-offset comparison read non-loadable custom debug-section bytes. That evidence was withdrawn; only overlay-table/PT_LOAD-resolved bytes support this receipt.",
+  "game_bytes_in_repository_or_ci": false,
+  "real_game_execution": false,
+  "whole_game_coverage": "NOT_MEASURABLE_YET",
+  "shared_core_promoted": false
+}

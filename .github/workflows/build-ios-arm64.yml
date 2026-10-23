@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           cargo test -p rc-trace --lib rc2_gs::tests 2>&1 | tee evidence/rc2-capture-tests.log
-          cargo check -p rc-trace --bin rc-trace 2>&1 | tee evidence/rc2-capture-cli-check.log
+          cargo check -p rc-trace --bin rc-trace --examples 2>&1 | tee evidence/rc2-capture-cli-check.log
       - name: Retain regression results
         if: always()
         uses: actions/upload-artifact@v4

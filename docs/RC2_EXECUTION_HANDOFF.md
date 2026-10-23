@@ -1,5 +1,32 @@
 # RC2 native asset phase — durable public handoff
 
+## Emergency continuation: experimental terrain preview candidate
+
+Added an opt-in `RC2_SCENE_PREVIEW=<private Build7 Aranos directory>` app path
+before RAC1 import/save/gameplay boot. It uses the existing Bevy/Metal renderer,
+a separate material/shader and a diagnostic camera. RC2 Play remains disabled.
+CPU upload planning has executed against original Aranos data for all three
+LODs (33710/26522/26416 triangles, 2578 contiguous draws each, 93 hash-verified
+mip0 images). The renderer candidate still needs compilation/GPU execution;
+there is no scene screenshot, original-state parity or gameplay result yet.
+
+`RC2_PREVIEW_LOD=0|1|2`, `RC2_PREVIEW_CAM=ex,ey,ez,tx,ty,tz` (game axes),
+`RC2_PREVIEW_CAPTURE=<NEW image path>` configure the diagnostic. WASD/QE and
+arrows, or gamepad sticks, move the diagnostic camera only. Native controller
+code is reused but this new route has not been input-tested. The camera uses
+a diagnostic orthonormal Z-up rotation and 60-degree perspective. Rendering
+uses two-sided opaque depth-writing terrain, raw RGB/128 modulation, mip0
+bilinear wrap/clamp; alpha, lighting, fog and morph remain explicitly absent.
+These policies are experimental and must not be represented as verified GC
+behaviour. Hash receipts bind exactly the preserved SCUS97268 v2 slot0 package;
+no game payload is included in source/CI and no prepared assets regenerated.
+
+Local full-engine compilation still fails resolving uncached pinned winit,
+and shell GitHub DNS fails. Hosted build is the next compilation gate.
+Build7 remains the validated rollback; no new playable build is claimed.
+Classification GAME_SPECIFIC; no Shared Core promotion or other-engine change.
+
+
 ## Current terrain evidence step (2026-10-23)
 
 Local a15f9cd source/tests/docs now preserved on true remote history as

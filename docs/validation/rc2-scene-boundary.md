@@ -29,6 +29,15 @@ this candidate does **not** yet add an iOS scene, change shaders or enable Play.
 
 ## Rendering parity / integration matrix
 
+Follow-up static original-source check: the actual loadable payloads for terrain
+candidate programs55907/903379 are byte-identical between the two verified boot
+ELFs. See rc2-vu-upload-identity.json and tools/trace/examples/rc2_vu_identity.rs.
+This reduces the microcode difference question; the CPU/GPU table below still
+does NOT claim original execution, runtime program selection or identical EE
+matrices, light/fog inputs and GS state. Custom DVP debug-section file offsets
+were rejected as code evidence; only ovlytab EE addresses resolved through
+PT_LOAD were compared. No original instruction bytes committed or uploaded.
+
 | Feature | Implemented | CPU executed | GPU/device verified | Remaining requirement |
 |---|---|---|---|---|
 | Owned package lengths/hashes | Build7 converter/audit |655/655 |No |App importer/identity binding |

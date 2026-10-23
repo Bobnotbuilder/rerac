@@ -5,6 +5,25 @@ use rc_formats::{iso9660::IsoImage, rc2, rc2_tie, sha1, wad};
 
 #[test]
 #[ignore = "requires private Build7 Aranos conversion; no game data on public CI"]
+fn aranos_preview_upload_plan() {
+    let root = std::path::PathBuf::from(std::env::var_os("RC2_PRIVATE_SCENE").expect("RC2_PRIVATE_SCENE"));
+    for (lod, expected) in [33710, 26522, 26416].into_iter().enumerate() {
+        let scene = rc_data::rc2_preview::load_aranos(&root, lod as u32).unwrap();
+        assert_eq!(scene.triangles, expected);
+        assert_eq!(scene.images.len(), 93);
+        assert_eq!(scene.draws.iter().map(|d| d.positions.len()).sum::<usize>(), expected*3);
+        assert!(scene.min.iter().chain(scene.max.iter()).all(|v| v.is_finite()));
+        for draw in &scene.draws {
+            assert_eq!(draw.positions.len(), draw.st.len());
+            assert_eq!(draw.positions.len(), draw.rgba.len());
+            assert!(draw.material < 93);
+        }
+        println!("Aranos preview LOD{lod}: {} triangles, {} ordered draws, bounds {:?}..{:?}; CPU only", scene.triangles, scene.draws.len(), scene.min, scene.max);
+    }
+}
+
+#[test]
+#[ignore = "requires private Build7 Aranos conversion; no game data on public CI"]
 fn aranos_build7_scene() {
     let root =
         std::path::PathBuf::from(std::env::var_os("RC2_PRIVATE_SCENE").expect("RC2_PRIVATE_SCENE"));

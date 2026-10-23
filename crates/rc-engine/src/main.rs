@@ -44,6 +44,7 @@ mod render_work;
 mod ios_runtime;
 
 mod crash_log;
+mod rc2_preview;
 mod asset_write;
 mod audio_out;
 mod determinism;
@@ -153,6 +154,11 @@ fn main() -> anyhow::Result<()> {
     ios::begin_launch();
     #[cfg(target_os = "ios")]
     ios_gamepad::simulator_self_test();
+    // Opt-in diagnostic app: return before RAC1 import, save boot or scheduler.
+    // Never exposed as RC2 Play. Prepared RC2 data stays outside ReRACData.
+    if let Some(root) = std::env::var_os("RC2_SCENE_PREVIEW") {
+        return rc2_preview::run(std::path::Path::new(&root));
+    }
     // `--version-json` exits here; a missing or wrong data folder exits with a clear error (crate::disc_source).
     #[cfg(not(target_os = "ios"))]
     let root = disc_source::startup();

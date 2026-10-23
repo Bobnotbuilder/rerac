@@ -19,6 +19,8 @@
 pub mod cache;
 pub mod rc2;
 pub mod rc2_scene;
+pub mod rc2_preview;
+mod rc2_aranos_receipt;
 pub mod xxh64;
 
 pub use cache::{Cache, Error};
