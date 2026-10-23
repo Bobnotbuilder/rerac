@@ -31,6 +31,7 @@
 //! * [`travel`]: the ship, game mode 6 (take-off, landing, fly-away, the flight) and `DoSpaceTransition` (`docs/plan/progression.md` `## travel`).
 
 pub mod collision_query;
+pub mod rc2_compat;
 pub mod ps2v;
 pub mod rng;
 pub mod particles;

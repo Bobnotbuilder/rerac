@@ -20,6 +20,7 @@ pub mod cache;
 pub mod rc2;
 pub mod rc2_scene;
 pub mod rc2_preview;
+pub mod rc2_character;
 mod rc2_aranos_receipt;
 pub mod xxh64;
 

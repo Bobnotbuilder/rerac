@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "phase": "BUILD9_FULL_ENGINE_COMPATIBILITY_EXPERIMENT",
+  "acceptance": "INCOMPLETE_NOT_PLAYABLE",
+  "starting_local_source": "4a86d31b361f9cc724dc759dfd44cd84250889e2",
+  "preserved_remote_source": "32c041f45f9228f5f4c39fae824dffdf10ededcc",
+  "classifications": [
+    {
+      "system": "native_backend",
+      "status": "REUSED_UNCHANGED",
+      "evidence_and_limits": "Existing Rust/Bevy/Metal ARM64 backend; Build8 physical terrain baseline reported by user. No new GPU execution this phase."
+    },
+    {
+      "system": "native_controller_transport",
+      "status": "REUSED_UNCHANGED",
+      "evidence_and_limits": "Existing GameController/Backbone transport; Build8 free-camera input physically confirmed by user. No RC2 player input mapping established."
+    },
+    {
+      "system": "rc2_level_loading",
+      "status": "REUSED_WITH_ADAPTER",
+      "evidence_and_limits": "Explicit GC level/primary/core readers preserve game identity; existing bounded WAD codec reused."
+    },
+    {
+      "system": "terrain_native_structures",
+      "status": "REUSED_WITH_ADAPTER",
+      "evidence_and_limits": "833 authentic tfrags accepted; 33710/26522/26416 triangles in separate LODs; existing prepared payloads unchanged."
+    },
+    {
+      "system": "original_gs_material_parity",
+      "status": "BLOCKED",
+      "evidence_and_limits": "Live original GS/VU state not correlated. Build8 material policy remains experimental."
+    },
+    {
+      "system": "pif_texture_decoding",
+      "status": "REUSED_UNCHANGED",
+      "evidence_and_limits": "Existing PIF/raw-alpha decoding accepted four original armor textures with fixed hashes."
+    },
+    {
+      "system": "moby_mesh_loading",
+      "status": "REUSED_WITH_ADAPTER",
+      "evidence_and_limits": "187 populated GC classes structurally decoded; RAC1 direct parser rejects183 and accepts4 with zero vertices. Compact 16-bit headers and no RAC1 color blob."
+    },
+    {
+      "system": "hero_resource_binding",
+      "status": "REUSED_WITH_ADAPTER",
+      "evidence_and_limits": "Class0 skeleton111; ARMOR.WAD armor0 mesh63 high/22 low/2 metal packets; matching header counts. No original player rendering yet."
+    },
+    {
+      "system": "hero_gpu_skinning",
+      "status": "NOT_YET_TESTED",
+      "evidence_and_limits": "Native skin/mesh/skeleton structures populated; actual GC character upload and GPU pose output not exercised."
+    },
+    {
+      "system": "compressed_animation_storage",
+      "status": "REUSED_WITH_ADAPTER",
+      "evidence_and_limits": "All96 resident special blobs/2187 frames bounded and preserved in original slots; shared regular reader used only for unflagged storage."
+    },
+    {
+      "system": "compressed_animation_pose",
+      "status": "BLOCKED",
+      "evidence_and_limits": "RAC1 reader rejects all96 flagged blobs. RC2 special channel-to-pose evaluation and runtime sequence meanings not reconstructed; RAC1 evaluator is not called."
+    },
+    {
+      "system": "player_physics_and_states",
+      "status": "RC2_SPECIFIC_IMPLEMENTATION_REQUIRED",
+      "evidence_and_limits": "RAC1 hero code is a reconstructed title state machine with RAC1 constants, IDs and animation hooks. Utilities can be shared, but original RC2 equivalence is unproven. No movement test claimed."
+    },
+    {
+      "system": "third_person_camera",
+      "status": "NOT_YET_TESTED",
+      "evidence_and_limits": "Existing follow-camera architecture retained. RC2 camera parameters/state behavior not established; Build8 free camera is diagnostic."
+    },
+    {
+      "system": "collision_storage",
+      "status": "REUSED_WITH_ADAPTER",
+      "evidence_and_limits": "Existing collision reader accepts12079 cells/3 hero groups/81113 triangle records including cell duplicates; GC container bounds adapter."
+    },
+    {
+      "system": "collision_query_kernels",
+      "status": "REUSED_UNCHANGED",
+      "evidence_and_limits": "Existing line/sphere/capsule kernels hit original start floor z49.890625; independent horizontal-plane/segment assertion. Diagnostic dimensions, not RC2 grounded movement or original-query parity."
+    },
+    {
+      "system": "native_entity_storage",
+      "status": "REUSED_WITH_ADAPTER",
+      "evidence_and_limits": "472 genuine instances fit existing Moby/MobyTable through explicit GC metadata adapter. Update functions absent; NO_UPDATE/NO_ANIM; no RAC1 init or tick."
+    },
+    {
+      "system": "object_scheduler_and_handlers",
+      "status": "RC2_SPECIFIC_IMPLEMENTATION_REQUIRED",
+      "evidence_and_limits": "GC gameplay instances have0x88 stride; RAC1 reader expects0x78 and rejects. GC mission/pvar/update semantics not mapped to RAC1 handlers."
+    },
+    {
+      "system": "weapons_combat_enemy_ai",
+      "status": "RC2_SPECIFIC_IMPLEMENTATION_REQUIRED",
+      "evidence_and_limits": "No GC behavior handlers, weapon states, enemy AI or original combat traces executed. Existing RAC1 code retained as reusable infrastructure/reference."
+    },
+    {
+      "system": "sky_storage",
+      "status": "REUSED_UNCHANGED",
+      "evidence_and_limits": "Existing sky reader accepts6 original shells. Original sky GPU rendering not tested."
+    },
+    {
+      "system": "sound_bank_storage",
+      "status": "REUSED_UNCHANGED",
+      "evidence_and_limits": "Existing sound-bank reader accepts190 original Aranos sounds. Playback/grain semantics/scene triggers not validated."
+    },
+    {
+      "system": "music_dialogue_audio_output",
+      "status": "NOT_YET_TESTED",
+      "evidence_and_limits": "Existing native audio backend retained; RC2 music/dialogue scheduling, grain semantics and playback untested."
+    },
+    {
+      "system": "hud_menus",
+      "status": "NOT_YET_TESTED",
+      "evidence_and_limits": "Existing UI renderer retained; original RC2 HUD data/state/equipment mappings not integrated."
+    },
+    {
+      "system": "cutscene_playback",
+      "status": "NOT_YET_TESTED",
+      "evidence_and_limits": "Existing movie/scene infrastructure retained; original GC scene formats, actor animation and transition sequencing not exercised."
+    },
+    {
+      "system": "checkpoints_saves_death_respawn",
+      "status": "RC2_SPECIFIC_IMPLEMENTATION_REQUIRED",
+      "evidence_and_limits": "RAC1 save/state logic is title-specific; no RC2 save serialization or restart semantics implemented. Existing saves untouched."
+    },
+    {
+      "system": "scripted_progression_completion",
+      "status": "RC2_SPECIFIC_IMPLEMENTATION_REQUIRED",
+      "evidence_and_limits": "Native original start/objectives/mission events/completion transition not reconstructed. No complete playthrough."
+    }
+  ],
+  "FIRST_FATAL_BLOCKER": null,
+  "runtime_fatal_explanation": "No RC2 gameplay runtime was launched; do not invent a crash.",
+  "first_development_blocker": "RC2_HERO_SPECIAL_FRAME_TO_NATIVE_POSE_NOT_IMPLEMENTED",
+  "new_ipa": false,
+  "new_iphone_or_gpu_test": false,
+  "build8_physical_baseline": "USER_REPORTED_TERRAIN_TEXTURES_BACKBONE_FREE_CAMERA_PASS",
+  "shared_core_promotion": false,
+  "fix_classifications": [
+    "GAME_SPECIFIC",
+    "PLATFORM_SPECIFIC",
+    "SHARED_TESTING_CANDIDATE_NOT_PROMOTED"
+  ],
+  "other_engines_requiring_review": [],
+  "private_inputs_uploaded": false,
+  "tests": {
+    "formats_unit": {
+      "passed": 172,
+      "failed": 0,
+      "ignored": 1,
+      "data_dependent_cases_may_skip_without_RC_EXTRACTED": true
+    },
+    "data_unit": {
+      "passed": 16,
+      "failed": 0
+    },
+    "game_unit_without_private_data": {
+      "passed": 715,
+      "failed": 0
+    },
+    "game_unit_with_original_RAC1_data": {
+      "passed": 715,
+      "failed": 0,
+      "seconds": 92.91,
+      "same_test_cases_repeated": true
+    },
+    "RAC1_moby_reader_comparison": {
+      "levels": 19,
+      "populated_classes": 2968,
+      "identical_outputs": 2968,
+      "baseline": "4a86d31"
+    },
+    "private_RC2_character_contract": {
+      "passed": 1,
+      "seconds": 1.36
+    },
+    "ios_contracts": {
+      "passed": 59,
+      "failed": 0
+    },
+    "original_engine_compatibility_probe": "PASS_LINE_SPHERE_CAPSULE_NATIVE_METADATA_SKY_BANK_AND_EXPLICIT_RAC1_REJECTIONS",
+    "original_preview_directory": "95_ASSET_FILES_BYTE_IDENTICAL_PLUS_EXACT_MARKER",
+    "arm64_current_changes": "NOT_YET_COMPILED",
+    "new_gpu_execution": false,
+    "new_physical_iphone_execution": false
+  }
+}

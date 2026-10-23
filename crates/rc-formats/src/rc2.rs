@@ -9,6 +9,49 @@ pub const SECTOR: usize = 2048;
 pub const MAX_PRIMARY: usize = 64 << 20;
 pub const MAX_DECODED_CORE: usize = 64 << 20;
 
+/// File-relative GC ARMOR.WAD: nine armor pairs followed by six wrench pairs.
+/// Each pair contains sector ranges for a mesh-only resource and a PIF list.
+#[derive(Debug)]
+pub struct ArmorEntry { pub mesh: Range<usize>, pub textures: Range<usize> }
+
+pub fn armor_plan(header: &[u8], file_bytes: usize) -> Result<Vec<ArmorEntry>> {
+    let b = Buf(header);
+    b.check(0, 0xf8, "GC armor archive header")?;
+    if b.u32(0)? != 0xf8 || b.u32(4)? != 0 { return invalid("GC_ARMOR_HEADER_IDENTITY"); }
+    let mut ranges: Vec<Range<usize>> = Vec::new();
+    let mut out = Vec::new();
+    for i in 0..15 {
+        let mut pair = Vec::new();
+        for at in [8+i*16, 16+i*16] {
+            let start = b.u32(at)? as u64 * SECTOR as u64;
+            let length = b.u32(at+4)? as u64 * SECTOR as u64;
+            if start < SECTOR as u64 || length == 0 || start >= file_bytes as u64
+                || start+length > (file_bytes as u64).div_ceil(SECTOR as u64)*SECTOR as u64 {
+                return invalid("GC_ARMOR_RANGE");
+            }
+            let r = start as usize..(start+length).min(file_bytes as u64) as usize;
+            if ranges.iter().any(|v| r.start < v.end && v.start < r.end) { return invalid("GC_ARMOR_OVERLAP"); }
+            ranges.push(r.clone()); pair.push(r);
+        }
+        out.push(ArmorEntry { mesh: pair[0].clone(), textures: pair[1].clone() });
+    }
+    Ok(out)
+}
+
+/// GC hero animation offsets are an index-relative table at +0x78, with 256
+/// data-relative slots. These are independent blobs, not class-relative pointers.
+pub fn hero_sequence_offsets(index: &[u8], data_bytes: usize) -> Result<Vec<usize>> {
+    let b = Buf(index);
+    let at = b.u32(0x78)? as usize;
+    if at < 0xbc { return invalid("GC_HERO_SEQUENCE_TABLE"); }
+    let offsets: Vec<u32> = b.pod_slice(at, 256, "GC hero sequence offsets")?;
+    offsets.into_iter().map(|v| {
+        let v = v as usize;
+        if v != 0 && (v >= data_bytes || !v.is_multiple_of(16)) { return invalid("GC_HERO_SEQUENCE_OFFSET"); }
+        Ok(v)
+    }).collect()
+}
+
 #[derive(Clone, Debug)]
 pub struct Lump { pub name: &'static str, pub bytes: Range<usize> }
 
@@ -137,6 +180,29 @@ pub fn core(index: &[u8], data_bytes: usize) -> Result<Core> {
     Ok(c)
 }
 
+/// Known GC data-block boundaries. Index table pointers and unknown words are
+/// deliberately excluded. Shared by character loading and compatibility tools.
+pub fn core_block_bounds(index: &[u8], c: &Core) -> Result<Vec<usize>> {
+    let mut bounds=vec![c.decoded_bytes,c.geometry.start,c.geometry.end,c.sky,c.collision,c.textures_base];
+    bounds.extend(c.mobys.iter().chain(&c.ties).chain(c.shrubs.iter().map(|s|&s.base)).map(|v|v.offset_in_asset_wad as usize));
+    bounds.extend(hero_sequence_offsets(index,c.decoded_bytes)?.into_iter().filter(|v|*v>0));
+    for at in [0x64,0x68,0xb4] {
+        let v=Buf(index).u32(at)? as usize;
+        if v>0 {
+            if v>=c.decoded_bytes { return invalid("GC_CORE_BLOCK_BOUNDARY"); }
+            bounds.push(v);
+        }
+    }
+    bounds.sort_unstable();bounds.dedup();Ok(bounds)
+}
+
+pub fn core_block_range(bounds: &[usize], start: usize) -> Result<Range<usize>> {
+    if start==0 || !bounds.contains(&start) { return invalid("GC_CORE_BLOCK_START"); }
+    let end=bounds.iter().copied().find(|v|*v>start)
+        .ok_or_else(||crate::FormatError::Invalid("GC_CORE_BLOCK_END".into()))?;
+    Ok(start..end)
+}
+
 /// Observed GC moby-instance metadata. This is not a moby update scheduler or
 /// permission to apply RAC1 behaviours to the matching class numbers.
 #[derive(Debug)]
@@ -196,6 +262,18 @@ pub fn validate_terrain(tfrags: &[crate::tfrag::Tfrag], textures: usize) -> Resu
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn armor_ranges_and_external_sequence_offsets_are_bounded() {
+        let mut h=vec![0u8;0xf8]; put(&mut h,0,0xf8);
+        for i in 0..30 { put(&mut h,8+i*8,(i+1) as u32);put(&mut h,12+i*8,1); }
+        let p=armor_plan(&h,31*2048).unwrap(); assert_eq!(p.len(),15);assert_eq!(p[0].mesh,2048..4096);
+        assert!(armor_plan(&h[..247],31*2048).is_err());
+        put(&mut h,16,1);assert!(armor_plan(&h,31*2048).is_err());
+        let mut index=vec![0;0xbc+1024];put(&mut index,0x78,0xbc);put(&mut index,0xbc,16);
+        assert_eq!(hero_sequence_offsets(&index,32).unwrap()[0],16);
+        put(&mut index,0xbc,32);assert!(hero_sequence_offsets(&index,32).is_err());
+        put(&mut index,0xbc,17);assert!(hero_sequence_offsets(&index,32).is_err());
+    }
     use super::*;
     fn put(v: &mut [u8], at: usize, n: u32) { v[at..at+4].copy_from_slice(&n.to_le_bytes()); }
     fn header() -> Vec<u8> {

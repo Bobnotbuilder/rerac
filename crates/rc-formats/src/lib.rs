@@ -53,3 +53,4 @@ pub mod test_data;
 
 pub use buf::{Buf, FormatError};
 pub mod rc2_tie;
+pub mod rc2_anim;

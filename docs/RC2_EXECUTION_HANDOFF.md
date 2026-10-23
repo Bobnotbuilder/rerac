@@ -1,5 +1,27 @@
 # RC2 native asset phase — durable public handoff
 
+## Build 9 controlled full-engine reuse experiment — current
+
+Build9 is **INCOMPLETE**, with no RC2 gameplay launch or new IPA milestone.
+User reports Build8 authentic terrain/textures and Backbone free-camera operation
+on physical iPhone; preserve that working baseline. The older "not rendered"
+statements below describe the previous session's evidence, before this report.
+
+The new explicit GC adapters reuse native ReRAC types and collision kernels.
+All187 populated classes parse structurally; the direct RAC1 parser rejects183
+and accepts4 with zero geometry. Ratchet's original armor mesh, four textures,
+111-joint skeleton and96 special animation blobs/2187 stored frames load on CPU.
+The existing line/sphere/capsule kernels hit Aranos's original starting floor;
+the existing sky and sound-bank readers accept6 shells/190 sounds. No original
+pose evaluation, character GPU render, movement, combat or progression is claimed.
+
+Full [compatibility matrix and reproduction](validation/rc2-engine-compatibility.md)
+and [character format/provenance](formats/rc2_character_assets.md). First development
+blocker: GC compressed special-frame evaluation into verified native joint poses.
+No RC2 runtime fatal is invented; RC2 Play remains disabled. RAC1 data/saves,
+identity, Rust/Bevy and complete existing native implementation remain intact.
+
+
 ## Build 8 scene-preview validation receipt — 2026-10-23
 
 Runtime source `cd1311505774f52e87d006e6bb8cae9a0bbcc5ad` (local source

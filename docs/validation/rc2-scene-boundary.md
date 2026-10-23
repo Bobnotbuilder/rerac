@@ -1,5 +1,10 @@
 # RC2 Aranos experimental preview — original GPU frame pending
 
+Current state: [Build9 full-engine compatibility](rc2-engine-compatibility.md).
+User now reports original Build8 terrain and Backbone free camera on physical
+iPhone. Historical GPU-unverified notes below predate that report. Original
+Ratchet poses/gameplay/completion remain unimplemented and unvalidated.
+
 ## Build 8 scene-preview validation receipt — 2026-10-23
 
 Runtime source `cd1311505774f52e87d006e6bb8cae9a0bbcc5ad` (local source

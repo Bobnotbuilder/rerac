@@ -1,5 +1,9 @@
 # Going Commando native assets — experimental conversion v1
 
+Current extension: [Build9 character storage](rc2_character_assets.md) and
+[full-engine compatibility experiment](../validation/rc2-engine-compatibility.md).
+Build8 physical terrain/input PASS is user-reported; Build9 remains incomplete.
+
 Baseline: ReRAC iOS Build 6, `15b0da96480627e54cfb86941c96858ab6b51c11`.
 Preserve RAC1 gameplay, saves, import paths, shaders, controllers and audio.
 This is an independent extension to existing rc-formats/rc-data/rc-extract, not
