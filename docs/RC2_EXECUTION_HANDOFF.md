@@ -31,6 +31,41 @@ No new real-device regression or RC2 GPU/game execution was performed.
 
 ## Build and preservation
 
+## Final hosted validation receipt
+
+Application source `4c94e5350fd28afed19633c51fa403d340758765`.
+[Run39859007049](https://github.com/Bobnotbuilder/rerac/actions/runs/39859007049)
+completed SUCCESS for both jobs. Engine/UI1087 passed5 ignored;
+formats/extract/data1096 passed3 ignored;0 failures.1052 unit cases repeat.
+Actual iOS27 simulator startup, synthetic GameController, safe display/resize,
+batched/unbatched AA and shadow GPU probes passed. No owned game data on CI;
+not a physical Backbone, real game scene or RC2 runtime test.
+
+[Unsigned IPA](https://github.com/Bobnotbuilder/rerac/actions/runs/39859007049/artifacts/12461623495),
+[matched symbols](https://github.com/Bobnotbuilder/rerac/actions/runs/39859007049/artifacts/12463070281),
+[build evidence](https://github.com/Bobnotbuilder/rerac/actions/runs/39859007049/artifacts/12462584969).
+Inner IPA SHA256 `8f8071b774aa8a9d5f9888749536bd3b71a05c79f5f588eea13bbaa963898d1a`.
+Executable/dSYM UUID `2056fe6b-44a2-3d51-9718-03a81afcbbb8`, ARM64,
+minimum iOS16.0, SDK27.1,24 original WGSL shaders, unsigned/no provisioning.
+Bundle `org.rerac.game.iospoc`,0.3.4/build7. No valid local signing identity.
+Download artifact, unzip, sign inner IPA with the existing Sideloadly account/
+effective identifier and update without uninstalling; back up ReRACSupport first.
+Do not replace RAC1 data with the partial RC2 conversion. RC2 Play is disabled.
+
+RAC1 game logic/rendering/audio/controllers/saves remain unchanged; no new
+physical playthrough claimed. This is an asset-preparation checkpoint, not a
+new playable RC2 app. Any later documentation-only commit is not the binary
+source revision; use the application source above for exact reproduction.
+
+Further local research: all4 old-parser moby accepts contain0 packets/vertices;
+183 nontrivial blobs reject and51 have no local geometry offset. No usable
+RC2 model support follows from those accepts. Independent GC tie-header/region
+probe checks74 classes/1876 packets, not GS-order/colour/multipass correctness.
+Do not port reference approximations as hardware truth or forge RAC1 headers.
+
+The following pending-build notes are retained as the earlier execution stage;
+the final receipt above supersedes them.
+
 Candidate build number7; same0.3.4/bundleorg.rerac.game.iospoc/schemeReRAC/iOS16.
 Existing workflow builds actual device ARM64 and simulator checks; current
 candidate hosted result must be checked before declaring an IPA built.
