@@ -80,6 +80,9 @@ impl Data {
             assets.strings.0.len(), assets.sprites.len(),
             assets.main_menu.iter().map(|r| String::from_utf8_lossy(assets.strings.get(r.text)).into_owned()).collect::<Vec<_>>()
         );
+        #[cfg(target_os = "ios")]
+        crate::ios::diagnostic("RC2_NATIVE_FRONTEND_DATA_READY", &format!("menu_rows={} sprites={} movies={} graphics_unverified",
+            assets.main_menu.len(), assets.sprites.len(), movies.iter().flatten().count()));
         Ok(Data { root: root.to_path_buf(), assets, textures, movies, movie_files })
     }
 }
@@ -274,6 +277,8 @@ fn tick(
             // New Game (kind 4): the level. The save-slot page in between is not ported (module docs).
             Request::Row { kind: 4, .. } => {
                 println!("rac2: New Game: level {:02}", crate::level_load::level_index());
+                #[cfg(target_os = "ios")]
+                crate::ios::diagnostic("RC2_NATIVE_NEW_GAME_REQUEST", "original menu row kind=4; save-slot page unsupported; incomplete Aranos");
                 r.done = true;
             }
             Request::Row { kind, target } => println!("rac2: main menu row (kind {kind}, target {target:#x}): not in this version yet"),

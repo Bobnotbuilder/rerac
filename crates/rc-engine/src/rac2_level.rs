@@ -101,6 +101,10 @@ pub fn load(root: &Path, index: u32) -> Result<LoadedLevel> {
         mobys.classes.len(), mobys.instances.len(),
         sky.is_some(), collision.is_some()
     );
+    #[cfg(target_os = "ios")]
+    crate::ios::diagnostic("RC2_NATIVE_LEVEL_DATA_READY", &format!(
+        "level={index} tfrags={} textures={} moby_classes={} moby_instances={} collision={} graphics_unverified",
+        tfrags.len(), textures.len(), mobys.classes.len(), mobys.instances.len(), collision.is_some()));
     Ok(LoadedLevel {
         tfrags, textures, fog, background, mobys, ties, shrubs, sky, occlusion, tfrag_lod, particles, hud: None,
         water: Default::default(), sea: Default::default(), collision, death_z, audio: None, gameplay, moby_class_order, timings: t,

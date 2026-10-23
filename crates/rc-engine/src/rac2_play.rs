@@ -127,6 +127,13 @@ fn tick(
         }
     }
     commands.insert_resource(PlayView { view: camera_view(&p.camera), tan_half_fov: play_camera::GAME_TAN_HALF_FOV, far: crate::game_camera::FAR });
+    #[cfg(target_os = "ios")]
+    if p.ticks.is_multiple_of(300) {
+        crate::ios::diagnostic("RC2_NATIVE_PLAYER_CPU_TICK", &format!(
+            "tick={} state={} pos={:?} grounded={} buttons={:#x} stick={:?} seq={} graphics_and_complete_level_unverified",
+            p.ticks, p.hero.state, p.hero.pos, p.hero.grounded(), p.pad.held,
+            [p.pad.lx.to_f32(), p.pad.ly.to_f32()], p.anim.state.seq_a));
+    }
     p.ticks += 1;
 }
 
@@ -143,6 +150,10 @@ fn start(lv: &crate::level_load::LoadedLevel) -> Option<Play> {
     let hero = Hero::spawn(inst.position, inst.rotation[2]);
     let camera = FollowCamera::new(&cam_input(&hero, lv.collision.as_ref(), [0.0; 2]));
     println!("rac2: Ratchet at ({:.1}, {:.1}, {:.1}), yaw {:.2}: game tick on", inst.position[0], inst.position[1], inst.position[2], inst.rotation[2]);
+    #[cfg(target_os = "ios")]
+    crate::ios::diagnostic("RC2_NATIVE_PLAYER_CPU_START", &format!(
+        "class=0 instance={instance} pos={:?} joints={} sequences={} hardware_input_unverified graphics_unverified",
+        inst.position, m.anim[class].joint_count, m.anim[class].sequences.len()));
     Some(Play {
         anim: RatchetAnim::new(&m.anim[class]),
         hero, class, instance, scale, pad: PadState::default(), camera, ticks: 0,
