@@ -1,5 +1,6 @@
 //! Original RC2 frontend movie compatibility through the existing native video decoder.
-//! No movie bytes/images are emitted. This is CPU decoding, not playback or audio output.
+//! No movie bytes/images are emitted. This is CPU decoding and PCM tick coverage,
+//! not speaker playback or audiovisual parity.
 use rc_formats::{iso9660::IsoImage,rac2::toc};
 
 #[test]
@@ -22,6 +23,14 @@ fn original_rac2_logo_and_title_movies_decode() {
             assert_eq!((frame.width,frame.height),(512,416));
             rc_video::movie::frame_to_rgba(&frame,&mut rgba);assert_eq!(rgba.len(),512*416*4);
         }
+        let pcm = movie.audio.as_deref().expect("original frontend movie audio");
+        assert!(!pcm.is_empty());
+        for (tick, original) in pcm.chunks(800).enumerate() {
+            let block = rc_video::movie::pcm_for_tick(pcm, tick as u64);
+            assert_eq!(&block[..original.len()], original);
+            assert!(block[original.len()..].iter().all(|s| *s == [0, 0]));
+        }
+        assert_eq!(rc_video::movie::pcm_for_tick(pcm, pcm.len().div_ceil(800) as u64), [[0; 2]; 800]);
         println!("ORIGINAL_RC2_MOVIE_CPU_PASS id={id:#x} frames=3 dimensions=512x416 fps={} audio_samples={} GPU_NOT_TESTED AUDIO_OUTPUT_NOT_TESTED",movie.fps(),movie.audio.as_ref().map_or(0,Vec::len));
     }
 }

@@ -19,6 +19,20 @@ use std::fmt;
 /// Output sample rate of the port's mixer.
 pub const OUTPUT_RATE: u32 = 48_000;
 
+/// Original decoded PCM for one 60 Hz playback tick, padded with silence after
+/// the stream ends. This preserves samples and channel order; title-specific
+/// mixer gains are deliberately outside the decoder.
+pub fn pcm_for_tick(pcm: &[[i16; 2]], tick: u64) -> [[i16; 2]; 800] {
+    let mut out = [[0; 2]; 800];
+    if let Some(at) = tick.checked_mul(800).and_then(|n| usize::try_from(n).ok()) {
+        if at < pcm.len() {
+            let n = (pcm.len() - at).min(out.len());
+            out[..n].copy_from_slice(&pcm[at..at + n]);
+        }
+    }
+    out
+}
+
 #[derive(Debug, Clone)]
 pub struct MovieError(pub String);
 
@@ -132,6 +146,19 @@ pub fn frame_to_rgba(f: &Frame, out: &mut Vec<u8>) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn pcm_ticks_preserve_stereo_and_pad_only_after_end() {
+        let pcm: Vec<[i16; 2]> = (0..1601).map(|i| [i, -i]).collect();
+        assert_eq!(super::pcm_for_tick(&pcm, 0).as_slice(), &pcm[..800]);
+        assert_eq!(super::pcm_for_tick(&pcm, 1).as_slice(), &pcm[800..1600]);
+        let last = super::pcm_for_tick(&pcm, 2);
+        assert_eq!(last[0], pcm[1600]);
+        assert!(last[1..].iter().all(|s| *s == [0, 0]));
+        for tick in [3, u64::MAX / 800, u64::MAX] {
+            assert_eq!(super::pcm_for_tick(&pcm, tick), [[0; 2]; 800]);
+        }
+    }
+
     use super::*;
 
     #[test]

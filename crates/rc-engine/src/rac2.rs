@@ -16,7 +16,10 @@
 //!   blend in display bytes); the splash screens, the backdrop and the movie are textures of the layer's atlas (the
 //!   movie's rewritten each picture), copied as the frame buffer holds them (alpha 0x80).
 //! * **Movies**: decoded on a worker thread (`rc_video`), the pictures in display order at the file's rate (picture
-//!   `⌊k·fps/60⌋` at frame k). **No sound yet**: the movie audio, the front end's sounds and music are not played.
+//!   `⌊k·fps/60⌋` at frame k). Original decoded movie PCM uses the existing native audio
+//!   transport at 48 kHz stereo (800 samples per tick); RC_AUDIO=0 disables it.
+//!   Experimental unity gain: original GC mixer gain/options and audiovisual
+//!   latency parity are not verified. Menu sounds and music remain unimplemented.
 //!
 //! Environment: `RC_PLAY_SCRIPT` (crate::input_map::Script) drives the pad by frame, `RC_SCREENSHOT` +
 //! `RC_SCREENSHOT_FRAME` capture a frame (crate::determinism), `RC_RAC2_TRACE=1` logs the front end's movies and rows.
@@ -107,13 +110,14 @@ fn movie_bytes(root: &Path, sizes: &[u64], m: toc::Movie) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-enum Msg { Opened(f64), Picture(Vec<u8>), End, Failed(String) }
+enum Msg { Opened(f64, Option<Vec<[i16; 2]>>), Picture(Vec<u8>), End, Failed(String) }
 
 /// A movie being played.
 struct Playing {
     id: u32,
     rx: Mutex<Receiver<Msg>>,
     fps: Option<f64>,
+    audio: Option<Vec<[i16; 2]>>,
     /// Frames shown and pictures received.
     frame: u64,
     received: u64,
@@ -126,7 +130,7 @@ fn decode(bytes: Vec<u8>, tx: SyncSender<Msg>) {
         Err(e) => { let _ = tx.send(Msg::Failed(e.to_string())); return; }
     };
     drop(bytes);
-    if tx.send(Msg::Opened(m.fps())).is_err() { return; }
+    if tx.send(Msg::Opened(m.fps(), m.audio.take())).is_err() { return; }
     loop {
         match m.next_frame() {
             Ok(Some(f)) => {
@@ -150,7 +154,7 @@ impl Playing {
             Some(Err(e)) => { let _ = tx.send(Msg::Failed(e.to_string())); }
             None => { let _ = tx.send(Msg::Failed(format!("no movie {id:#x}"))); }
         }
-        Playing { id, rx: Mutex::new(rx), fps: None, frame: 0, received: 0, ended: false }
+        Playing { id, rx: Mutex::new(rx), fps: None, audio: None, frame: 0, received: 0, ended: false }
     }
 
     /// One frame: the picture for it (waiting for the worker if it is behind), or None when it has not changed.
@@ -161,7 +165,7 @@ impl Playing {
             let want = self.fps.map(|f| (self.frame as f64 * f / 60.0) as u64 + 1);
             if self.ended || want.is_some_and(|w| self.received >= w) { break; }
             match rx.recv() {
-                Ok(Msg::Opened(f)) => self.fps = Some(f),
+                Ok(Msg::Opened(f, pcm)) => { self.fps = Some(f); self.audio = pcm; },
                 Ok(Msg::Picture(p)) => { self.received += 1; picture = Some(p); }
                 Ok(Msg::End) | Err(_) => self.ended = true,
                 Ok(Msg::Failed(e)) => { eprintln!("rac2: movie {:#x}: {e}; it ends here", self.id); self.ended = true; }
@@ -221,6 +225,7 @@ impl Plugin for FrontEndPlugin {
     fn build(&self, app: &mut App) {
         let Some(data) = self.data.lock().unwrap_or_else(|e| e.into_inner()).take() else { return };
         let seed = clock_seed(if crate::determinism::deterministic() { [0; 8] } else { crate::saves::clock_now() });
+        app.add_plugins(crate::audio_out::MoviePcmOutPlugin);
         app.insert_resource(Rac2 {
             camera: None,
             done: false,
@@ -263,6 +268,7 @@ fn tick(
     mouse: Res<ButtonInput<MouseButton>>,
     motion: Res<AccumulatedMouseMotion>,
     gamepads: Query<&Gamepad>,
+    audio: Option<Res<crate::audio_out::MoviePcmOut>>,
 ) {
     let r = &mut *rac2;
     if r.done { return; }
@@ -280,13 +286,17 @@ fn tick(
                 #[cfg(target_os = "ios")]
                 crate::ios::diagnostic("RC2_NATIVE_NEW_GAME_REQUEST", "original menu row kind=4; save-slot page unsupported; incomplete Aranos");
                 r.done = true;
+                r.movie = None;
+                if let Some(out) = &audio { out.clear(); }
             }
             Request::Row { kind, target } => println!("rac2: main menu row (kind {kind}, target {target:#x}): not in this version yet"),
         }
     }
+    if r.done { return; }
     // The movie the front end asks for: started, kept, or stopped.
     let want = r.front.movie();
     if r.movie.as_ref().map(|m| m.id) != want {
+        if let Some(out) = &audio { out.clear(); }
         r.movie = want.map(|id| {
             if r.trace { println!("rac2: frame {}: movie {id:#x}", r.ticks) }
             Playing::start(&r.data, id)
@@ -294,6 +304,11 @@ fn tick(
     }
     if let Some(m) = r.movie.as_mut() {
         if let Some(p) = m.advance() { r.picture = Some(p); }
+        if let Some(out) = &audio {
+            // advance() has received the decoded PCM before the first picture.
+            // Its frame counter now points to the next 60 Hz playback tick.
+            out.push(&rc_video::movie::pcm_for_tick(m.audio.as_deref().unwrap_or(&[]), m.frame - 1));
+        }
         if m.ended {
             r.movie_ended = true;
             r.movie = None;
@@ -329,4 +344,29 @@ fn finish(mut commands: Commands, mut rac2: ResMut<Rac2>) {
     if let Some(layer) = r.layer.take() { layer.despawn(&mut commands); }
     if let Some(cam) = r.camera.take() { commands.entity(cam).despawn(); }
     r.movie = None;
+}
+
+#[cfg(test)]
+mod movie_transport_tests {
+    use super::*;
+
+    #[test]
+    fn movie_worker_hands_off_audio_before_first_picture_and_uses_same_tick_clock() {
+        let (tx, rx) = sync_channel(4);
+        let pcm: Vec<_> = (0..2400i16).map(|i| [i, -i]).collect();
+        tx.send(Msg::Opened(30.0, Some(pcm))).unwrap();
+        tx.send(Msg::Picture(vec![1])).unwrap();
+        tx.send(Msg::Picture(vec![2])).unwrap();
+        tx.send(Msg::End).unwrap();
+        let mut m = Playing { id: 0xb2, rx: Mutex::new(rx), fps: None, audio: None, frame: 0, received: 0, ended: false };
+        assert_eq!(m.advance(), Some(vec![1]));
+        assert_eq!(rc_video::movie::pcm_for_tick(m.audio.as_deref().unwrap(), m.frame - 1)[0], [0, 0]);
+        assert_eq!(m.advance(), None);
+        assert_eq!(rc_video::movie::pcm_for_tick(m.audio.as_deref().unwrap(), m.frame - 1)[0], [800, -800]);
+        assert_eq!(m.advance(), Some(vec![2]));
+        assert_eq!(rc_video::movie::pcm_for_tick(m.audio.as_deref().unwrap(), m.frame - 1)[0], [1600, -1600]);
+        assert_eq!(m.advance(), None);
+        assert_eq!(m.advance(), None);
+        assert!(m.ended);
+    }
 }

@@ -105,6 +105,12 @@ struct RingState {
 pub struct Ring(Mutex<RingState>);
 
 impl Ring {
+    fn clear(&self) {
+        let mut r = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        r.frames.clear();
+        r.running = false;
+    }
+
     fn push(&self, frames: &[[i16; 2]]) {
         let mut r = self.0.lock().unwrap_or_else(|e| e.into_inner());
         r.frames.extend(frames.iter().copied());
@@ -161,6 +167,37 @@ impl Source for MixerDecoder {
 impl Decodable for MixerStream {
     type Decoder = MixerDecoder;
     fn decoder(&self) -> MixerDecoder { MixerDecoder { ring: Arc::clone(&self.ring), right: None } }
+}
+
+/// A decoded movie's native PCM transport without a title's level sound bank or
+/// gameplay mixer. Reuses the same bounded ring, stereo decoder and Bevy output
+/// as AudioOut. RC2's original SPU gain/options law is still unverified: samples
+/// are passed through unchanged by this experimental frontend adapter.
+#[derive(Resource)]
+pub(crate) struct MoviePcmOut {
+    ring: Arc<Ring>,
+}
+
+impl MoviePcmOut {
+    pub(crate) fn push(&self, samples: &[[i16; 2]]) { self.ring.push(samples); }
+    /// Movie skip/change/New Game must not leave the previous movie queued.
+    pub(crate) fn clear(&self) { self.ring.clear(); }
+}
+
+pub(crate) struct MoviePcmOutPlugin;
+
+impl Plugin for MoviePcmOutPlugin {
+    fn build(&self, app: &mut App) {
+        if !enabled() { return; }
+        app.add_audio_source::<MixerStream>()
+            .insert_resource(MoviePcmOut { ring: Arc::new(Ring::default()) })
+            .add_systems(Startup, start_movie_output);
+    }
+}
+
+fn start_movie_output(mut commands: Commands, out: Res<MoviePcmOut>, mut streams: ResMut<Assets<MixerStream>>) {
+    let handle = streams.add(MixerStream { ring: Arc::clone(&out.ring) });
+    commands.spawn((AudioPlayer(handle), Name::new("decoded movie PCM output")));
 }
 
 /// `RC_AUDIO_WAV`: the first 10 s (`RC_AUDIO_WAV_SECONDS`).
@@ -415,5 +452,42 @@ fn run_audio(
             underruns,
             if s.snd.unimplemented.is_empty() { String::new() } else { format!(", unported grains {:?}", s.snd.unimplemented) }
         );
+    }
+}
+
+#[cfg(test)]
+mod movie_pcm_tests {
+    use super::*;
+
+    #[test]
+    fn shared_decoder_preserves_channels_and_flushes_on_movie_skip() {
+        let ring = Arc::new(Ring::default());
+        let out = MoviePcmOut { ring: Arc::clone(&ring) };
+        let mut decoder = MixerStream { ring }.decoder();
+        out.push(&vec![[i16::MIN, i16::MAX]; PREFILL]);
+        assert_eq!(decoder.next(), Some(-1.0));
+        assert_eq!(decoder.next(), Some(32767.0 / 32768.0));
+        out.clear();
+        assert_eq!(decoder.next(), Some(0.0));
+        assert_eq!(decoder.next(), Some(0.0));
+        // A new movie re-primes independently; no old channel samples survive.
+        out.push(&vec![[16384, -16384]; PREFILL]);
+        assert_eq!(decoder.next(), Some(0.5));
+        assert_eq!(decoder.next(), Some(-0.5));
+    }
+
+    #[test]
+    fn shared_ring_caps_latency_and_restarts_after_underrun() {
+        let ring = Ring::default();
+        ring.push(&vec![[1, 2]; RING_CAP]);
+        ring.push(&vec![[3, 4]; PREFILL]);
+        assert_eq!(ring.0.lock().unwrap().frames.len(), RING_CAP);
+        for _ in 0..RING_CAP - PREFILL { assert_eq!(ring.pop(), [1, 2]); }
+        for _ in 0..PREFILL { assert_eq!(ring.pop(), [3, 4]); }
+        assert_eq!(ring.pop(), [0, 0]);
+        ring.push(&[[5, 6]]);
+        assert_eq!(ring.pop(), [0, 0]);
+        ring.push(&vec![[7, 8]; PREFILL - 1]);
+        assert_eq!(ring.pop(), [5, 6]);
     }
 }
