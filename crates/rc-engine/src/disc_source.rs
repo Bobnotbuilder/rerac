@@ -171,6 +171,7 @@ static ROOT: OnceLock<PathBuf> = OnceLock::new();
 /// Read-only library check: does not change the active root or create data.
 #[cfg(target_os = "ios")]
 pub(crate) fn inspect_mobile_data(root: &Path) -> Result<()> {
+    anyhow::ensure!(!root.join("RC2.HDR").exists(), "RAC1 import requires RAC1 data; experimental RC2 belongs in Documents/RC2Native");
     check(root, Origin::Env).map(|_| ()).map_err(|e| anyhow::anyhow!("{}", e.message))
 }
 
@@ -202,6 +203,11 @@ pub fn startup() -> PathBuf {
 /// iOS uses the same strict extraction checks, without CLI parsing or process::exit.
 #[cfg(target_os = "ios")]
 pub fn mobile_startup(root: PathBuf) -> Result<PathBuf> {
+    if root.join("RC2.HDR").exists() {
+        let home = std::env::var_os("HOME").context("iOS sandbox HOME unavailable")?;
+        anyhow::ensure!(root == PathBuf::from(home).join("Documents/RC2Native"),
+            "experimental RC2 cannot use the RAC1 data/save route; use Documents/RC2Native");
+    }
     check(&root, Origin::Env).map_err(|e| anyhow::anyhow!("{}", e.message))?;
     if let Some(existing) = ROOT.get() {
         anyhow::ensure!(existing == &root, "data root already initialized differently");
