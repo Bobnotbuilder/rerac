@@ -1,5 +1,21 @@
 # RC2 native asset phase — durable public handoff
 
+## Current terrain evidence step (2026-10-23)
+
+Local a15f9cd source/tests/docs now preserved on true remote history as
+25157d7b2b7ff7bd7f86092ce09c226b290804f2, parent a974c687;7/7 blob hashes
+match. Do not push the different local snapshot root. Build7 remains preserved.
+See docs/workflows/rc2-terrain-reference.md for capture protocol and evidence
+matrix. The existing trace harness has a bounded read-only original-GC GS-dump
+inventory; synthetic parser tests are NOT original-game comparisons.
+
+Managed Cocoa launch fails before VM start; packaged Qt has no offscreen plugin.
+An isolated private reference profile is ready for user Terminal/Aqua launch.
+No new RC2 capture, native scene or graphics claim. Need actual Aranos GS dump
+and corresponding VU/EE savestate before selecting state/shaders. Object-class
+completion is NOT a terrain prerequisite. Reuse existing833 fragments/textures;
+Play remains disabled and RAC1 runtime paths unchanged. No private uploads.
+
 ## Latest CPU scene-boundary checkpoint (2026-10-23)
 
 See `docs/validation/rc2-scene-boundary.md`. Build7 source and all prepared data

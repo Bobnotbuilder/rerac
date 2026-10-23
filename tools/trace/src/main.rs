@@ -24,6 +24,8 @@ EE memory source (for the commands that read RAM), one of:
   --pine [slot]                       live read over PCSX2's PINE socket (default slot 28011)
 
 Commands:
+  inspect-rc2-gs --dump FILE.gs --out NEW_PRIVATE_REPORT.json [--skip-packed-vertices N]
+      Bounded original-GC post-VU GIF/state inventory; never uploads or changes the dump.
   compare-tfrag-light <source> [--level 01] [--extracted DIR] [--csv FILE] [--max-diffs N]
       Lights every tfrag with rc_formats::tfrag_light and compares with the RGBA blocks in RAM.
       Exit status 0 = all equal, 2 = mismatches, 1 = error.
@@ -155,6 +157,25 @@ fn run() -> Result<i32> {
     }
     let cmd = a.0.remove(0);
     match cmd.as_str() {
+        "inspect-rc2-gs" => {
+            let path=PathBuf::from(a.opt("--dump")?.context("--dump FILE.gs required")?);
+            let out=PathBuf::from(a.opt("--out")?.context("--out NEW_PRIVATE_REPORT.json required")?);
+            let sample_skip=a.opt("--skip-packed-vertices")?.map(|v|v.parse::<usize>()).transpose()?.unwrap_or(0);
+            a.done()?;
+            rc_trace::ensure_not_extracted(&out)?;
+            let mut file=std::fs::File::open(&path)?;
+            use std::io::{Read,Write};
+            if file.metadata()?.len()>rc_trace::rc2_gs::MAX_DUMP as u64 {bail!("RC2_GS_CAPTURE_FILE_BUDGET");}
+            let mut bytes=Vec::new();
+            (&mut file).take(rc_trace::rc2_gs::MAX_DUMP as u64+1).read_to_end(&mut bytes)?;
+            let report=rc_trace::rc2_gs::inspect_at(&bytes,sample_skip).map_err(anyhow::Error::msg)?;
+            let digest=rc_formats::sha1::hex(&rc_formats::sha1::sha1(&bytes));
+            let json=format!("{{\"source_sha1\":\"{digest}\",\"source_bytes\":{},\"capture\":{}}}\n",bytes.len(),report.json().trim());
+            let mut output=std::fs::OpenOptions::new().write(true).create_new(true).open(&out)?;
+            output.write_all(json.as_bytes())?;output.sync_all()?;
+            println!("GC capture: {} VSyncs, {} transfer records, {} packed vertex writes; terrain attribution UNPROVEN; private report {}",report.vsyncs,report.transfers,report.vertices,out.display());
+            Ok(0)
+        }
         "class-census" => {
             let out = a.opt("--out")?.map(PathBuf::from).unwrap_or_else(|| rc_trace::work_dir().join("census"));
             let tags = a.opt("--tags")?.map(PathBuf::from).unwrap_or_else(|| rc_trace::repo_root().join("tools/ghidra/names/census_systems.tsv"));

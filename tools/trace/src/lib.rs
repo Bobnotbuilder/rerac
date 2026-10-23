@@ -25,6 +25,7 @@ pub mod spawn_facts;
 pub mod tfrag_light_cmp;
 pub mod tie_shrub_cmp;
 pub mod zip;
+pub mod rc2_gs;
 
 use anyhow::{bail, Result};
 use std::path::{Path, PathBuf};

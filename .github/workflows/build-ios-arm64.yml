@@ -42,6 +42,12 @@ jobs:
           rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
           cargo xtask test-job engine ui --cargo-test 2>&1 | tee evidence/headless-regressions.log
           cargo xtask test-job formats extract data --cargo-test 2>&1 | tee evidence/extraction-regressions.log
+      - name: RC2 read-only capture analyser synthetic tests and CLI compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test -p rc-trace --lib rc2_gs::tests 2>&1 | tee evidence/rc2-capture-tests.log
+          cargo check -p rc-trace --bin rc-trace 2>&1 | tee evidence/rc2-capture-cli-check.log
       - name: Retain regression results
         if: always()
         uses: actions/upload-artifact@v4

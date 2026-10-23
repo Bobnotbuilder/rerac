@@ -7,6 +7,10 @@ and triage: `docs/plan/trace_harness.md`; results: `docs/plan/trace_results_nova
 
 ## Purpose
 
+RC2 terrain capture: see `docs/workflows/rc2-terrain-reference.md` and
+`inspect-rc2-gs --dump FILE.gs --out NEW_PRIVATE_REPORT.json`. Development-only
+bounded post-VU/state inventory; no inferred RAC1 defaults or game-data uploads.
+
 Reads the PS2's EE memory (a PCSX2 savestate, a raw dump, or the live game over PINE) and compares it with what the
 port computes from the same game data: tfrag / tie / shrub lighting, the Novalis spawn state (game-state chunks, hero,
 camera, fog, `rand` stream, moby table), and per-tick hero recordings replayed through the port.
