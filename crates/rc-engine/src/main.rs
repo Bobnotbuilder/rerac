@@ -45,6 +45,10 @@ mod ios_runtime;
 
 mod crash_log;
 mod rc2_preview;
+mod rac2;
+mod rc2_native_data;
+mod rac2_level;
+mod rac2_play;
 mod asset_write;
 mod audio_out;
 mod determinism;
@@ -160,8 +164,8 @@ fn main() -> anyhow::Result<()> {
         return rc2_preview::run(std::path::Path::new(&root));
     }
     #[cfg(target_os = "ios")]
-    if let Some(root) = rc2_preview::requested_ios_root()? {
-        return rc2_preview::run(&root);
+    if rc2_native_data::requested_ios_root()?.is_none() {
+        if let Some(root) = rc2_preview::requested_ios_root()? { return rc2_preview::run(&root); }
     }
     // `--version-json` exits here; a missing or wrong data folder exits with a clear error (crate::disc_source).
     #[cfg(not(target_os = "ios"))]
@@ -179,7 +183,8 @@ fn main() -> anyhow::Result<()> {
     // ship and the load-time update pass (crate::moby_spawn; RC_SPAWN_RULES=0 skips it), the fog zones and the
     // underwater test (crate::fog_state).
     // The boot's game state first: the level's spawn test reads its save bits (crate::gameplay::level_spawn_save).
-    let boot = gameplay::boot_state(&root, index);
+    let rac2 = disc_source::game(&root) == disc_source::Game::Rac2;
+    let boot = if rac2 { None } else { gameplay::boot_state(&root, index) };
     let save = gameplay::level_spawn_save(boot.as_ref().map(|(gs, _)| gs), index);
     let loaded = level_switch::load_bundle(&root, index, &save);
     #[cfg(not(target_os = "ios"))]
@@ -307,6 +312,8 @@ fn main() -> anyhow::Result<()> {
     .add_systems(Startup, setup_camera)
     .add_systems(level_switch::LevelStartup, setup)
     .add_systems(Update, report_fps);
+    if rac2 && rac2::requested() { app.add_plugins(rac2::FrontEndPlugin::new(&root)?); }
+    if rac2 { app.add_plugins(rac2_play::Rac2PlayPlugin); }
     // RC_RENDER_DIAG=1: Bevy's per-pass render timings (CPU only on Metal) and the views rendered, logged every 5 s.
     if std::env::var("RC_RENDER_DIAG").is_ok_and(|v| v.trim() == "1") {
         app.add_plugins((

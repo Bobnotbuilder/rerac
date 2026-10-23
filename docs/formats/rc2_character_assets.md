@@ -64,3 +64,15 @@ Collision/MobyClass/Moby/MobyTable types. It never invokes RAC1 InitMobyInstance
 class handlers, load pass, `tick::Game`, checkpoint/save code or title routing.
 Mission and pvar indices remain GC metadata. Diagnostic records disable update
 and animation and have no update address. The source is not an RC2 gameplay module.
+
+The existing moby GPU infrastructure also needs a title-policy adapter before GC
+upload: `moby_render::glow_from` interprets class+0xa/+0xb as RAC1 glow boundaries,
+but GC+0xb=0 is the compact-format selector. Passing those raw fields unchanged
+would mark all low-LOD packets as glow. Existing `moby_light` also defaults an
+absent multiplier record to0x80; that is not evidence of GC lighting parity.
+Preserve the shared mesh/material/palette infrastructure and supply independently
+validated GC decisions. No current compatibility path calls this renderer policy.
+
+Animation counts are per resident table slot:96 slots reference95 distinct blob
+hashes; slots156/157 alias. The2187 per-slot frame records include that alias
+(2177 records across distinct blob hashes). Neither count denotes evaluated poses.

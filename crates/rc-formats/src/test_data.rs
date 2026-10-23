@@ -77,3 +77,11 @@ pub fn gameplay_section(level: u32, name: &str) -> Option<Vec<u8>> {
     let g = gameplay(level)?;
     gameplay::section(&g, name).unwrap_or_else(|e| panic!("level {level:02} gameplay sections: {e}")).map(<[u8]>::to_vec)
 }
+
+/// Original RC2 Tier 0 archives used by upstream-compatible tests.
+pub fn rac2_root() -> PathBuf {
+    std::env::var_os("RC_EXTRACTED_RAC2")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../extracted-rac2"))
+}

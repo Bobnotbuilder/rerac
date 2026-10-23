@@ -22,6 +22,14 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+/// Runtime routing only; the RAC1 import/Play identity contract remains unchanged.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Game { Rac1, Rac2 }
+pub fn game(root: &Path) -> Game {
+    if root.join("RC2.HDR").is_file() && !root.join("toc.bin").exists() { Game::Rac2 } else { Game::Rac1 }
+}
+pub fn current() -> Game { game(&data_root()) }
+
 /// The data-folder layout this runtime reads (launcher contract `data_format`; `extract-info.json`).
 pub const DATA_FORMAT: u64 = 1;
 /// Exit code: bad command line (`--data-dir` without a value).
@@ -109,6 +117,15 @@ fn check(root: &Path, origin: Origin) -> std::result::Result<String, DataError> 
     let no_data = |what: String| DataError { code: EXIT_NO_DATA, message: format!("{what} {fix}") };
     if !root.is_dir() {
         return Err(no_data(format!("the game data folder {} ({}) does not exist.", root.display(), origin.describe())));
+    }
+    if root.join("RC2.HDR").is_file() {
+        let fail = |message: String| DataError { code: EXIT_DATA_FORMAT, message };
+        let info = std::fs::read_to_string(root.join("extract-info.json")).map_err(|e| fail(format!("RC2 manifest: {e}")))?;
+        if json_uint(&info, "data_format") != Some(DATA_FORMAT) || json_str(&info,"game") != Some("rac2") || json_str(&info,"disc") != Some("SCUS_972.68") {
+            return Err(fail("RC2_EXPERIMENTAL_MANIFEST_IDENTITY_MISMATCH".into()));
+        }
+        crate::rc2_native_data::validate(root).map_err(|e| fail(format!("RC2 experimental data: {e:#}")))?;
+        return Ok(format!("data: {} (EXPERIMENTAL upstream RC2 native Aranos; incomplete gameplay)", root.display()));
     }
     if !root.join("toc.bin").is_file() {
         return Err(no_data(format!("{} ({}) is not a ReRAC game data folder (no toc.bin).", root.display(), origin.describe())));

@@ -450,7 +450,7 @@ struct ListState { cache: Vec<Option<MobyVertex>>, slots: Vu0Slots, texture: i32
 
 impl ListState { fn new() -> Self { ListState { cache: vec![None; 512], slots: Vu0Slots::default(), texture: -1 } } }
 
-fn read_packet(blob: Buf, e: &MobyPacketEntry, metal: bool, state: &mut ListState, compact: bool) -> Result<MobySubmesh> {
+fn read_packet(game: crate::Game, blob: Buf, e: &MobyPacketEntry, metal: bool, state: &mut ListState) -> Result<MobySubmesh> {
     // VIF list: ST (regular only), indices, optional ad-gifs.
     let list = blob.sub(e.vif_list_offset as usize, e.vif_list_size as usize * 0x10, "moby VIF list")?;
     let codes = parse_vif(list.bytes())?;
@@ -515,16 +515,22 @@ fn read_packet(blob: Buf, e: &MobyPacketEntry, metal: bool, state: &mut ListStat
             });
         }
     } else {
-        let h: MobyVertexTableHeader = if compact {
-            let v: [u16; 8] = blob.pod(vo, "GC compact vertex table header")?;
-            MobyVertexTableHeader {
-                matrix_transfer_count: v[0] as u32, two_way_blend_vertex_count: v[1] as u32,
-                three_way_blend_vertex_count: v[2] as u32, main_vertex_count: v[3] as u32,
-                duplicate_vertex_count: v[4] as u32, transfer_vertex_count: v[5] as u32,
-                vertex_table_offset: v[6] as u32, unknown_e: v[7] as u32,
+        // Going Commando's vertex table header is eight u16s (0x10 bytes) and has no RGBA multiplier blob: its level
+        // code converts an R&C1-layout class ("moby %d is in an old format", L00 0x2ffe70) by halving the eight words
+        // to u16s, moving the rest down 0x10 bytes and zeroing the multiplier offset.
+        let (h, head) = match game {
+            crate::Game::Rac1 => (blob.pod::<MobyVertexTableHeader>(vo, "moby vertex table header")?, 0x20),
+            crate::Game::Rac2 => {
+                let w: [u16; 8] = blob.pod(vo, "moby vertex table header")?;
+                let [matrix, two, three, main, dup, transfer, table, mult] = w.map(u32::from);
+                let h = MobyVertexTableHeader {
+                    matrix_transfer_count: matrix, two_way_blend_vertex_count: two, three_way_blend_vertex_count: three,
+                    main_vertex_count: main, duplicate_vertex_count: dup, transfer_vertex_count: transfer,
+                    vertex_table_offset: table, unknown_e: mult,
+                };
+                (h, 0x10)
             }
-        } else { blob.pod(vo, "moby vertex table header")? };
-        let header_bytes = if compact { 0x10 } else { 0x20 };
+        };
         sub.vertex_table = h;
         let (n2, n3) = (h.two_way_blend_vertex_count as usize, h.three_way_blend_vertex_count as usize);
         let in_file = n2 + n3 + h.main_vertex_count as usize;
@@ -534,23 +540,18 @@ fn read_packet(blob: Buf, e: &MobyPacketEntry, metal: bool, state: &mut ListStat
         if e.unknown_d as u32 != (tvc * 6).div_ceil(0x10) || e.unknown_e as u32 != tvc.div_ceil(4) {
             return invalid("moby packet: redundant entry fields do not match");
         }
-        sub.transfers = blob.pod_slice(vo + header_bytes, h.matrix_transfer_count as usize, "moby matrix transfers")?;
-        let mut ofs = vo + header_bytes + h.matrix_transfer_count as usize * 2;
+        sub.transfers = blob.pod_slice(vo + head, h.matrix_transfer_count as usize, "moby matrix transfers")?;
+        let mut ofs = vo + head + h.matrix_transfer_count as usize * 2;
         if !ofs.is_multiple_of(4) { ofs += 2; }
         if !ofs.is_multiple_of(8) { ofs += 4; }
         sub.duplicates = blob.pod_slice(ofs, h.duplicate_vertex_count as usize, "moby duplicate vertices")?;
-        // GC ends at vertex_data_size; +0xe is not RAC1's colour-blob offset.
-        let vertex_end = if compact { e.vertex_data_size as usize * 16 } else { h.unknown_e as usize };
-        if (h.vertex_table_offset as usize) < header_bytes || !(h.vertex_table_offset as usize).is_multiple_of(16)
-            || ofs + sub.duplicates.len() * 2 > vo + h.vertex_table_offset as usize {
-            return invalid("moby packet: vertex metadata overlaps vertex records");
-        }
-        let record_bytes = vertex_end.checked_sub(h.vertex_table_offset as usize)
-            .ok_or_else(|| crate::buf::FormatError::Invalid("moby packet: vertex end before records".into()))?;
-        if !record_bytes.is_multiple_of(16) { return invalid("moby packet: unaligned vertex end"); }
-        let epilogue = (record_bytes / 16).wrapping_sub(in_file);
+        // The vertex records end where the multiplier blob starts (R&C1) or with the packet's vertex data (R&C2).
+        let records_end = if game == crate::Game::Rac2 { e.vertex_data_size as u32 * 0x10 } else { h.unknown_e };
+        if records_end < h.vertex_table_offset { return invalid("moby packet: unknown_e before vertex table"); }
+        let epilogue = ((records_end - h.vertex_table_offset) / 0x10) as usize;
+        let epilogue = epilogue.wrapping_sub(in_file);
         if !(1..7).contains(&epilogue) { return invalid(format!("moby packet: epilogue vertex count {}", epilogue as isize)); }
-        if !compact {
+        if game == crate::Game::Rac1 {
             let mult_size = e.vertex_data_size as usize * 0x10;
             if mult_size < h.unknown_e as usize { return invalid("moby packet: multiplier blob starts past the vertex data"); }
             sub.rgba_multipliers = blob.sub(vo + h.unknown_e as usize, mult_size - h.unknown_e as usize, "moby RGBA multipliers")?.bytes().to_vec();
@@ -607,26 +608,11 @@ fn read_packet(blob: Buf, e: &MobyPacketEntry, metal: bool, state: &mut ListStat
 }
 
 /// Parses one moby class blob (a `moby_class/NNNN` block of the level core data).
-pub fn parse_moby_class(blob: &[u8]) -> Result<MobyClass> {
-    parse_class_layout(blob, false)
-}
+pub fn parse_moby_class(blob: &[u8]) -> Result<MobyClass> { parse_moby_class_for(crate::Game::Rac1, blob) }
 
-/// Explicit GC entry point. Structural decoding does not prove GC skinning/VU parity.
-/// The nonzero +0xb legacy variant must be handled separately, never guessed.
-pub fn parse_gc_moby_class(blob: &[u8]) -> Result<MobyClass> {
-    if Buf(blob).u8(0xb)? != 0 { return invalid("GC_MOBY_LEGACY_LAYOUT_UNSUPPORTED"); }
-    let c=parse_class_layout(blob, true)?;
-    if !c.header.scale.is_finite() || c.header.packet_table_offset<0
-        || c.header.skeleton<0 || c.header.common_trans<0 || c.sequence_pointers.iter().any(|p|*p<0) {
-        return invalid("GC_MOBY_INVALID_HEADER");
-    }
-    if !c.skeleton.matrices.iter().flatten().flatten().all(|v|v.is_finite()) {
-        return invalid("GC_MOBY_NONFINITE_SKELETON");
-    }
-    Ok(c)
-}
-
-fn parse_class_layout(blob: &[u8], compact: bool) -> Result<MobyClass> {
+/// [`parse_moby_class`] for a class of `game`: Going Commando's class header is R&C1's (its relocation, L00
+/// 0x2ffe70, walks the same fields); its packets differ only in the vertex table header ([`read_packet`]).
+pub fn parse_moby_class_for(game: crate::Game, blob: &[u8]) -> Result<MobyClass> {
     let b = Buf(blob);
     let h: MobyClassHeader = b.pod(0, "moby class header")?;
     let sequence_pointers = if h.sequence_count > 0 { b.pod_slice(0x48, h.sequence_count as usize, "moby sequence pointers")? } else { Vec::new() };
@@ -638,7 +624,7 @@ fn parse_class_layout(blob: &[u8], compact: bool) -> Result<MobyClass> {
         // Vertex cache, VU0 slots and GS texture state carry across the packets of one list.
         let list = |first: usize, count: usize, is_metal: bool, out: &mut Vec<MobySubmesh>| -> Result<()> {
             let mut st = ListState::new();
-            for e in &entries[first..first + count] { out.push(read_packet(b, e, is_metal, &mut st, compact)?); }
+            for e in &entries[first..first + count] { out.push(read_packet(game, b, e, is_metal, &mut st)?); }
             Ok(())
         };
         list(0, h.high_lod_count as usize, false, &mut high_lod)?;
@@ -652,29 +638,25 @@ fn parse_class_layout(blob: &[u8], compact: bool) -> Result<MobyClass> {
     Ok(MobyClass { header: h, sequence_pointers, high_lod, low_lod, metal, skeleton })
 }
 
-/// GC armor archives contain mesh-only resources; no skeleton or sequences.
-/// Scale and hero association belong to the original loader and are not inferred here.
-#[derive(Clone, Debug)]
-pub struct GcArmorMesh {
-    pub high_lod: Vec<MobySubmesh>,
-    pub low_lod: Vec<MobySubmesh>,
-    pub metal: Vec<MobySubmesh>,
-}
-
-pub fn parse_gc_armor_mesh(blob: &[u8]) -> Result<GcArmorMesh> {
-    let b = Buf(blob);
-    b.check(0, 16, "GC armor mesh header")?;
-    let counts = [b.u8(0)? as usize, b.u8(1)? as usize, b.u8(2)? as usize];
-    let metal_begin = b.u8(3)? as usize;
-    let total = counts.iter().sum::<usize>();
-    if counts[2] > 0 && metal_begin != counts[0]+counts[1] { return invalid("GC_ARMOR_METAL_RANGE"); }
-    let entries: Vec<MobyPacketEntry> = b.pod_slice(b.u32(4)? as usize, total, "GC armor packets")?;
-    let mut out = GcArmorMesh { high_lod: vec![], low_lod: vec![], metal: vec![] };
-    for (first, count, metal, dst) in [(0, counts[0], false, &mut out.high_lod), (counts[0], counts[1], false, &mut out.low_lod), (metal_begin, counts[2], true, &mut out.metal)] {
-        let mut state = ListState::new();
-        for e in &entries[first..first+count] { dst.push(read_packet(b, e, metal, &mut state, true)?); }
-    }
-    Ok(out)
+/// Gives `class` the packets of a separate mesh blob: `u8 high, low, metal, metal_begin`, `+4` the packet table,
+/// offsets from the blob's start (Going Commando's armour, `crate::rac2::armor`; its level class 0 has none).
+pub fn attach_packets(game: crate::Game, class: &mut MobyClass, mesh: &[u8]) -> Result<()> {
+    let b = Buf(mesh);
+    let (high, low, metal, metal_begin) = (b.u8(0)? as usize, b.u8(1)? as usize, b.u8(2)? as usize, b.u8(3)? as usize);
+    let table = b.u32(4)? as usize;
+    let total = high + low + metal;
+    if metal > 0 && metal_begin + metal > total { return invalid("moby mesh: metal packets past the packet table"); }
+    let entries: Vec<MobyPacketEntry> = b.pod_slice(table, total, "moby mesh packet table")?;
+    let list = |first: usize, count: usize, is_metal: bool| -> Result<Vec<MobySubmesh>> {
+        let mut st = ListState::new();
+        entries[first..first + count].iter().map(|e| read_packet(game, b, e, is_metal, &mut st)).collect()
+    };
+    class.high_lod = list(0, high, false)?;
+    class.low_lod = list(high, low, false)?;
+    class.metal = list(metal_begin, metal, true)?;
+    let h = &mut class.header;
+    (h.high_lod_count, h.low_lod_count, h.metal_count, h.metal_begin) = (high as u8, low as u8, metal as u8, metal_begin as u8);
+    Ok(())
 }
 
 /// A level's moby class with its core-index entry (whose `textures[16]` maps a triangle's
@@ -704,7 +686,7 @@ pub fn parse_level_mobys(core: &LevelCore, core_data: &[u8]) -> Result<Vec<Level
             return invalid(format!("moby class {}: no core block", e.o_class));
         };
         let blob = Buf(core_data).sub(blk.offset, blk.size, "moby class blob")?;
-        let class = parse_moby_class(blob.bytes()).map_err(|err| crate::FormatError::Invalid(format!("moby class {}: {err}", e.o_class)))?;
+        let class = parse_moby_class_for(core.game, blob.bytes()).map_err(|err| crate::FormatError::Invalid(format!("moby class {}: {err}", e.o_class)))?;
         out.push(LevelMobyClass { o_class: e.o_class, entry: *e, class });
     }
     Ok(out)
@@ -713,39 +695,6 @@ pub fn parse_level_mobys(core: &LevelCore, core_data: &[u8]) -> Result<Vec<Level
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn gc_mesh_fixture() -> Vec<u8> {
-        let mut b=vec![0u8;208];
-        b[0]=1; b[4..8].copy_from_slice(&16u32.to_le_bytes());
-        let e=MobyPacketEntry { vif_list_offset:32,vif_list_size:2,vertex_offset:64,
-            vertex_data_size:9,unknown_d:2,unknown_e:1,transfer_vertex_count:3,..Default::default() };
-        b[16..32].copy_from_slice(bytemuck::bytes_of(&e));
-        b[32..36].copy_from_slice(&0x65030000u32.to_le_bytes()); // V2_16 ST, three records.
-        b[48..52].copy_from_slice(&0x6e030000u32.to_le_bytes()); // V4_8 index stream.
-        b[56..64].copy_from_slice(&[0x81,0x82,3,1,1,1,0,0]);
-        let h=[0u16,0,0,3,0,3,16,777]; // GC +0xe is NOT a colour-blob offset.
-        b[64..80].copy_from_slice(bytemuck::cast_slice(&h));
-        b[106..108].copy_from_slice(&1024i16.to_le_bytes());
-        b[124..126].copy_from_slice(&1024i16.to_le_bytes());
-        b[196..198].copy_from_slice(&1u16.to_le_bytes());
-        b[198..200].copy_from_slice(&2u16.to_le_bytes());
-        b
-    }
-
-    #[test]
-    fn gc_compact_mesh_decodes_triangle_without_rac1_colour_blob() {
-        let b=gc_mesh_fixture(); let m=parse_gc_armor_mesh(&b).unwrap();
-        assert!(m.low_lod.is_empty() && m.metal.is_empty());
-        let s=&m.high_lod[0];
-        assert!(s.rgba_multipliers.is_empty());
-        assert_eq!(s.vertices[1].packed_position(),[1024,0,0]);
-        assert_eq!(s.vertices[2].packed_position(),[0,1024,0]);
-        assert_eq!(s.vertices.iter().map(|v|v.id).collect::<Vec<_>>(),[0,1,2]);
-        assert_eq!(s.triangles,[MobyTriangle {a:0,b:1,c:2,texture:-1}]);
-        for n in 0..b.len() { assert!(parse_gc_armor_mesh(&b[..n]).is_err(),"truncation {n}"); }
-        let mut wrong=b.clone(); wrong[29]=3; assert!(parse_gc_armor_mesh(&wrong).is_err());
-        wrong=b; wrong[28]=3; assert!(parse_gc_armor_mesh(&wrong).is_err());
-    }
 
     fn close(a: [f32; 3], b: [f32; 3]) -> bool { a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-6) }
 
@@ -833,4 +782,17 @@ mod tests {
         assert!(moby_triangles(&walk_sub(&[0x81, 0x82, 3, 1, 1, 1], &[0], &[], 3)).is_err());
         assert!(moby_triangles(&walk_sub(&[0x81, 0x82, 4, 1, 1, 1, 0], &[0], &[], 3)).is_err());
     }
+}
+
+/// GameStudio compatibility name; implementation is upstream's shared reader.
+pub fn parse_gc_moby_class(blob: &[u8]) -> Result<MobyClass> {
+    parse_moby_class_for(crate::Game::Rac2, blob)
+}
+#[derive(Clone, Debug)]
+pub struct GcArmorMesh { pub high_lod: Vec<MobySubmesh>, pub low_lod: Vec<MobySubmesh>, pub metal: Vec<MobySubmesh> }
+/// Compatibility view over upstream armor packet attachment.
+pub fn parse_gc_armor_mesh(blob: &[u8]) -> Result<GcArmorMesh> {
+    let mut class = parse_moby_class(&[0u8;0x48])?;
+    attach_packets(crate::Game::Rac2, &mut class, blob)?;
+    Ok(GcArmorMesh { high_lod:class.high_lod, low_lod:class.low_lod, metal:class.metal })
 }

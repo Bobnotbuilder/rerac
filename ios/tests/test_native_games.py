@@ -36,7 +36,7 @@ class NativeGames(unittest.TestCase):
         project = (ROOT/'ios/ReRAC.xcodeproj/project.pbxproj').read_text()
         self.assertIn('PRODUCT_BUNDLE_IDENTIFIER = org.rerac.game.iospoc;', project)
         info = plistlib.loads((ROOT/'ios/Info.plist').read_bytes())
-        self.assertEqual(info['CFBundleVersion'], '8')
+        self.assertEqual(info['CFBundleVersion'], '9')
         self.assertTrue(info['UIFileSharingEnabled'])
 
     def test_library_panel_is_persistent_and_does_not_dispatch_a_fake_module(self):

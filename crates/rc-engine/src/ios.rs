@@ -68,6 +68,17 @@ pub fn prepare() -> anyhow::Result<PathBuf> {
         .ok_or_else(|| anyhow::anyhow!("iOS application sandbox HOME unavailable"))?);
     anyhow::ensure!(home.is_absolute(), "iOS sandbox HOME must be absolute");
     let documents = home.join("Documents");
+    if let Some(root) = crate::rc2_native_data::requested_ios_root()? {
+        // Explicit sidecar. No RAC1 folder, memory card or settings file is opened.
+        let root = crate::disc_source::mobile_startup(root)?;
+        let support = documents.join("RC2NativeSupport");
+        std::fs::create_dir_all(&support)?;
+        std::env::set_var("RC_DATA_DIR", &root);
+        std::env::set_var("RC_SAVE_DIR", "0"); // upstream RC2 saves are not implemented
+        std::env::set_var("RC_SETTINGS_FILE", support.join("settings.json"));
+        diagnostic("RC2_NATIVE_EXPERIMENTAL_REQUESTED", "upstream 89c87e; incomplete Aranos gameplay; RAC1 saves isolated");
+        return Ok(root);
+    }
     let data = documents.join("ReRACData");
     let support = documents.join("ReRACSupport");
     std::fs::create_dir_all(&data)?;

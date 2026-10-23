@@ -51,9 +51,14 @@
       "evidence_and_limits": "Native skin/mesh/skeleton structures populated; actual GC character upload and GPU pose output not exercised."
     },
     {
+      "system": "moby_render_header_and_lighting_policy",
+      "status": "RC2_SPECIFIC_IMPLEMENTATION_REQUIRED",
+      "evidence_and_limits": "Static source audit: rc-engine/moby_render::glow_from treats class+0xa/+0xb as RAC1 glow thresholds. GC+0xb=0 selects compact format; using it unchanged would mark all low-LOD packets as glow. GC vertex records have no RAC1 multiplier blob; existing lighting supplies a neutral fallback, not original GC lighting proof. Keep common GPU infrastructure; adapt verified GC policy before upload."
+    },
+    {
       "system": "compressed_animation_storage",
       "status": "REUSED_WITH_ADAPTER",
-      "evidence_and_limits": "All96 resident special blobs/2187 frames bounded and preserved in original slots; shared regular reader used only for unflagged storage."
+      "evidence_and_limits": "96 resident special slots,95 distinct blob hashes;2187 per-slot frame records (2177 across distinct hashes). Slots156/157 alias. Bounded raw storage, not evaluated poses."
     },
     {
       "system": "compressed_animation_pose",
@@ -134,14 +139,13 @@
   "FIRST_FATAL_BLOCKER": null,
   "runtime_fatal_explanation": "No RC2 gameplay runtime was launched; do not invent a crash.",
   "first_development_blocker": "RC2_HERO_SPECIAL_FRAME_TO_NATIVE_POSE_NOT_IMPLEMENTED",
-  "new_ipa": false,
-  "new_iphone_or_gpu_test": false,
+  "new_ipa": true,
   "build8_physical_baseline": "USER_REPORTED_TERRAIN_TEXTURES_BACKBONE_FREE_CAMERA_PASS",
   "shared_core_promotion": false,
   "fix_classifications": [
     "GAME_SPECIFIC",
     "PLATFORM_SPECIFIC",
-    "SHARED_TESTING_CANDIDATE_NOT_PROMOTED"
+    "SHARED_TESTING"
   ],
   "other_engines_requiring_review": [],
   "private_inputs_uploaded": false,
@@ -182,8 +186,54 @@
     },
     "original_engine_compatibility_probe": "PASS_LINE_SPHERE_CAPSULE_NATIVE_METADATA_SKY_BANK_AND_EXPLICIT_RAC1_REJECTIONS",
     "original_preview_directory": "95_ASSET_FILES_BYTE_IDENTICAL_PLUS_EXACT_MARKER",
-    "arm64_current_changes": "NOT_YET_COMPILED",
-    "new_gpu_execution": false,
+    "arm64_current_changes": "COMPILED_PHYSICAL_IPHONE_TARGET_PASS_NOT_A_DEVICE_EXECUTION",
+    "new_gpu_execution": "HOSTED_SYNTHETIC_METAL_ONLY",
     "new_physical_iphone_execution": false
+  },
+  "hosted_validation": {
+    "source": "8829f79d8c210d1294cdbb4731438314960a40b2",
+    "run": 40007216478,
+    "native_intel": "PASS",
+    "headless": "PASS",
+    "engine_ui": {
+      "passed": 1114,
+      "ignored": 5
+    },
+    "formats_extract_data": {
+      "passed": 1123,
+      "ignored": 3,
+      "common_cases_repeated": 1079
+    },
+    "trace_parser_subset": {
+      "passed": 8,
+      "included_in_34_common_trace_unit_cases": true
+    },
+    "trace_cli_and_examples": "PASS_INCLUDES_FULL_ENGINE_COMPATIBILITY_PROBE",
+    "synthetic_metal": "PASS_DEPTH_0_255_0_ORDER_255_255_0_NOT_ARANOS",
+    "device": "ARM64_COMPILE_PASS_APP_PACKAGE_AND_SIMULATOR_IN_PROGRESS",
+    "original_RC2_assets_on_CI": false
+  },
+  "new_synthetic_gpu_test": true,
+  "new_original_gpu_test": false,
+  "new_physical_iphone_test": false,
+  "ipa_scope": "AUTOMATIC_SOURCE_VALIDATION_PACKAGE_UNCHANGED_BUILD8_COUNTER_NO_NEW_RC2_RUNTIME_FEATURE",
+  "build9_complete_or_playable_ipa": false,
+  "validation_package": {
+    "source": "8829f79d8c210d1294cdbb4731438314960a40b2",
+    "run": 40007216478,
+    "ipa_artifact": 12525935320,
+    "symbols_artifact": 12525765731,
+    "artifact_zip_sha256": "4ea50f025f5ee2946ec430eb0772878fe68d470caacce0a58bfcb119b5208e63",
+    "note": "Outer artifact ZIP digest, not the inner IPA checksum. Device log receipt pending."
+  },
+  "hero_animation_counts": {
+    "resident_slots": 96,
+    "distinct_blob_hashes": 95,
+    "per_slot_frame_records_including_aliases": 2187,
+    "frame_records_across_distinct_blob_hashes": 2177,
+    "alias_slots": [
+      156,
+      157
+    ]
   }
 }

@@ -148,7 +148,8 @@ fn give_items() -> Option<Vec<usize>> {
 }
 
 /// `RC_PLAY` (default on; `0` = fly camera only).
-pub fn enabled() -> bool { !std::env::var("RC_PLAY").is_ok_and(|v| v.trim() == "0") }
+pub fn enabled() -> bool {
+    if crate::disc_source::current() != crate::disc_source::Game::Rac1 { return false; } !std::env::var("RC_PLAY").is_ok_and(|v| v.trim() == "0") }
 
 /// The boot's game state: a direct boot into level `index` (`load_game_state`) with the debug grants applied. Built
 /// once, before the boot's level load (its spawn bits, [`level_spawn_save`]), and handed to [`GameplayPlugin`].

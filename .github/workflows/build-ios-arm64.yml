@@ -3,7 +3,7 @@ name: ReRAC iOS ARM64 unsigned proof of concept
 on:
   workflow_dispatch:
   push:
-    branches: ['ios/arm64-poc', 'ios/rc2-native']
+    branches: ['ios/arm64-poc', 'ios/rc2-native', 'ios/rc2-upstream-integration']
     paths:
       - '.github/workflows/build-ios-arm64.yml'
       - 'ios/**'
@@ -46,6 +46,7 @@ jobs:
           mkdir -p evidence
           rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
           cargo xtask test-job engine ui --cargo-test 2>&1 | tee evidence/headless-regressions.log
+          cargo test -p rc-game2 --lib 2>&1 | tee evidence/rc-game2-regressions.log
           cargo xtask test-job formats extract data --cargo-test 2>&1 | tee evidence/extraction-regressions.log
       - name: RC2 read-only capture analyser synthetic tests and CLI compilation
         shell: bash
