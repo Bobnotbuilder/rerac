@@ -57,8 +57,9 @@ impl Material for PreviewMaterial {
     ) -> std::result::Result<(), SpecializedMeshPipelineError> {
         d.primitive.cull_mode = None;
         if let Some(depth) = &mut d.depth_stencil {
-            depth.depth_write_enabled = true;
-            depth.depth_compare = bevy::render::render_resource::CompareFunction::GreaterEqual;
+            depth.depth_write_enabled = Some(true);
+            depth.depth_compare =
+                Some(bevy::render::render_resource::CompareFunction::GreaterEqual);
         }
         if let Some(f) = &mut d.fragment {
             for target in f.targets.iter_mut().flatten() {
@@ -371,7 +372,7 @@ fn spawn(
         commands.insert_resource(CaptureTarget(image));
     } else {
         commands.spawn((Text::new("RC2 TERRAIN PREVIEW — EXPERIMENTAL\nNo gameplay · original GS/VU parity unverified\nSticks: diagnostic camera"),
-            TextFont {font_size:18.,..default()},TextColor(Color::WHITE),
+            TextFont {font_size:FontSize::Px(18.),..default()},TextColor(Color::WHITE),
             Node {position_type:PositionType::Absolute,top:px(12),left:px(12),..default()},
             BackgroundColor(Color::srgba(0.,0.,0.,0.8))));
     }

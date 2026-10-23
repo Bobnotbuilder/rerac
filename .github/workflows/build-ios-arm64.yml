@@ -34,6 +34,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/cache/restore@v4
+        id: rust-target-cache
+        with:
+          path: target/
+          key: rc2-headless-xcode27-rust1991-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**/Cargo.toml') }}
       - name: Existing headless engine and UI regression tier
         shell: bash
         run: |
@@ -59,6 +64,11 @@ jobs:
           cargo run -p rc-engine --features dev --bin rerac 2>&1 | tee evidence/rc2-preview-synthetic-gpu.log
           grep -q RC2_PREVIEW_GPU_PROBE_PASS evidence/rc2-preview-synthetic-gpu.log
           test -s evidence/rc2-preview-synthetic-gpu.png
+      - uses: actions/cache/save@v4
+        if: always() && steps.rust-target-cache.outputs.cache-hit != 'true'
+        with:
+          path: target/
+          key: ${{ steps.rust-target-cache.outputs.cache-primary-key }}
       - name: Retain regression results
         if: always()
         uses: actions/upload-artifact@v4
@@ -79,6 +89,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/cache/restore@v4
+        id: rust-target-cache
+        with:
+          path: target/
+          key: rc2-intel-preview-xcode27-rust1991-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**/Cargo.toml') }}
       - name: Cross-compile native preview validation binary
         shell: bash
         run: |
@@ -95,6 +110,11 @@ jobs:
           otool -L "$package/rerac" > evidence/rc2-preview-macos-frameworks.txt
           test "$(lipo -archs "$package/rerac")" = x86_64
           shasum -a 256 "$package/rerac" > "$package/rerac.sha256"
+      - uses: actions/cache/save@v4
+        if: always() && steps.rust-target-cache.outputs.cache-hit != 'true'
+        with:
+          path: target/
+          key: ${{ steps.rust-target-cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@v4
         with:
           name: RC2-scene-preview-macOS-x86_64-validation
@@ -140,6 +160,12 @@ jobs:
           xcodebuild -version | tee evidence/xcode.txt
           xcrun --sdk iphoneos --show-sdk-version | tee evidence/iphoneos-sdk.txt
           echo "CARGO_TARGET_DIR=$RUNNER_TEMP/rerac-ios-target" >> "$GITHUB_ENV"
+
+      - uses: actions/cache/restore@v4
+        id: rust-target-cache
+        with:
+          path: ${{ runner.temp }}/rerac-ios-target/
+          key: rc2-ios-xcode27-rust1991-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**/Cargo.toml') }}
 
       - name: Install exact Rust device target
         run: |
@@ -230,3 +256,8 @@ jobs:
           path: evidence/
           if-no-files-found: warn
           retention-days: 14
+      - uses: actions/cache/save@v4
+        if: always() && steps.rust-target-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ runner.temp }}/rerac-ios-target/
+          key: ${{ steps.rust-target-cache.outputs.cache-primary-key }}
