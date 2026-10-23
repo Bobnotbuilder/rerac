@@ -103,3 +103,14 @@ RAC1 remains the physical third-planet regression baseline. No new RC2 visible
 graphics, audio, menu, input, gameplay or performance claim. No Shared Core
 promotion/adoption. Classification GAME_SPECIFIC, supporting PLATFORM_SPECIFIC
 container/GS format facts and SHARED_TESTING candidate only.
+
+## Build 8 experimental scene consumer
+
+The format remains RC2MESH1/v1. `rc_data::rc2_preview` now validates a scoped
+Build 7 Aranos receipt and creates consecutive per-packet/per-fragment draw
+runs for one selected LOD. The independent Bevy material/shader consumes these
+positions, ST and raw base colours plus original mip0 images; unknown GC
+alpha, lighting, fog, mip/morph and inherited GS state remain experimental.
+See `docs/validation/rc2-scene-preview-build8.json` for compiled/GPU-test scope.
+The Metal pixel probe uses synthetic inputs; original-data CPU success is not
+an original Aranos GPU-render or gameplay result. No prepared payloads changed.

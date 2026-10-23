@@ -1,4 +1,44 @@
-# RC2 Aranos scene boundary — CPU candidate, not a rendered scene
+# RC2 Aranos experimental preview — original GPU frame pending
+
+## Build 8 scene-preview validation receipt — 2026-10-23
+
+Runtime source `cd1311505774f52e87d006e6bb8cae9a0bbcc5ad` (local source
+`d38272251c01b7004baed9e94e981371c5f7e7b9`). The isolated experimental
+terrain renderer compiled for native Intel/macOS, ARM64/macOS, iPhone ARM64
+and the iOS simulator. The new **synthetic** Metal probe captured a frame and
+passed independent texture/colour, depth and submission-order pixel checks.
+Original Aranos upload planning passed on all three preserved LODs, but an
+**original Aranos GPU frame has not been captured**. No Ratchet model,
+player movement/collision, RC2 gameplay or physical iPhone result is claimed.
+RC2 Play remains disabled; normal RAC1 startup and data/save paths are retained.
+
+[Run 39943428819](https://github.com/Bobnotbuilder/rerac/actions/runs/39943428819)
+passed all compilation, regression, package/symbol and batched/unbatched iOS 27
+simulator validation steps. The workflow conclusion is **failure** because the
+final device-evidence upload timed out after five ArtifactService attempts.
+The IPA and symbols had already uploaded successfully; full job logs retain
+the validation results. No assertion was bypassed or reclassified as a pass.
+
+[Build 8 unsigned scene-preview IPA](https://github.com/Bobnotbuilder/rerac/actions/runs/39943428819/artifacts/12498465782)
+and [matched symbols](https://github.com/Bobnotbuilder/rerac/actions/runs/39943428819/artifacts/12498027423).
+Inner IPA SHA256: `3331f73993855769f6ea850e4aa3eb6068ff7e0c8e752f047f4e36fc5669ee1c`.
+UUID: `198ebb96-e8fc-3fd0-9537-18eedbcd20fa`; bundle `org.rerac.game.iospoc`,
+version 0.3.4/build 8, minimum iOS 16, SDK 27.1, 25 source-matched shaders.
+Sign with the existing effective identity and install as an update; preserve
+RAC1 data/saves and do not uninstall. This is a scene-preview build, not gameplay.
+
+[Native Intel validation ZIP](https://github.com/Bobnotbuilder/rerac/actions/runs/39943428819/artifacts/12497867130)
+is compiled, but shell DNS prevents retrieving it into the local workspace.
+Immediate next step: obtain that binary locally, run `RC2_SCENE_PREVIEW` against
+the unchanged private Aranos package, capture and inspect an authentic frame.
+Original GS/VU state remains uncorrelated; the diagnostic material/camera policy
+is explicitly experimental. No private game assets were uploaded/regenerated.
+Full scoped results: `docs/validation/rc2-scene-preview-build8.json`.
+
+The implementation/checkpoint notes below predate this receipt. Pending compile
+statements there are historical; original-game rendering/gameplay limits remain.
+
+## Historical CPU scene-boundary evidence
 
 Baseline application source: `4c94e5350fd28afed19633c51fa403d340758765`,
 Build7. Latest baseline documentation commit:

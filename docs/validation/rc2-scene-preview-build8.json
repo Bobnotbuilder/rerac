@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "build": 8,
+  "version": "0.3.4",
+  "label": "RC2_SCENE_PREVIEW_NOT_GAMEPLAY",
+  "runtime_source_commit": "cd1311505774f52e87d006e6bb8cae9a0bbcc5ad",
+  "local_runtime_source_commit": "d38272251c01b7004baed9e94e981371c5f7e7b9",
+  "classification": [
+    "GAME_SPECIFIC",
+    "SHARED_TESTING_REVIEW_CANDIDATE"
+  ],
+  "workflow_run": 39943428819,
+  "workflow_conclusion": "failure",
+  "workflow_failure": "POST_VALIDATION_DEVICE_EVIDENCE_UPLOAD_ARTIFACT_SERVICE_TIMEOUT_AFTER_FIVE_ATTEMPTS",
+  "compile": {
+    "native_macos_arm64": true,
+    "native_macos_x86_64": true,
+    "iphone_arm64": true,
+    "ios_simulator_arm64": true
+  },
+  "local": {
+    "data_unit_passed": 15,
+    "extractor_library_passed": 23,
+    "extractor_library_ignored": 1,
+    "cli_passed": 2,
+    "ios_contracts_passed": 59,
+    "private_original_upload_plan_cases_passed": 1
+  },
+  "hosted": {
+    "engine_ui_passed": 1108,
+    "engine_ui_ignored": 5,
+    "formats_extract_data_passed": 1117,
+    "formats_extract_data_ignored": 3,
+    "common_unit_cases_repeated": 1073,
+    "capture_parser_subset_passed": 8,
+    "capture_parser_subset_is_repeated_coverage": true,
+    "trace_cli_examples_compile": "PASS"
+  },
+  "metal_probe": {
+    "result": "PASS",
+    "input": "SYNTHETIC_ONLY_NO_GAME_DATA",
+    "adapter": "Apple Paravirtual device",
+    "backend": "Metal",
+    "depth_pixel": [
+      0,
+      255,
+      0
+    ],
+    "order_pixel": [
+      255,
+      255,
+      0
+    ],
+    "frame_captured": true
+  },
+  "ios_simulator": {
+    "runtime": "27.0",
+    "batched": "PASS",
+    "unbatched": "PASS",
+    "startup_controller_display_resize_aa_shadow": "PASS",
+    "original_game_data_used": false,
+    "rc2_scene_executed": false
+  },
+  "original_aranos": {
+    "cpu_upload_plan": "PASS",
+    "triangles_by_lod": [
+      33710,
+      26522,
+      26416
+    ],
+    "contiguous_draws_per_lod": 2578,
+    "consumed_mip0_images_hash_verified": 93,
+    "gpu_rendered": false,
+    "scene_screenshot_captured": false,
+    "asset_payloads_regenerated": false
+  },
+  "preview_policy": {
+    "status": "EXPLICITLY_EXPERIMENTAL_NOT_GC_PARITY",
+    "coordinates": "orthonormal Z-up to Y-up diagnostic rotation",
+    "projection": "60 degree diagnostic perspective",
+    "texture": "original mip0 bilinear repeat/clamp",
+    "colour": "raw base RGB divided by 128 modulation",
+    "depth": "opaque reverse-Z greater-equal write",
+    "faces": "two sided",
+    "omitted": [
+      "original alpha/test/blending",
+      "lighting",
+      "fog",
+      "mip/LOD selection/morph",
+      "original phase/VU emission correlation"
+    ]
+  },
+  "ipa": {
+    "artifact_id": 12498465782,
+    "sha256": "3331f73993855769f6ea850e4aa3eb6068ff7e0c8e752f047f4e36fc5669ee1c",
+    "signing": "UNSIGNED",
+    "architecture": "arm64",
+    "minimum_ios": "16.0",
+    "sdk": "27.1",
+    "bundle_identifier": "org.rerac.game.iospoc",
+    "symbols_artifact_id": 12498027423,
+    "matching_uuid": "198ebb96-e8fc-3fd0-9537-18eedbcd20fa",
+    "shaders": 25
+  },
+  "native_intel_artifact": {
+    "artifact_id": 12497867130,
+    "zip_sha256": "7b9d6f6ddd9c8b93198de4c7cf900a44a3af98c3543c085c5529df622f68f3c3",
+    "execution_on_private_original_data": "BLOCKED_ARTIFACT_NOT_LOCAL_SHELL_DNS_UNAVAILABLE"
+  },
+  "gameplay": {
+    "rc2_play_enabled": false,
+    "original_ratchet_model_rendered": false,
+    "animations_rendered": false,
+    "native_player_movement": false,
+    "native_collision": false,
+    "new_camera_controller_hardware_tested": false,
+    "physical_iphone_tested": false,
+    "playable_milestone": false,
+    "FIRST_FATAL_BLOCKER": null
+  },
+  "preservation": {
+    "ratchet1_runtime_paths_retained": true,
+    "ratchet1_data_saves_modified": false,
+    "fresh_ratchet1_physical_regression": false,
+    "shared_core_promotion": false,
+    "other_engines_changed": false,
+    "proprietary_media_in_repo_or_ci": false
+  },
+  "next_objective": "Run compiled Intel preview against unchanged private Aranos package, inspect and retain authentic terrain frame, then correlate original GS/VU state and implement actual player assets/behaviour."
+}
