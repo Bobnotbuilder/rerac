@@ -18,6 +18,7 @@
 
 pub mod cache;
 pub mod rc2;
+pub mod rc2_scene;
 pub mod xxh64;
 
 pub use cache::{Cache, Error};

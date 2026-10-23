@@ -1,5 +1,19 @@
 # RC2 native asset phase — durable public handoff
 
+## Latest CPU scene-boundary checkpoint (2026-10-23)
+
+See `docs/validation/rc2-scene-boundary.md`. Build7 source and all prepared data
+are preserved. New rc-data terrain reader and independent GC tie vertex-region
+reader compile/test locally; private Aranos tests accept833 terrain fragments,
+279 images,74 tie classes/1876 packets/93418 vertices. No native RC2 rendering
+or gameplay path exists yet. Do not mistake a typed CPU reader for scene parity.
+RC2 Play remains disabled; no current-candidate device build/new IPA claimed.
+Exact next action: correlate original GC terrain DMA/VU state and register
+patching, then connect the isolated scene to the existing renderer. Do not use
+RAC1's hardcoded fog/camera/alpha/depth defaults without evidence. No media upload.
+
+The historical Build7 receipt below remains valid for that app source only.
+
 Continue `ios/rc2-native`; preserve Build6 source
 15b0da96480627e54cfb86941c96858ab6b51c11 and its successful run39785625401.
 Never replace original ios/arm64-poc or the separate C++ RAC1 project.

@@ -52,3 +52,4 @@ pub mod sha1;
 pub mod test_data;
 
 pub use buf::{Buf, FormatError};
+pub mod rc2_tie;
