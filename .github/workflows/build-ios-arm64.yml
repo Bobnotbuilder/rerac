@@ -16,9 +16,9 @@ permissions:
 
 concurrency:
   group: rerac-ios-poc-${{ github.ref }}
-  # Superseded builds on this isolated development branch are replaceable; keep
-  # the final SHA's device/symbol/test evidence together instead of queueing stale builds.
-  cancel-in-progress: true
+  # Preserve package, symbols and simulator evidence for a running integration.
+  # Follow-up revisions queue and reuse its completed cache instead of cancelling validation.
+  cancel-in-progress: false
 
 jobs:
   headless-regressions:
@@ -46,7 +46,8 @@ jobs:
           mkdir -p evidence
           rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
           cargo xtask test-job engine ui --cargo-test 2>&1 | tee evidence/headless-regressions.log
-          cargo test -p rc-game2 --lib 2>&1 | tee evidence/rc-game2-regressions.log
+          cargo test -p rc-game2 --lib --tests -- --nocapture 2>&1 | tee evidence/rc-game2-regressions.log
+          cargo test -p rc-video --test rac2_original_frontend -- --nocapture 2>&1 | tee evidence/rc2-video-contract.log
           cargo xtask test-job formats extract data --cargo-test 2>&1 | tee evidence/extraction-regressions.log
       - name: RC2 read-only capture analyser synthetic tests and CLI compilation
         shell: bash
@@ -229,7 +230,7 @@ jobs:
       - name: Upload unsigned IPA and checksum
         uses: actions/upload-artifact@v4
         with:
-          name: ReRAC-iOS-arm64-unsigned
+          name: ReRAC-Build9-RC2-experimental-iOS-arm64-unsigned
           path: |
             dist/ReRAC-iOS-arm64-unsigned.ipa
             dist/ReRAC-iOS-arm64-unsigned.ipa.sha256
@@ -239,7 +240,7 @@ jobs:
       - name: Retain UUID-matched device symbols
         uses: actions/upload-artifact@v4
         with:
-          name: ReRAC-iOS-arm64-symbols
+          name: ReRAC-Build9-RC2-experimental-iOS-arm64-symbols
           path: symbols/
           if-no-files-found: error
           retention-days: 90

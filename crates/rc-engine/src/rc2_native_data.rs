@@ -1,7 +1,9 @@
 //! Experimental upstream RC2 data route. Never authorizes RC2 in the RAC1 importer.
 //! GAME_SPECIFIC / PLATFORM_SPECIFIC: separate, explicit opt-in and save namespace.
 use anyhow::{Context, Result, ensure};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(target_os = "ios")]
+use std::path::PathBuf;
 
 pub const REQUEST: &[u8] = b"RC2_NATIVE_ARANOS_EXPERIMENTAL_V1\n";
 pub const MARKER: &str = "ENABLE_NATIVE_RC2.txt";
@@ -33,5 +35,24 @@ pub fn requested_ios_root() -> Result<Option<PathBuf>> {
         Ok(_) => Ok(Some(root)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(e.into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn experimental_request_never_authorizes_a_rac1_folder() {
+        let root=std::env::temp_dir().join(format!("rerac-rc2-native-gate-{}",std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let error=validate(&root).unwrap_err().to_string();assert!(error.contains("opt-in"));
+        std::fs::write(root.join(MARKER),b"ARANOS_TERRAIN_PREVIEW_V1\n").unwrap();
+        assert!(validate(&root).unwrap_err().to_string().contains("invalid RC2"));
+        std::fs::write(root.join(MARKER),REQUEST).unwrap();
+        std::fs::write(root.join("toc.bin"),b"RAC1").unwrap();
+        assert!(validate(&root).unwrap_err().to_string().contains("RAC1 data folder"));
+        assert_eq!(std::fs::read(root.join("toc.bin")).unwrap(),b"RAC1");
+        assert!(!root.join("memcard").exists());
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

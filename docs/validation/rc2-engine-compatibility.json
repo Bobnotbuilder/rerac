@@ -235,5 +235,8 @@
       156,
       157
     ]
-  }
+  },
+  "historical_receipt": true,
+  "superseded_by": "rc2-upstream-integration.md",
+  "superseded_reason": "Pinned upstream implementation adopted; prior pose/movement blockers no longer current."
 }

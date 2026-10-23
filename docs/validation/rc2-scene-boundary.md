@@ -1,5 +1,18 @@
 # RC2 Aranos experimental preview — original GPU frame pending
 
+## Build 9 upstream integration — current, 24 October 2026
+
+Build 9 remains **INCOMPLETE**. Pinned upstream `89c87e98f9d8296187df2a6310c67b32144090d3` is selectively adopted on `ios/rc2-upstream-integration`; it supersedes the earlier independent compressed-pose blocker. Pre-integration rollback: `0fb24c6a312360e594b15abc48ca52e77894d031`. Initial integrated local/public sources: `35a163e` / `a301e92ed077bc5d3066f133e4fb2a9e7fb97aa6`; follow-up validations and strict loader changes are still being finalized.
+
+Original-data CPU evidence: 833 tfrags, 351 texture entries, 74 tie classes / 2,000 tie instances, 187 moby classes / 472 placements; authentic Ratchet armor/four textures/111 joints, all 2,187 pose frames finite; original frontend New Game request; native hero move 0.330 units, jump rise 1.051 units and landing on original collision; follow camera updated. This is not GPU or physical-controller evidence. RAC1: 715 game tests, 175 formats tests, 16 data tests, all 2,968 populated class outputs unchanged across 19 available levels. Upstream game2: 9 tests. iOS contracts: 59 tests.
+
+ARM64/shared-engine GPU validation is pending in [run 40012155135](https://github.com/Bobnotbuilder/rerac/actions/runs/40012155135). No new original Ratchet render, physical iPhone gameplay or complete Aranos claim. Build 8's user-reported physical terrain/Backbone free-camera baseline and IPA remain preserved.
+
+The pinned upstream extractor prepared 96 original archives (3,807,638,923 bytes) privately, validating every file against its size/SHA1 table. Existing converted Build8 payloads were not regenerated. Experimental native RC2 uses Documents/RC2Native + ENABLE_NATIVE_RC2.txt (`RC2_NATIVE_ARANOS_EXPERIMENTAL_V1` newline); RC2 saves disabled and settings isolated. The production RC2 Play gate and RAC1 data/saves remain unchanged.
+
+First runtime fatal: none observed in CPU tests; GPU startup has not yet run. Next: complete native compilation, capture authentic Ratchet/Aranos through the shared renderer and test the route on iPhone. Combat/enemies, original HUD/audio, scripts, checkpoints/death/respawn and legitimate completion are still missing. No Shared Core promotion or other-engine changes. See [integration matrix](rc2-upstream-integration.md) and upstream [bring-up plan](../plan/rac2_bringup.md).
+
+
 Current state: [Build9 full-engine compatibility](rc2-engine-compatibility.md).
 User now reports original Build8 terrain and Backbone free camera on physical
 iPhone. Historical GPU-unverified notes below predate that report. Original

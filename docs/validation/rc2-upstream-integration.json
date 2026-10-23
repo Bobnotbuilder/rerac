@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "upstream_source": "89c87e98f9d8296187df2a6310c67b32144090d3",
+  "acceptance": "BUILD9_INCOMPLETE",
+  "classifications": [
+    {
+      "system": "native_ARM64_Bevy_Metal_backend",
+      "status": "REUSED_UNCHANGED",
+      "evidence_and_limits": "Existing backend and iOS policies retained; Build8 physical preview is USER_REPORTED; current integrated ARM64 build pending."
+    },
+    {
+      "system": "resource_loading",
+      "status": "REUSED_WITH_ADAPTER",
+      "evidence_and_limits": "Upstream rac2::LevelWad/Toc/gameplay/armor feed shared native types; original-data environment and character tests PASS; explicit separate opt-in identity gate."
+    },
+    {
+      "system": "terrain_ties_shrubs_textures",
+      "status": "REUSED_WITH_ADAPTER",
+      "evidence_and_limits": "Shared renderers retained; RC2 readers CPU-decode 833 fragments, 351 textures, 74 tie classes, 7 shrub classes; GPU not yet tested."
+    },
+    {
+      "system": "sky_background",
+      "status": "REUSED_WITH_ADAPTER",
+      "evidence_and_limits": "Upstream rac2_level uses shared sky/background/fog loader; original full native rendering not yet tested."
+    },
+    {
+      "system": "material_lighting_fog_parity",
+      "status": "BLOCKED",
+      "evidence_and_limits": "Upstream RC2 uses neutral tie/shrub/moby lighting; original GS parity and visual comparison remain outstanding."
+    },
+    {
+      "system": "character_mesh_skeleton",
+      "status": "REUSED_WITH_ADAPTER",
+      "evidence_and_limits": "Upstream compact GC packets and armor attachment; authentic armor, four textures and 111-joint skeleton CPU-tested, GPU not tested."
+    },
+    {
+      "system": "compressed_animation_pose",
+      "status": "REUSED_WITH_ADAPTER",
+      "evidence_and_limits": "Pinned upstream GC decompressor outputs regular frames into shared evaluator; 2187 original frames evaluate finite 111-joint poses. Visual pose parity not claimed."
+    },
+    {
+      "system": "animation_player",
+      "status": "REUSED_UNCHANGED",
+      "evidence_and_limits": "Existing rc_game::hero::anim::RatchetAnim drives upstream GC state logic; original jump/movement test PASS."
+    },
+    {
+      "system": "player_movement_and_jump",
+      "status": "RC2_SPECIFIC_IMPLEMENTATION_REQUIRED",
+      "evidence_and_limits": "Required RC2-specific behavior is IMPLEMENTED BY ADOPTING upstream rc-game2, not newly reconstructed. Original-data CPU move/jump/landing PASS; device not tested."
+    },
+    {
+      "system": "third_person_camera",
+      "status": "RC2_SPECIFIC_IMPLEMENTATION_REQUIRED",
+      "evidence_and_limits": "Required GC camera is IMPLEMENTED BY ADOPTING upstream rc-game2::camera; CPU updates finite; GPU/device behavior pending."
+    },
+    {
+      "system": "collision_queries",
+      "status": "REUSED_UNCHANGED",
+      "evidence_and_limits": "Existing rc_game collision kernels used unchanged by GC hero; original spawn floor, jump and grounded return tested."
+    },
+    {
+      "system": "GameController_Backbone_input",
+      "status": "REUSED_UNCHANGED",
+      "evidence_and_limits": "Existing native iOS GameController-to-Bevy input mapping retained. Build8 hardware free-camera USER_REPORTED; current GC player hardware path not tested."
+    },
+    {
+      "system": "object_entity_framework",
+      "status": "REUSED_WITH_ADAPTER",
+      "evidence_and_limits": "Upstream GC placements mapped explicitly into shared MobyInstance; 472 placements/187 classes CPU-tested. Static placement does not establish object behavior."
+    },
+    {
+      "system": "title_main_menu_NewGame",
+      "status": "REUSED_WITH_ADAPTER",
+      "evidence_and_limits": "Upstream frontend and boot tables; original menu quads and NewGame request CPU-tested; runtime GPU pending. Original save-slot page is absent."
+    },
+    {
+      "system": "PSS_movie_decoder",
+      "status": "REUSED_UNCHANGED",
+      "evidence_and_limits": "Existing native rc-video decoded three frames for each original logo/title movie b2..bb at512x416; PCM decoded, no GPU/audio output claim."
+    },
+    {
+      "system": "weapons_attacks_combat",
+      "status": "RC2_SPECIFIC_IMPLEMENTATION_REQUIRED",
+      "evidence_and_limits": "Unported mandatory GC gameplay semantics; RAC1 implementations not enabled as substitutes."
+    },
+    {
+      "system": "enemy_AI_and_damage",
+      "status": "RC2_SPECIFIC_IMPLEMENTATION_REQUIRED",
+      "evidence_and_limits": "Original classes parse, GC AI/damage/health runtime not established."
+    },
+    {
+      "system": "HUD",
+      "status": "RC2_SPECIFIC_IMPLEMENTATION_REQUIRED",
+      "evidence_and_limits": "Generic HUD rendering reused for frontend; original GC in-level HUD is not implemented by this integration."
+    },
+    {
+      "system": "level_audio_dialogue",
+      "status": "RC2_SPECIFIC_IMPLEMENTATION_REQUIRED",
+      "evidence_and_limits": "Shared output/decoder retained; RC2 level audio and frontend playback not wired upstream."
+    },
+    {
+      "system": "scripted_events_triggers_progression",
+      "status": "RC2_SPECIFIC_IMPLEMENTATION_REQUIRED",
+      "evidence_and_limits": "Original Aranos objectives/route events/legitimate completion not implemented or demonstrated."
+    },
+    {
+      "system": "checkpoints_save_death_respawn",
+      "status": "RC2_SPECIFIC_IMPLEMENTATION_REQUIRED",
+      "evidence_and_limits": "Upstream GC save-slot/checkpoint/death recovery absent; experimental saving disabled; RAC1 save paths preserved."
+    },
+    {
+      "system": "full_Aranos_iPhone_playthrough",
+      "status": "NOT_YET_TESTED",
+      "evidence_and_limits": "No current physical device access; no complete-level acceptance or compatibility percentage."
+    }
+  ],
+  "classification_note": "RC2_SPECIFIC_IMPLEMENTATION_REQUIRED describes RAC1 compatibility requirements. For hero and camera, that implementation is already supplied by adopted upstream rc-game2; it is not an instruction to recreate it.",
+  "original_data_tests": "crates/rc-game2/tests/original_aranos.rs; crates/rc-video/tests/rac2_original_frontend.rs",
+  "RAC1_regressions": "formats175/data16/game715;2968 class outputs identical across19 available levels; iOS59; upstream game2 9",
+  "new_GPU_execution": false,
+  "new_iPhone_execution": false,
+  "shared_core_promoted": false
+}

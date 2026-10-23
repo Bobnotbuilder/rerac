@@ -26,3 +26,17 @@ RC2 settings use RC2NativeSupport; RC2 saving is disabled. Remove the RC2 reques
 ## Validation status at first integration checkpoint
 
 Implemented: selective upstream format/game2/engine routing. Local offline CPU library compilation succeeded (rc-formats, rc-game, rc-game2, rc-data). iOS packaging/controller/display contracts: 59 passed. Further CPU original-data, hosted ARM64 compilation, GPU and physical iPhone validation remain pending; none are implied by these results. This is an experimental incomplete build, not a complete-level release.
+
+## Original-data and regression evidence
+
+Read-only private reproduction: set RC2_ORIGINAL_ISO to the owned NTSC-U v2.00 ISO, then `cargo test -p rc-game2 --test original_aranos -- --nocapture`. The test explicitly reports NOT_TESTED when private media is absent; public CI does not contain original assets.
+
+Both original-data integration tests passed (4.71 s): authentic boot glyphs/three original menu rows/230 GUI sprites produced 68 menu quads and the New Game request; 833 tfrags/all three triangle LODs, 351 texture entries, 74 tie classes, 2,000 tie instances, 187 moby classes and 472 placements decoded. Original armor has four textures and 111 joints; all 2,187 stored pose frames evaluated to finite native joint matrices. The adopted hero jumped 1.0508652 units, returned to original collision (59 grounded ticks after landing), moved 0.32995287 units from scripted pad input and updated the native follow camera. This checks the adopted CPU path, not GS parity, hardware controllers or GPU output.
+
+Local regressions with available original RAC1 data: formats 175 passed/1 ignored; data 16 passed; game 715 passed (73.89 s); upstream game2 9 passed; iOS contracts 59 passed. The preserved RAC1 parser comparison found 2,968 identical populated class outputs across levels 0–18; level 19 data unavailable and not tested.
+
+The original upstream extractor compiled unchanged and copied 96 Tier 0 files (3,807,638,923 bytes) to private storage in 213.871 s, checking the upstream size/SHA1 table. This adds the raw archives required by the upstream runtime; converted Build8 assets were not regenerated.
+
+First fatal runtime blocker: none in CPU testing; native GPU startup not yet executed. First development dependency: hosted native engine compilation and original-data GPU validation. No physical iPhone is visible to this managed session; xctrace lists only the Mac and local CoreSimulator services reject connections. No frame time/memory/energy claim or full-level completion claim is made.
+
+[Per-system machine-readable compatibility matrix](rc2-upstream-integration.json) separates already-adopted GC-specific player/camera implementations from missing GC combat/progression. The existing native video decoder also passed an original-data CPU test decoding the first three 512×416 frames of each logo/title movie (0xb2–0xbb), including PCM decoding; frontend audio output remains unwired.

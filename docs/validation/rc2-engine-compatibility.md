@@ -1,5 +1,7 @@
 # Build 9 full-engine compatibility experiment
 
+Historical pre-upstream experiment. Current evidence and subsystem adoption: [pinned upstream integration](rc2-upstream-integration.md). The compressed animation and native hero/camera blockers below have since been resolved by adopting upstream; remaining GPU/device and full-level validation is outstanding.
+
 Build 9 remains **INCOMPLETE**. The full RAC1 runtime cannot execute original RC2 unchanged. Existing native infrastructure can be reused through explicit adapters; RAC1 reconstructed title behavior is not a universal RC2 implementation. This experiment adds no second renderer and never starts the RAC1 scheduler with RC2 data.
 
 Build8 terrain/textures, Backbone and free-camera operation on a physical iPhone are **user-reported PASS**. This phase performed original-data native CPU tests and a hosted synthetic Metal probe. It did not capture a new original-game GPU frame, render Ratchet or test gameplay on iPhone. The preserved runtime source is `cd1311505774f52e87d006e6bb8cae9a0bbcc5ad`; local starting checkpoint is `4a86d31b361f9cc724dc759dfd44cd84250889e2`.

@@ -1,17 +1,17 @@
 {
   "schema": 2,
   "version": "0.3.4",
-  "build": "5",
+  "build": "9",
   "repository": "Bobnotbuilder/rerac",
-  "development_branch": "ios/arm64-poc",
+  "development_branch": "ios/rc2-upstream-integration",
   "playable_baseline_commit": "c9df823e939446e97b255af1a9d5ca28db874d79",
   "baseline_physical_acceptance": "USER_VERIFIED_PLAYABLE_BACKBONE_PLANET_THREE",
   "target": "aarch64-apple-ios",
   "bundle_identifier": "org.rerac.game.iospoc",
-  "source_implementation": "ENCODING_RESOURCE_REUSE_AND_FIXED_RESOLUTION_COMPARISONS_PREPARED_FOR_HOSTED_BUILD",
+  "source_implementation": "SELECTIVE_UPSTREAM_89C87E_NATIVE_RC2_FRONTEND_PLAYER_SHARED_RENDERERS_EXPERIMENTAL",
   "previous_ci_validated_commit": "80d2fb1093429be32d0e1ff09ca828163be015cf",
   "hud_evidence": "USER_REPORTED_A15_210_SECONDS_EXACT_SOURCE_SETTINGS_UNCONFIRMED",
-  "device_build": "PENDING_NEW_ACTIONS_RUN",
+  "device_build": "HOSTED_COMPILATION_IN_PROGRESS",
   "new_physical_gameplay": "NOT_TESTED",
   "new_physical_fullscreen": "NOT_TESTED",
   "new_physical_energy_improvement": "NOT_MEASURED",
@@ -19,5 +19,10 @@
   "shared_core_promotion": false,
   "devstudio_modified": false,
   "copyrighted_assets_uploaded": false,
-  "actual_build_evidence": "GitHub Actions artifacts identify the exact source SHA and result"
+  "actual_build_evidence": "GitHub Actions artifacts identify the exact source SHA and result",
+  "original_RC2_CPU": "PASS_2187_POSES_MOVE_JUMP_GROUND_COLLISION_CAMERA_ORIGINAL_NEW_GAME",
+  "complete_Aranos": "INCOMPLETE",
+  "production_RC2_Play": "DISABLED",
+  "RC2_experimental_entry": "EXPLICIT_RC2Native_SIDECAR",
+  "upstream_source": "89c87e98f9d8296187df2a6310c67b32144090d3"
 }

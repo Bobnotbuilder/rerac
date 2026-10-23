@@ -333,8 +333,8 @@ fn main() -> anyhow::Result<()> {
     #[cfg(target_os = "ios")]
     {
         ios::diagnostic("BEVY_GAME_RUN_REQUESTED", "");
+        if !rac2 { app.add_plugins(ios_library::GameLibraryPlugin); }
         app.add_plugins((ios_gamepad::IOSGameControllerPlugin, ios_runtime::IOSRuntimePlugin))
-            .add_plugins(ios_library::GameLibraryPlugin)
             .add_systems(Startup, ios::startup_diagnostics)
             .add_systems(Update, ios::update_diagnostics);
     }
