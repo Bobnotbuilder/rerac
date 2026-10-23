@@ -159,6 +159,10 @@ fn main() -> anyhow::Result<()> {
     if let Some(root) = std::env::var_os("RC2_SCENE_PREVIEW") {
         return rc2_preview::run(std::path::Path::new(&root));
     }
+    #[cfg(target_os = "ios")]
+    if let Some(root) = rc2_preview::requested_ios_root()? {
+        return rc2_preview::run(&root);
+    }
     // `--version-json` exits here; a missing or wrong data folder exits with a clear error (crate::disc_source).
     #[cfg(not(target_os = "ios"))]
     let root = disc_source::startup();

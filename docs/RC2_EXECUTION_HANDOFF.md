@@ -10,6 +10,23 @@ LODs (33710/26522/26416 triangles, 2578 contiguous draws each, 93 hash-verified
 mip0 images). The renderer candidate still needs compilation/GPU execution;
 there is no scene screenshot, original-state parity or gameplay result yet.
 
+The next validation revision adds `RC2_PREVIEW_HEADLESS=1` for GPU image
+capture without Aqua/Winit and an independent `RC2_PREVIEW_GPU_FIXTURE=1`
+texture/depth/order pixel probe. Synthetic probes are unavailable on physical
+iPhone and are never reported as Aranos output. The existing hosted workflow
+builds an Intel macOS11 diagnostic binary to run original data privately, plus
+the normal ARM64/iOS and regression tiers. No game data goes to hosted jobs.
+
+Build8 is a **scene-preview candidate**, not a playable RC2 build. On iPhone,
+Files sharing can opt in using `Documents/RC2ScenePreview/` with the unchanged
+Build7 `rc2-assets.json`, `terrain.mesh`, all93 `terrain-NNN-mip0.rgba`, and
+`ENABLE_SCENE_PREVIEW.txt` containing exactly `ARANOS_TERRAIN_PREVIEW_V1\n`
+(the final character is a newline). Remove that request file to resume normal
+RAC1 startup. Do not put these files in ReRACData or ReRACSupport/save folders.
+RAC1 import/save boot is bypassed only for the explicit scene-preview request.
+The same bundle identity is retained; signing updates must preserve app data.
+This route still needs actual GPU/physical-device acceptance.
+
 `RC2_PREVIEW_LOD=0|1|2`, `RC2_PREVIEW_CAM=ex,ey,ez,tx,ty,tz` (game axes),
 `RC2_PREVIEW_CAPTURE=<NEW image path>` configure the diagnostic. WASD/QE and
 arrows, or gamepad sticks, move the diagnostic camera only. Native controller

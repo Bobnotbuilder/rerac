@@ -48,12 +48,65 @@ jobs:
           set -euo pipefail
           cargo test -p rc-trace --lib rc2_gs::tests 2>&1 | tee evidence/rc2-capture-tests.log
           cargo check -p rc-trace --bin rc-trace --examples 2>&1 | tee evidence/rc2-capture-cli-check.log
+      - name: Experimental RC2 preview GPU texture depth and ordering fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RC2_SCENE_PREVIEW=synthetic-gpu-fixture
+          export RC2_PREVIEW_GPU_FIXTURE=1
+          export RC2_PREVIEW_HEADLESS=1
+          export RC2_PREVIEW_CAPTURE="$PWD/evidence/rc2-preview-synthetic-gpu.png"
+          cargo run -p rc-engine --features dev --bin rerac 2>&1 | tee evidence/rc2-preview-synthetic-gpu.log
+          grep -q RC2_PREVIEW_GPU_PROBE_PASS evidence/rc2-preview-synthetic-gpu.log
+          test -s evidence/rc2-preview-synthetic-gpu.png
       - name: Retain regression results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ReRAC-headless-regression-evidence
           path: evidence/
+          retention-days: 14
+  rc2-preview-local-validation-binary:
+    # Native diagnostic binary for running PRIVATE prepared assets on the
+    # existing Intel macOS11 host. No desktop game release or media on CI.
+    runs-on: xcode-27
+    timeout-minutes: 60
+    env:
+      RUSTUP_TOOLCHAIN: 1.99.1
+      CARGO_BUILD_JOBS: '3'
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Cross-compile native preview validation binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --target x86_64-apple-darwin
+          mkdir -p evidence dist/RC2ScenePreview-macOS-x86_64
+          cargo build --release --locked --target x86_64-apple-darwin -p rc-engine --bin rerac 2>&1 | tee evidence/rc2-preview-macos-build.log
+          package=dist/RC2ScenePreview-macOS-x86_64
+          cp target/x86_64-apple-darwin/release/rerac "$package/rerac"
+          cp -R crates/rc-engine/assets "$package/assets"
+          git rev-parse HEAD > "$package/source-commit.txt"
+          file "$package/rerac" | tee evidence/rc2-preview-macos-file.txt
+          otool -l "$package/rerac" > evidence/rc2-preview-macos-load-commands.txt
+          otool -L "$package/rerac" > evidence/rc2-preview-macos-frameworks.txt
+          test "$(lipo -archs "$package/rerac")" = x86_64
+          shasum -a 256 "$package/rerac" > "$package/rerac.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RC2-scene-preview-macOS-x86_64-validation
+          path: dist/RC2ScenePreview-macOS-x86_64/
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RC2-scene-preview-macOS-build-evidence
+          path: evidence/
+          if-no-files-found: warn
           retention-days: 14
   device:
     runs-on: xcode-27
