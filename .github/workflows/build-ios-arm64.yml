@@ -1,4 +1,4 @@
-name: ReRAC iOS ARM64 unsigned proof of concept
+name: ReRAC internal native compilation and regressions
 
 on:
   workflow_dispatch:
@@ -47,6 +47,7 @@ jobs:
           rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
           cargo xtask test-job engine ui --cargo-test 2>&1 | tee evidence/headless-regressions.log
           cargo test -p rc-game2 --lib --tests -- --nocapture 2>&1 | tee evidence/rc-game2-regressions.log
+          cargo check -p rc-game2 --example rc2_deep_scan 2>&1 | tee evidence/rc2-deep-scan-compilation.log
           cargo test -p rc-video --lib --test rac2_original_frontend -- --nocapture 2>&1 | tee evidence/rc2-video-contract.log
           cargo xtask test-job formats extract data --cargo-test 2>&1 | tee evidence/extraction-regressions.log
       - name: RC2 read-only capture analyser synthetic tests and CLI compilation
@@ -230,7 +231,9 @@ jobs:
       - name: Upload unsigned IPA and checksum
         uses: actions/upload-artifact@v4
         with:
-          name: ReRAC-Build9-RC2-experimental-iOS-arm64-unsigned
+          # Internal compilation artifact. Full Aranos acceptance is required
+          # before presenting any package as a user-facing release candidate.
+          name: ReRAC-INTERNAL-RC2-iOS-arm64-unsigned
           path: |
             dist/ReRAC-iOS-arm64-unsigned.ipa
             dist/ReRAC-iOS-arm64-unsigned.ipa.sha256
@@ -240,7 +243,7 @@ jobs:
       - name: Retain UUID-matched device symbols
         uses: actions/upload-artifact@v4
         with:
-          name: ReRAC-Build9-RC2-experimental-iOS-arm64-symbols
+          name: ReRAC-INTERNAL-RC2-iOS-arm64-symbols
           path: symbols/
           if-no-files-found: error
           retention-days: 90

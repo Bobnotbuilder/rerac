@@ -16,6 +16,14 @@ fn original_aranos_character_pose_movement_jump_and_camera() {
     let file=read("/G/LEVEL0.WAD");let w=LevelWad::parse(&file).unwrap();
     let data=wad::decompress(w.lump(Lump::CoreData).unwrap().unwrap()).unwrap();
     let core=level::parse_level_core_for(Game::Rac2,w.lump(Lump::CoreIndex).unwrap().unwrap(),data.len()).unwrap();
+    let wrench_blob=core.block(&data,"moby_class/0071").expect("original wrench class 0x47");
+    let wrench=moby::parse_moby_class_for(Game::Rac2,wrench_blob).unwrap();
+    let wrench_class=ma::MobyAnimClass::new(&wrench,ma::parse_sequences(wrench_blob,&wrench).unwrap());
+    for seq in [3,4,5,10] {
+        let q=wrench_class.sequence(seq).expect("original wrench action sequence");assert!(!q.frames.is_empty());
+        let mut state=ma::AnimState::spawn(&wrench_class);assert!(ma::hard_cut(&mut state,&wrench_class,seq,0));
+        assert!(ma::evaluate(&wrench_class,&state).iter().flatten().flatten().all(|v|v.is_finite()));
+    }
     let gameplay=wad::decompress(w.part_bytes(Part::Gameplay).unwrap().unwrap()).unwrap();
     let mut ratchet=moby::parse_moby_class_for(Game::Rac2,core.block(&data,"moby_class/0000").unwrap()).unwrap();
     let hdr=read("/RC2.HDR");let toc=rac2::toc::Toc::parse(&hdr).unwrap();
@@ -72,6 +80,90 @@ fn original_aranos_character_pose_movement_jump_and_camera() {
 
 fn camera_input<'a>(hero: &'a Hero, coll: &'a rc_formats::collision::Collision, rstick: [f32;2]) -> CamInput<'a> {
     CamInput {hero,mobys:None,hero_moby:None,coll:Some(coll),rstick,yaw_normal:true,pitch_normal:true}
+}
+
+#[test]
+fn original_aranos_ground_combo_timing_and_native_pose_playback() {
+    use rc_game::{hero::anim::AnimCtl,ps2v::Pf};
+    use rc_game2::melee::{GroundCombo,EntryHistory,Recovery,JumpRequest,WrenchUse,WeaponDecision,wrench_request};
+    let Some(path)=std::env::var_os("RC2_ORIGINAL_ISO") else {eprintln!("NOT_TESTED: private original ISO unavailable");return;};
+    let iso=IsoImage::open(path).unwrap();let file=iso.read_file(iso.find("/G/LEVEL0.WAD").unwrap()).unwrap();
+    let w=LevelWad::parse(&file).unwrap();let overlay=w.lump(Lump::Overlay).unwrap().unwrap();
+    let table=rac2::melee::AranosMeleeTable::parse(w.id as u32,overlay).unwrap();
+    assert!(rac2::melee::AranosMeleeTable::parse(1,overlay).is_err(),"never apply level-0 addresses to another level");
+    // Independently inspected original records differ from RAC1's combo timings.
+    assert_eq!((table.rows()[0].chain_from,table.rows()[0].idle_after,table.rows()[1].idle_after),(25,26,15));
+    assert_ne!(table.rows()[0].idle_after,rc_game::hero::melee::COMBO[0][6]);
+    let c=WrenchUse {state:0,group:0,timer:30,frame:0.,blending:false,item_id:10,item_state:2,fire_mask:button::SQUARE,hand:Some((0x47,0)),hero_mode:0,item_disabled:0,change_gate:0,f348:0,f149a:0,f1e0:0,landed:0,descending:0,flip_kind:0,height:0.,f6ec:0,f594:0};
+    let mut pad=PadState::default();pad.update(Some(&PadInput::neutral().press(button::SQUARE).bytes()),false);
+    assert_eq!(wrench_request(&c,&table.rows()[0],&pad),WeaponDecision::Enter(0x13));
+    assert_eq!(wrench_request(&WrenchUse{item_id:8,..c},&table.rows()[0],&pad),WeaponDecision::UnsupportedItem(8));
+    assert_eq!(wrench_request(&WrenchUse{hand:None,..c},&table.rows()[0],&pad),WeaponDecision::None);
+    assert_eq!(wrench_request(&WrenchUse{hand:Some((0x47,1)),..c},&table.rows()[0],&pad),WeaponDecision::None);
+    assert_eq!(wrench_request(&WrenchUse{item_disabled:1,..c},&table.rows()[0],&pad),WeaponDecision::None);
+    assert_eq!(wrench_request(&WrenchUse{state:7,group:4,timer:11,height:2.,..c},&table.rows()[4],&pad),WeaponDecision::Enter(0x14));
+    assert_eq!(wrench_request(&WrenchUse{state:7,group:4,timer:11,height:2.,f6ec:1,..c},&table.rows()[4],&pad),WeaponDecision::None);
+    assert_eq!(wrench_request(&WrenchUse{state:0x13,group:6,frame:24.9,..c},&table.rows()[0],&pad),WeaponDecision::None);
+    assert_eq!(wrench_request(&WrenchUse{state:0x13,group:6,frame:25.,..c},&table.rows()[0],&pad),WeaponDecision::Enter(0x13));
+    pad.update(Some(&PadInput::neutral().press(button::SQUARE|button::R1).bytes()),false);
+    assert_eq!(wrench_request(&c,&table.rows()[0],&pad),WeaponDecision::Enter(0x15));
+    assert_eq!(wrench_request(&WrenchUse{state:1,timer:21,..c},&table.rows()[0],&pad),WeaponDecision::ThrowFromLook);
+    // The original 10-tick ground buffer is distinct from RAC1's 7 ticks.
+    for _ in 0..8 {pad.update(Some(&PadInput::neutral().bytes()),false);}
+    assert_eq!(wrench_request(&c,&table.rows()[0],&pad),WeaponDecision::Enter(0x13));
+    for _ in 0..2 {pad.update(Some(&PadInput::neutral().bytes()),false);}
+    assert_eq!(wrench_request(&c,&table.rows()[0],&pad),WeaponDecision::None);
+    let data=wad::decompress(w.lump(Lump::CoreData).unwrap().unwrap()).unwrap();
+    let core=level::parse_level_core_for(Game::Rac2,w.lump(Lump::CoreIndex).unwrap().unwrap(),data.len()).unwrap();
+    let ratchet=moby::parse_moby_class_for(Game::Rac2,core.block(&data,"moby_class/0000").unwrap()).unwrap();
+    let seqs=(0..core.ratchet_seqs.len()).map(|i|core.block(&data,&format!("ratchet_seq/{i:03}")).map(|b|ma::parse_sequence_joints(b,0,Some(111)).unwrap())).collect();
+    let class=ma::MobyAnimClass::new(&ratchet,seqs);let mut anim=RatchetAnim::new(&class);
+    let boot_bytes=iso.read_file(iso.find("/SCUS_972.68").unwrap()).unwrap();
+    let boot=rac2::boot::BootElf::parse(&boot_bytes).unwrap();
+    let definition=rac2::items::AranosWrenchDefinition::parse(0,&boot,overlay).unwrap();
+    assert_eq!((definition.definition_index,definition.class),(10,0x47));
+    let blob=core.block(&data,&format!("moby_class/{:04}",definition.class)).unwrap();
+    let wrench=moby::parse_moby_class_for(Game::Rac2,blob).unwrap();
+    let wrench_class=ma::MobyAnimClass::new(&wrench,ma::parse_sequences(blob,&wrench).unwrap());
+    let mut hand=rc_game2::items::WrenchAnimation::initial_animation(&wrench_class).unwrap();
+    assert_eq!(hand.state.seq_b,1);
+    let mut combo=GroundCombo::new(&table);let mut pose_count=0;
+    for step in 0..3 {
+        let history=EntryHistory {previous_state:if step==0 {0}else{0x13},older_state:0,timer:0,saved_timer:0};
+        let entry=combo.enter(history,20.0);assert_eq!(entry.step,step);
+        assert_eq!((entry.hero_sequence,entry.wrench_sequence,entry.start_frame),(0x17+step as u8,3+step as u8,step as i32));
+        GroundCombo::set_hero_animation(entry,&mut anim.ctl(&class));
+        hand.combo(&wrench_class,entry).unwrap();assert_eq!(hand.state.seq_b,entry.wrench_sequence);
+        let mut recovered=false;
+        for _ in 0..100 {
+            let mut ctl=anim.ctl(&class);ctl.advance(Pf::ONE);let v=ctl.view();
+            assert!(v.frame.is_finite());
+            assert_eq!(v.seq_b,entry.hero_sequence);
+            let bones=ma::evaluate_with_snapshot(&class,&anim.state,anim.snapshot.as_ref());assert_eq!(bones.len(),111);
+            assert!(bones.iter().flatten().flatten().all(|x|x.is_finite()));pose_count+=1;
+            hand.advance(&wrench_class);let hand_pose=hand.pose(&wrench_class);
+            assert_eq!(hand_pose.len(),10);assert!(hand_pose.iter().flatten().flatten().all(|x|x.is_finite()));
+            if combo.recovery(v.frame,v.blending(),v.flags as u16,0.)==Recovery::Idle {recovered=true;break;}
+        }
+        assert!(recovered,"original combo step {step} never reached recovery");
+        let end=combo.timing().idle_after as f32;
+        assert_eq!(combo.recovery(end,false,0,0.81),Recovery::Continue);
+        assert_eq!(combo.recovery(end+0.1,false,0,0.81),Recovery::Walk);
+        assert_eq!(combo.recovery(end+5.,false,0,0.),Recovery::Continue);
+        assert_eq!(combo.recovery(end+5.1,false,0,0.),Recovery::Idle);
+        assert_eq!(combo.recovery(80.,true,2,1.),Recovery::Continue);
+        let mut pad=PadState::default();pad.update(Some(&PadInput::neutral().press(button::CROSS).bytes()),false);
+        let frame=combo.timing().jump_after as f32+1.;
+        assert_eq!(combo.jump_request(frame,false,&pad),Some(JumpRequest::Plain));
+        assert_eq!(combo.jump_request(frame,true,&pad),None);
+        assert!(combo.target_speed(0.,false,1.)>0.);
+        assert_eq!(combo.target_speed(20.,false,1.),0.);
+    }
+    let recent=EntryHistory {previous_state:0,older_state:0x13,timer:5,saved_timer:21};
+    assert_eq!(combo.enter(recent,100.).step,0,"recent third swing wraps");
+    assert_eq!(combo.enter(recent,100.).step,1,"GC short return can chain through a different state");
+    assert_eq!(combo.enter(EntryHistory{saved_timer:22,..recent},100.).step,0,"27 ticks closes short return");
+    println!("ORIGINAL_RC2_GROUND_COMBO_TIMING_CPU_PASS original_table=0x25d910 sequences=0x17..0x19 poses={pose_count}; ITEM_OWNERSHIP_WRENCH_HITS_DAMAGE_PHYSICS_GPU_NOT_IMPLEMENTED_OR_TESTED");
 }
 
 #[test]

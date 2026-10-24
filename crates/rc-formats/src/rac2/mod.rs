@@ -15,7 +15,9 @@ pub mod boot;
 pub mod front_end;
 pub mod gameplay;
 pub mod gui_sprite;
+pub mod items;
 pub mod level;
+pub mod melee;
 pub mod toc;
 
 /// A picture as the GS holds it: RGBA bytes, alpha 0x80 = opaque (not scaled).

@@ -1,3 +1,7 @@
+## Current release policy — complete Aranos required
+
+The 24 October full-game directive supersedes earlier offers of feature-test IPAs below. Do not present another user-facing IPA until **all non-hardware complete-Aranos acceptance gates pass**. CI packages are INTERNAL_EXPERIMENTAL only. Physical complete-level acceptance remains NOT_TESTED unless actually executed. Aranos and the campaign remain INCOMPLETE; keep developing through the missing original gameplay systems. Retain the prior source/assets/saves and rollback points.
+
 ## Build 9 device-gap continuation — current, 24 October 2026
 
 **Build 9 remains INCOMPLETE.** Supplied iPhone evidence establishes user-reported Ratchet/Aranos rendering, walking and introductory audio on the prior experimental baseline. Exact baseline binary/source linkage is pending. It supersedes older statements below that original character/terrain had never rendered on a device.

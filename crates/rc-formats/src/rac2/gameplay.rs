@@ -91,6 +91,21 @@ pub fn section<'a>(gameplay: &'a [u8], name: &str) -> Result<Option<&'a [u8]>> {
 /// The level-settings section (R&C1's fields where they are the same; header word 0).
 pub fn level_settings(gameplay: &[u8]) -> Result<Option<&[u8]>> { section(gameplay, "level_settings") }
 
+/// Original GC pvar bytes referenced by an instance, before relocation or any
+/// class initializer. The table is content-identified (header word 23); GC's
+/// section positions differ from RAC1. Never run RAC1 spawn/fixup code here.
+pub fn unrelocated_pvar(gameplay: &[u8], index: i32) -> Result<Option<&[u8]>> {
+    if index == -1 { return Ok(None); }
+    if index < -1 { return invalid("invalid GC pvar index"); }
+    let table = section(gameplay,"pvar_table")?.ok_or_else(|| crate::buf::FormatError::Invalid("GC instance references an absent pvar table".into()))?;
+    let table=Buf(table);
+    let pos=(index as usize).checked_mul(8).ok_or_else(|| crate::buf::FormatError::Invalid("GC pvar index overflow".into()))?;
+    let (offset,size)=(table.i32(pos)?,table.i32(pos+4)?);
+    if offset<0 || size<0 { return invalid("negative GC pvar extent"); }
+    let data=section(gameplay,"pvar_data")?.ok_or_else(|| crate::buf::FormatError::Invalid("GC instance references absent pvar bytes".into()))?;
+    Ok(Some(Buf(data).sub(offset as usize,size as usize,"GC original pvar")?.bytes()))
+}
+
 /// R&C2's tie instance (0x60 bytes): R&C1's record without the 64 per-light-slot colours (0x50..0xd0), so
 /// `{o_class, draw distance, 0, occlusion index, matrix, directional lights, uid, 0, 0}`.
 const TIE_INSTANCE: usize = 0x60;
@@ -158,4 +173,29 @@ pub fn moby_instances(gameplay: &[u8]) -> Result<Vec<Rac2MobyInstance>> {
         p += MOBY_INSTANCE;
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod pvar_tests {
+    use super::*;
+    fn fixture()->Vec<u8> {
+        let mut data=vec![0;0xb4];
+        data[23*4..24*4].copy_from_slice(&0xa0u32.to_le_bytes());
+        data[24*4..25*4].copy_from_slice(&0xb0u32.to_le_bytes());
+        data[0xa4..0xa8].copy_from_slice(&4u32.to_le_bytes());
+        data[0xb0..].copy_from_slice(&[1,2,3,4]);data
+    }
+    #[test]
+    fn gc_pvars_use_gc_section_positions_and_original_unrelocated_bytes() {
+        let data=fixture();assert_eq!(unrelocated_pvar(&data,0).unwrap(),Some(&[1,2,3,4][..]));
+        assert_eq!(unrelocated_pvar(&data,-1).unwrap(),None);
+        assert!(unrelocated_pvar(&data,-2).is_err());
+    }
+    #[test]
+    fn bad_gc_pvar_extents_and_indices_are_rejected() {
+        let mut data=fixture();assert!(unrelocated_pvar(&data,2).is_err());
+        data[0xa4..0xa8].copy_from_slice(&5u32.to_le_bytes());assert!(unrelocated_pvar(&data,0).is_err());
+        data[0xa4..0xa8].copy_from_slice(&(-1i32).to_le_bytes());assert!(unrelocated_pvar(&data,0).is_err());
+        data[23*4..24*4].fill(0);assert!(unrelocated_pvar(&data,0).is_err());
+    }
 }
