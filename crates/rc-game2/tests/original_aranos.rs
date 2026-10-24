@@ -140,12 +140,15 @@ fn original_aranos_raised_placement_floor_and_jump() {
     let class=ma::MobyAnimClass::new(&ratchet,sequences);
     let run=|with_placements:bool| {
         let mut hero=Hero::spawn([247.,198.,51.2],0.);let mut anim=RatchetAnim::new(&class);let mut pad=PadState::default();
+        let mut camera=FollowCamera::new(&CamInput{hero:&hero,coll:Some(&world),mobys:with_placements.then_some(&scene),hero_moby:Some(0),rstick:[0.;2],yaw_normal:true,pitch_normal:true});
         let mut max_jump=f32::NEG_INFINITY;
         for tick in 0..240 {
             let input=if tick==90 {PadInput::neutral().press(button::CROSS)}else{PadInput::neutral()};
             pad.update(Some(&input.bytes()),false);
-            let env=Env{coll:&world,mobys:with_placements.then_some(&scene),hero_moby:Some(0),pad:&pad,cam_yaw:0.,cam_rows:[[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]],mirror:false};
+            let env=Env{coll:&world,mobys:with_placements.then_some(&scene),hero_moby:Some(0),pad:&pad,cam_yaw:camera.yaw(),cam_rows:camera.rows,mirror:false};
             assert_eq!(hero_update(&mut hero,&env,&mut anim.ctl(&class)),HeroTick::Ran);
+            camera.update(&CamInput{hero:&hero,coll:Some(&world),mobys:with_placements.then_some(&scene),hero_moby:Some(0),rstick:[0.;2],yaw_normal:true,pitch_normal:true});
+            assert!(camera.pos.iter().all(|v|v.is_finite()));
             if tick>=90 {max_jump=max_jump.max(hero.pos[2]);}
             assert!(hero.pos.iter().all(|v|v.is_finite()));
         }

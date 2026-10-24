@@ -132,8 +132,8 @@ fn tick(
         let combined = rc_game::collision_query::coll_line_m(coll, scene.as_ref(), a, b, rc_game::collision_query::QueryFlags(2), Some(p.instance));
         let cell = h.pos.map(|v| (v / 4.0).floor() as i16);
         let candidates = lv.rc2_placement_collision.as_ref().map(|s| s.candidates(h.pos));
-        let detail = format!("tick={} input={:02x?} pos={:?} ground={:?} normal={:?} height={} air={} capsule={}/{}/{} flags=line:0x2,cap:0x24 cell={cell:?} cell_index={:?} candidates={candidates:?} world={:?} combined={:?}",
-            p.ticks, input.bytes(), h.pos, h.ground_point, h.ground_normal, h.height, h.air_ticks, h.cap_bottom, h.cap_top, h.cap_radius,
+        let detail = format!("source={} tick={} input={:02x?} pos={:?} ground={:?} normal={:?} height={} air={} capsule={}/{}/{} flags=line:0x2,cap:0x24 cell={cell:?} cell_index={:?} candidates={candidates:?} world={:?} combined={:?}",
+            option_env!("RERAC_SOURCE_COMMIT").unwrap_or("UNKNOWN"), p.ticks, input.bytes(), h.pos, h.ground_point, h.ground_normal, h.height, h.air_ticks, h.cap_bottom, h.cap_top, h.cap_radius,
             coll.cell_at(cell[0],cell[1],cell[2]), world_hit.map(|o|(o.kind,o.point,o.tri)), combined.map(|o|(o.moby,o.kind,o.point,o.tri)));
         println!("rac2 collision: {detail}");
         #[cfg(target_os = "ios")]
