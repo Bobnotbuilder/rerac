@@ -18,6 +18,9 @@ pub struct World {
     pub preceding_owners:Vec<PrecedingOwner>,
     pub grid:rc_game::collision_query::MobyGrid,
     pub effects:Option<crate::effects::Effects>,
+    /// One stream for all GC classes/effects, never a separately seeded RNG
+    /// per subsystem. The caller supplies its loader-boundary state.
+    pub rng:rc_game::rng::Rng,
     hits:crate::hits::HitLog,
     init_list:Vec<MobyId>,
     init_cursor:usize,
@@ -55,6 +58,7 @@ impl World {
     /// because the original table is overwritten with each allocation address.
     /// `ground` implements original 0x31ce20; it is required for rooted records.
     pub fn load(gameplay:&[u8],classes:&mut [LoadedClass<'_>],state:&mut SpawnState,
+        rng:rc_game::rng::Rng,
         mut ground:impl FnMut([f32;3])->Result<f32>)->Result<Self> {
         let instances=gameplay::moby_instances(gameplay)?;
         let section=gameplay::section(gameplay,"moby_instances")?.ok_or_else(||rc_formats::FormatError::Invalid("GC static section absent".into()))?;
@@ -137,7 +141,7 @@ impl World {
         let mut pvar_indices=moby_to_instance.iter().map(|&i|if instances[i].base.o_class==0 {-1}else{instances[i].base.pvar_index}).collect::<Vec<_>>();
         pvar_indices.push(-1);
         Ok(Self {objects:Objects::new(records,dynamic_capacity),instance_to_moby,moby_to_instance,pvars,pvar_indices,groups,
-            gc:vec![GcState::default();count],preceding_owners,grid,effects:None,hits:Default::default(),init_list,init_cursor:0,initialized:false})
+            gc:vec![GcState::default();count],preceding_owners,grid,effects:None,rng,hits:Default::default(),init_list,init_cursor:0,initialized:false})
     }
 
     pub fn local_pvar_bytes(&self,id:MobyId,field:usize,len:usize)->Result<&[u8]> {
@@ -206,7 +210,7 @@ impl World {
                 match m.state {
                     0=>{
                         let Some(effects)=self.effects.as_mut() else {return false;};
-                        if effects.spawn_aranos_12fa(id,&self.objects).is_err() {return false;}
+                        if effects.spawn_aranos_12fa(id,&self.objects,&mut self.rng).is_err() {return false;}
                         self.set_state(id,1,None);true
                     },
                     1=>{
@@ -318,7 +322,7 @@ mod tests {
         let n=records.len();World {objects:Objects::new(records,0),instance_to_moby:(0..n).map(Some).collect(),
             moby_to_instance:(0..n).collect(),pvars:PvarPlan {blocks:Vec::new(),pointer_fields:Vec::new(),shared_data:Vec::new(),shared_fields:Vec::new()},
             pvar_indices:vec![-1;n],groups:vec![Vec::new();2],gc:vec![GcState::default();n],preceding_owners:Vec::new(),
-            grid:rc_game::collision_query::MobyGrid::new(),effects:None,hits:Default::default(),init_list:Vec::new(),init_cursor:0,initialized:false}
+            grid:rc_game::collision_query::MobyGrid::new(),effects:None,rng:rc_game::rng::Rng::new(),hits:Default::default(),init_list:Vec::new(),init_cursor:0,initialized:false}
     }
     fn object(id:u32,slot:u8)->Moby {
         let mut m=Moby::init_instance(id,slot as i16,None);m.class_slot=slot;m.mode=mode::TARGETABLE;m.visible=1;m

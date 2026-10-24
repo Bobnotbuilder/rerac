@@ -33,9 +33,9 @@ impl NativeWorld {
             mission_status:(-1..16).map(|i|(i,0)).collect(),disabled:vec![0;2048],saved:vec![0;1024],
             reload_saved:Some(vec![0;1024]),reload:false,omitted:Default::default()};
         let collision=lv.collision.as_ref().context("GC native world requires original collision")?;
-        let mut world=World::load(&lv.gameplay,&mut classes,&mut state,|p|Ok(rc_game2::collision::root_height(collision,p)))?;
+        let mut world=World::load(&lv.gameplay,&mut classes,&mut state,rc_game::rng::Rng {state:1234},|p|Ok(rc_game2::collision::root_height(collision,p)))?;
         let defs=lv.particles.textures.as_ref().context("GC native world requires original particle definitions")?.defs.clone();
-        world.effects=Some(rc_game2::effects::Effects::new(defs,rc_game::rng::Rng {state:1234}));
+        world.effects=Some(rc_game2::effects::Effects::new(defs));
         let bindings=classes.iter().zip(animations).map(|(c,a)|(c.binding(),a)).collect();drop(classes);
         eprintln!("RC2_INTERNAL_WORLD_SAVE_FIXTURE: spawned={} rejected={} provenance=SYNTHETIC_SAVE_AND_RNG_INPUTS original_data=true not_original_New_Game_not_release",world.moby_to_instance.len(),world.instance_to_moby.iter().filter(|i|i.is_none()).count());
         Ok(Self {world,bindings,empty,blocked:false,ready:false})

@@ -111,7 +111,7 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
         mission_status:(-1..16).map(|i|(i,0)).collect(),disabled:vec![0;2048],saved:vec![0;1024],
         reload_saved:Some(vec![0;1024]),reload:false,omitted:Default::default()};
     let coll=rc_formats::collision::parse_collision(&core,&data).unwrap();
-    let mut world=rc_game2::world::World::load(&gameplay,&mut loaded,&mut state,
+    let mut world=rc_game2::world::World::load(&gameplay,&mut loaded,&mut state,rc_game::rng::Rng {state:1234},
         |p|Ok(rc_game2::collision::root_height(&coll,p))).unwrap();
     let count=world.moby_to_instance.len();assert!(count>0 && count<placements.len());
     for (id,&placement) in world.moby_to_instance.iter().enumerate() {
@@ -148,7 +148,7 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     assert!(world.grid.cells_of(1).is_empty());
     for id in [2,3,4] {assert_eq!(world.objects.get(id).unwrap().state,1,"original link-wait init must execute");}
     let defs=rc_formats::particle_tex::parse_part_defs(wad.lump(Lump::CoreIndex).unwrap().unwrap(),core.header.part_defs_offset).unwrap();
-    world.effects=Some(rc_game2::effects::Effects::new(defs,rc_game::rng::Rng {state:1234}));
+    world.effects=Some(rc_game2::effects::Effects::new(defs));
     // Continue the SAME initialization cursor after providing the required
     // original effect resource. This fixture's RNG seed is explicit too.
     let next=world.initialize(&loaded,|w,id,source|w.native_update(id,source,0)).unwrap_err();

@@ -6,16 +6,15 @@ use rc_game::{particles::{PartPool,rec},rng::Rng,ps2v::Pf,
     hero::physics::{vadd,vsub,vscale,set_len3}};
 use crate::objects::Objects;
 
-pub struct Effects {pub pool:PartPool,defs:PartDefs,pub rng:Rng}
+pub struct Effects {pub pool:PartPool,defs:PartDefs}
 
 impl Effects {
-    /// RNG is the caller's stream at this point in the actual loader/tick.
-    /// Seeding here would lose earlier original consumers.
-    pub fn new(defs:PartDefs,rng:Rng)->Self {Self {pool:PartPool::new(),defs,rng}}
+    pub fn new(defs:PartDefs)->Self {Self {pool:PartPool::new(),defs}}
 
     /// Complete spawner branch used by0x383d44: attached moby, joint=-1,
     /// kind1, subtype0, lifetime=-1 and draw distance96.
-    pub fn spawn_aranos_12fa(&mut self,id:usize,objects:&Objects)->Result<Option<usize>> {
+    /// RNG is the world's single stream at this exact callback boundary.
+    pub fn spawn_aranos_12fa(&mut self,id:usize,objects:&Objects,rng:&mut Rng)->Result<Option<usize>> {
         let Some(owner)=objects.get(id) else {return invalid("GC attached sprite owner absent");};
         let Some(start)=self.defs.start(0x59) else {return invalid("GC particle89 definition absent");};
         let Some(&texture)=self.defs.blob.get(start+1) else {return invalid("GC particle89 kind1 texture absent");};
@@ -25,7 +24,7 @@ impl Effects {
         let r=&mut self.pool.recs[i];r.fill(0);r[0]=0x59;
         rec::set_u32(r,4,0x32608080);r[3]=0x48;
         rec::set_ff(r,0xc,(Pf::f(owner.scale)*Pf::b(0x4aa037a0)).to_f32());
-        r[8]=self.rng.randi(255) as u8;r[9]=0x34;r[2]=texture;
+        r[8]=rng.randi(255) as u8;r[9]=0x34;r[2]=texture;
         rec::set_i16(r,10,-1);
         // A stable native moby id replaces the original pointer; +1 keeps
         // id0 distinct from the source null pointer.
@@ -62,5 +61,26 @@ impl Effects {
             rec::set_v4(&mut self.pool.recs[i],0x10,p.map(Pf::to_f32));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rc_game::moby_runtime::Moby;
+    #[test]
+    fn gc_particle_pool_reuse_clears_full_record_and_full_pool_keeps_world_rng() {
+        let defs=PartDefs {header:[90,8,0,2],offsets:vec![0;90],blob:vec![4,7]};
+        let mut effects=Effects::new(defs);let mut rng=Rng {state:1234};
+        let mut m=Moby::zeroed();m.scale=1.;m.position=[32.,48.,5.,0.];
+        let objects=Objects::new(vec![m],0);
+        for _ in 0..2048 {assert!(effects.pool.create_part(0x59).is_some());}
+        let before=rng;assert_eq!(effects.spawn_aranos_12fa(0,&objects,&mut rng).unwrap(),None);assert_eq!(rng,before);
+        effects.pool.kill_part(0);effects.pool.recs[0][0x3f]=99;
+        assert_eq!(effects.spawn_aranos_12fa(0,&objects,&mut rng).unwrap(),Some(0));
+        assert_eq!(effects.pool.recs[0][0x3f],0,"GC clears bytes RAC1 intentionally retains");
+        assert_eq!(effects.pool.recs[0][2],7);assert_eq!(rec::u32(&effects.pool.recs[0],0x20),1);
+        let mut expected=before;let rotation=expected.randi(255) as u8;
+        assert_eq!(rng,expected);assert_eq!(effects.pool.recs[0][8],rotation);
     }
 }
