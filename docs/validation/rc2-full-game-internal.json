@@ -1,41 +1,57 @@
 {
   "schema_version": 1,
   "scope": "IN_PROGRESS_FULL_GAME_DEVELOPMENT_NOT_RELEASE",
-  "updated_utc": "2026-10-24T12:01:58.625145+00:00",
-  "starting_local": "a21594d6251d1a535719dfac18d763177f1c8f96",
-  "starting_public": "df9b97c24b3d18266686e7b2e68770731e7d3401",
-  "current_local_code": "928f0ed94232c4a4658306845b9f987a513c329a",
-  "current_public_code": "c8c578520025c21c4495543a0913b2f009992e3e",
+  "updated_utc": "2026-10-24T17:29:54.644948+00:00",
+  "starting_local": "23e3bf84bf7cd2f60e1c1e1f240e33fbf7ba2ee4",
+  "starting_public": "373ff2cf25b565b790cef16e988f03050d4ca084",
+  "current_local_code": "0e217fc64071fd0828ac270935afc8253f5327c6",
+  "current_public_code": "d7105d3ec60bbf822c3853b242cfb77852939776",
   "production_RC2_Play": false,
   "release_policy": "NO_USER_IPA_BEFORE_ALL_NON_HARDWARE_COMPLETE_ARANOS_GATES_PASS",
   "all_non_hardware_Aranos_gates_pass": false,
   "physical_full_Aranos": "NOT_TESTED",
   "FIRST_FATAL_BLOCKER": null,
-  "first_development_blocker": "GC_FULL_HERO_ITEM_TICK_MELEE_PHYSICS_LIVE_TARGET_LIST_AND_RECEIVER_CALLBACKS_UNCONNECTED",
+  "first_development_blocker": "GC_ARANOS_CLASS_132D_SOURCE_383EB8_INITIALIZATION_QUERY_AND_DRAW_SERVICES_UNPORTED",
   "tests": {
     "formats": {
       "passed": 179,
       "ignored": 1,
-      "optional_extracted_fixtures": "UNAVAILABLE_SKIP_MESSAGES_PRESERVED_ORIGINAL_ISO_REGRESSIONS_RUN_SEPARATELY"
+      "optional_extracted_fixtures": "UNAVAILABLE_SKIP_MESSAGES_PRESERVED_ORIGINAL_ISO_REGRESSIONS_RUN_SEPARATELY",
+      "latest_log": "evidence/complete-directive-formats-tests.log"
     },
     "rac1_game": {
-      "passed": 715
+      "passed": 715,
+      "latest_log": "evidence/complete-directive-rac1-tests.log"
     },
     "rac1_original_iso_classes": {
       "levels": 19,
       "identical_classes": 2968,
       "baseline": "4a86d31",
-      "read_only": true
+      "read_only": true,
+      "execution_scope": "PRIOR_CHECKPOINT_SOURCE_UNCHANGED_THIS_SESSION"
     },
     "game2_units": {
-      "passed": 18
+      "passed": 26,
+      "latest_log": "evidence/gc-world-final-game2-20261025.log"
     },
     "original_rc2": {
-      "passed": 8,
-      "latest_log": "evidence/complete-directive-original-batch13-tests.log"
+      "passed": 9,
+      "latest_log": "evidence/gc-world-final-original-20261025.log",
+      "world_context": "EXPLICIT_SYNTHETIC_SAVE_AND_RNG_INPUTS_WITH_ORIGINAL_LEVEL_DATA_NOT_A_NEW_GAME_CAPTURE",
+      "spawned": 467,
+      "rejected": 5,
+      "preceding_pvar_owners": 28,
+      "initialization_stops_at": {
+        "moby": 23,
+        "class": "0x132d",
+        "source": "0x383eb8",
+        "state": 0
+      },
+      "full_gameplay": false
     },
     "ios_contracts": {
-      "passed": 59
+      "passed": 59,
+      "latest_log": "evidence/gc-world-ios-contracts-20261025.log"
     },
     "deep_scan": {
       "levels": 27,
@@ -56,23 +72,30 @@
       "shared_bytes": 464,
       "baseline": "8600bb1",
       "identical": true,
-      "runtime_executed": false
+      "runtime_executed": false,
+      "execution_scope": "PRIOR_CHECKPOINT_SOURCE_UNCHANGED_THIS_SESSION"
+    },
+    "local_engine_check": {
+      "status": "BLOCKED_ENVIRONMENT",
+      "reason": "pinned winit git dependency unavailable offline",
+      "latest_log": "evidence/gc-world-local-engine-check-20261025.log"
     }
   },
   "native_validation": {
-    "last_all_jobs_pass_source": "95bf206183584696ff95de14446e7bc5d419d1d0",
-    "last_all_jobs_pass_run": 40089826366,
-    "legacy_fix_run": 40088403465,
-    "legacy_fix_status": "ALL_THREE_JOBS_PASS",
-    "current_source_status": "INTERNAL_CI_PENDING_NOT_DEVICE_ORIGINAL_GAME_TESTED",
-    "current_run": 40092030462,
+    "current_run": 40116110147,
+    "current_source": "d7105d3ec60bbf822c3853b242cfb77852939776",
     "current_status": "PENDING",
-    "internal_ipa": {
-      "source": "95bf206183584696ff95de14446e7bc5d419d1d0",
-      "sha256": "7ec0593910fe01784058430fa4ab8987a34286e46a13fca21e5c0f73ac2f1725",
-      "arm64_dsym_uuid": "591695f7-2828-3f90-b0b3-22fd5c2b296e",
-      "user_release": false
-    }
+    "current_source_status": "INTERNAL_CI_PENDING_ORIGINAL_GAME_GPU_AND_DEVICE_NOT_TESTED",
+    "last_all_jobs_pass_source": "c8c578520025c21c4495543a0913b2f009992e3e",
+    "last_all_jobs_pass_run": 40092030462,
+    "first_world_source": "e64a0ee00c466af99eaa0d2b54d094aee57e5e9c",
+    "first_world_run": 40115286314,
+    "first_world_intel": "PASS",
+    "first_world_headless_and_synthetic_gpu": "PASS",
+    "first_world_device_job": "IN_PROGRESS",
+    "superseded_live_rigid_run": 40115749961,
+    "superseded_live_rigid_status": "CANCELLED_BY_CONCURRENCY_NOT_TEST_FAILURE",
+    "user_release": false
   },
   "implemented": [
     "Original GC melee timing/input kernels",
@@ -86,16 +109,25 @@
     "Bounds-checked GC pvar ranges",
     "Read-only 27-slot class and dependency inventory",
     "Normal-gravity-frame GC melee aim state through existing native RC2 stick driver",
-    "GC copied-pvar moby links and tagged local/shared pointer plans, signed GC shared field offsets, bounded native reads"
+    "GC copied-pvar moby links and tagged local/shared pointer plans, signed GC shared field offsets, bounded native reads",
+    "GC-specific static spawn decisions over explicit save/mission inputs, not RAC1 spawn semantics",
+    "Owned camera/sound/moby pvar allocation with actual spawn mapping and tagged reference views",
+    "Independent loaded/headerless GC class slots and mutated class mode binding retention",
+    "Native class initialization and live class-ordered update/target builder, blocked on unknown callbacks",
+    "Complete original delete-only callback0x383b90 and initial link-wait0x383bb0 states",
+    "Original class0x12fa sprite initialization and live hit-trigger state1-to2 receiver; state2 effects explicitly blocked",
+    "GC particle89 attached no-joint branch through existing native PartPool with GC full-record clear and shared world RNG",
+    "Live owned rigid collision, transform/grid updates and deletion; original placement164 is runtime159",
+    "Opt-in internal world driver connected to existing engine FixedUpdate, object renderer and hero/camera collision queries; no independent renderer"
   ],
   "not_implemented": [
-    "Complete hero/item tick and melee spatial physics",
-    "Original GC spawn decisions, owned-pvar allocation and class initialization/updates",
-    "Damage application, enemy AI/combat and required weapons",
-    "Full dynamic/posed collision and moving objects",
-    "Pickups/bolts/crates/HUD and full level audio",
-    "Scripted events/cutscenes/checkpoints/death/respawn/completion/transition",
-    "Complete original-game GPU/audio/playthrough evidence"
+    "Original New Game/save-derived GC spawn/RNG context (current world input is an explicit fixture)",
+    "Remaining required GC class callbacks, including first initialization blocker0x132d and full world readiness",
+    "Complete hero/item update and melee states13/14/15, wrench spatial delivery and enemy/crate health/damage receivers",
+    "GC sprite/effect GPU rendering, remaining particle branches and original animation-sound transport",
+    "Required combat/enemies/weapons/pickups/bolts/interactions and posed/moving-object gameplay behavior",
+    "Original HUD, level audio/dialogue/scripts/cutscenes/checkpoints/saving/death/respawn/completion/transition",
+    "Original-data GPU captures, complete route/playthrough, physical iPhone/Backbone and sustained performance validation"
   ],
   "asset_provenance": {
     "boot_sha1": "4124a79c1e5a1ceb56f514df0dbbc11f072af56f",
@@ -111,32 +143,57 @@
   "shared_core_promoted": false,
   "installed_engine_pointer_changed": false,
   "other_engines_requiring_review": "No adoption; reusable initializer/animation/math unchanged. RAC1 shared parser regression exercised; PS3/PS4/Xbox/PC unchanged.",
-  "next_objective": "Port original GC static spawn decisions and class initialization from the actual loader into the native GC world, producing the genuine active-target list and owned pvars; then connect full melee physics, wrench queries and crate/enemy receiver callbacks before enabling state0x13.",
+  "next_objective": "Port Aranos class0x132d source0x383eb8 with original initialization0x3840b8, query0x383fc0 and queued draw0x3842f8; preserve native RNG order and required render/query services. Resume World.initialize at moby23; do not skip callbacks. Then finish original New Game/save inputs, hero/item tick, wrench state0x13/spatial hits and actual crate/enemy health receivers.",
   "performance": {
     "full_level_frame_timing": "NOT_TESTED",
     "full_level_memory": "NOT_TESTED",
     "full_level_stability": "NOT_TESTED"
   },
   "source_files_changed": [
-    ".github/workflows/build-ios-arm64.yml",
-    "crates/rc-formats/src/gameplay.rs",
-    "crates/rc-formats/src/moby.rs",
-    "crates/rc-formats/src/rac2/classes.rs",
+    "crates/rc-engine/src/level_load.rs",
+    "crates/rc-engine/src/rac2_level.rs",
+    "crates/rc-engine/src/rac2_play.rs",
+    "crates/rc-engine/src/rac2_play/native_world.rs",
+    "crates/rc-engine/src/title_world.rs",
     "crates/rc-formats/src/rac2/gameplay.rs",
-    "crates/rc-formats/src/rac2/items.rs",
-    "crates/rc-formats/src/rac2/melee.rs",
-    "crates/rc-formats/src/rac2/mod.rs",
-    "crates/rc-game2/examples/rc2_deep_scan.rs",
+    "crates/rc-game2/src/collision.rs",
+    "crates/rc-game2/src/effects.rs",
     "crates/rc-game2/src/hits.rs",
-    "crates/rc-game2/src/items.rs",
     "crates/rc-game2/src/lib.rs",
-    "crates/rc-game2/src/melee.rs",
     "crates/rc-game2/src/objects.rs",
     "crates/rc-game2/src/pvars.rs",
-    "crates/rc-game2/src/targeting.rs",
-    "crates/rc-game2/tests/original_aranos.rs",
-    "docs/RC2_EXECUTION_HANDOFF.md",
-    "docs/validation/rc2-full-game-internal.md",
-    "docs/validation/rc2-full-game-internal.json"
+    "crates/rc-game2/src/spawn.rs",
+    "crates/rc-game2/src/world.rs",
+    "crates/rc-game2/tests/original_aranos.rs"
+  ],
+  "previous_checkpoint": {
+    "local": "928f0ed94232c4a4658306845b9f987a513c329a",
+    "public": "c8c578520025c21c4495543a0913b2f009992e3e"
+  },
+  "native_world": {
+    "environment": "RC2_NATIVE_WORLD_SAVE_FIXTURE=1",
+    "default_baseline_changed": false,
+    "fixture_is_original_new_game": false,
+    "object_updates_execute_after_full_init_only": true,
+    "rigid_geometry_cpu_query_pass": true,
+    "original_platform_gameplay_movement_implemented": false,
+    "injected_receiver_hit_is_wrench_swing": false,
+    "graphics_or_device_proof_for_current_world": false,
+    "Aranos_complete": false,
+    "engine_adapter_compilation": "CURRENT_SOURCE_PENDING_NATIVE_CI"
+  },
+  "code_checkpoints": [
+    {
+      "local": "3c08a1b1dfe45f9f86e193131ec4623e23fc2662",
+      "public": "e64a0ee00c466af99eaa0d2b54d094aee57e5e9c"
+    },
+    {
+      "local": "a4606d8507c1a35d69eb1ce8071ee8fb64450116",
+      "public": "602f0956358c8845d073dbfaff0f41f9ce4ef480"
+    },
+    {
+      "local": "0e217fc64071fd0828ac270935afc8253f5327c6",
+      "public": "d7105d3ec60bbf822c3853b242cfb77852939776"
+    }
   ]
 }
