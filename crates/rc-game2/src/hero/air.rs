@@ -27,7 +27,10 @@ impl Hero {
 
     pub(super) fn phys_fall(&mut self, env: &Env, _anim: &mut dyn AnimCtl) {
         self.run_target(env);
-        self.air_control();
+        // L00 0x2c1140..0x2c1150 reads hero+0x1e0 before calling
+        // 0x2b6cd0. Target selection, drag and gravity still run during lag;
+        // steering (including its carried-momentum write) resumes at zero.
+        if self.land_lag == 0 { self.air_control(); }
         self.drag(0.7, 0.0);
         self.vel[2] -= self.fall_g;
         if self.vel[2] < -50.0 * DT { self.vel[2] = -50.0 * DT; }

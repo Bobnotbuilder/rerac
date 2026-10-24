@@ -83,6 +83,57 @@ fn camera_input<'a>(hero: &'a Hero, coll: &'a rc_formats::collision::Collision, 
 }
 
 #[test]
+fn original_aranos_fall_defers_steering_until_landing_lag_expires() {
+    let Some(path)=std::env::var_os("RC2_ORIGINAL_ISO") else {
+        eprintln!("NOT_TESTED: private original ISO unavailable");return;
+    };
+    let iso=IsoImage::open(path).unwrap();
+    let file=iso.read_file(iso.find("/G/LEVEL0.WAD").unwrap()).unwrap();
+    let w=LevelWad::parse(&file).unwrap();
+    let sections=rc_formats::font::parse_overlay_sections(w.lump(Lump::Overlay).unwrap().unwrap()).unwrap();
+    // Pin this rule to the loaded Aranos instruction stream, not the boot
+    // ELF's different code at these addresses. This is not MIPS execution.
+    for (pc,word) in [(0x2c1140,0x860201e0u32),(0x2c1144,0x14400003),(0x2c1148,0),
+        (0x2c114c,0x0c0adb34),(0x2c1150,0),(0x2c1154,0x0c0adf22)] {
+        assert_eq!(rc_formats::font::read_overlay(&sections,pc,4).unwrap(),word.to_le_bytes());
+    }
+    let data=wad::decompress(w.lump(Lump::CoreData).unwrap().unwrap()).unwrap();
+    let core=level::parse_level_core_for(Game::Rac2,w.lump(Lump::CoreIndex).unwrap().unwrap(),data.len()).unwrap();
+    let ratchet=moby::parse_moby_class_for(Game::Rac2,core.block(&data,"moby_class/0000").unwrap()).unwrap();
+    let sequences=(0..core.ratchet_seqs.len()).map(|i|core.block(&data,&format!("ratchet_seq/{i:03}"))
+        .map(|b|ma::parse_sequence_joints(b,0,Some(111)).unwrap())).collect();
+    let class=ma::MobyAnimClass::new(&ratchet,sequences);
+    let coll=rc_formats::collision::parse_collision(&core,&data).unwrap();
+    let gameplay=wad::decompress(w.part_bytes(Part::Gameplay).unwrap().unwrap()).unwrap();
+    let instances=rac2::gameplay::moby_instances(&gameplay).unwrap();
+    let spawn=instances.iter().find(|i|i.base.o_class==0).unwrap().base.position;
+    // Explicit positioned state fixture, not a New Game or savestate capture.
+    let mut hero=Hero::spawn([spawn[0],spawn[1],spawn[2]+20.],0.);
+    let mut anim=RatchetAnim::new(&class);let mut pad=PadState::default();
+    pad.update(Some(&PadInput::neutral().stick(0.,-1.).bytes()),false);
+    let env=Env{coll:&coll,mobys:None,hero_moby:None,pad:&pad,cam_yaw:0.,
+        cam_rows:[[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]],mirror:false};
+    assert!(hero.set_state(&mut anim.ctl(&class),&env,6,true));
+    hero.land_lag=2;
+    for tick in 0..3 {
+        assert_eq!(hero_update(&mut hero,&env,&mut anim.ctl(&class)),HeroTick::Ran);
+        assert_eq!(hero.state,6);
+        assert!(hero.target_speed>0.,"stick target must still update during lag");
+        assert!(hero.vel[2]<0.,"gravity must still run during lag");
+        if tick<2 {
+            assert_eq!(&hero.vel[..2],&[0.,0.],"steering applied during landing lag");
+            assert_eq!(&hero.pos[..2],&spawn[..2]);
+        } else {
+            assert!(hero.vel[0]>0.,"steering must resume on the first zero-lag tick");
+            assert!(hero.pos[0]>spawn[0]);
+        }
+        let pose=ma::evaluate(&class,&anim.state);
+        assert_eq!(pose.len(),111);assert!(pose.iter().flatten().flatten().all(|v|v.is_finite()));
+    }
+    println!("ORIGINAL_RC2_FALL_LAG_CPU_PASS original_overlay_guard=2c1140 original_animations=111_joints lag_ticks=2 resumed_tick=3; POSITIONED_FIXTURE_NOT_GAME_CAPTURE GPU_NOT_TESTED DEVICE_NOT_TESTED");
+}
+
+#[test]
 fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary() {
     let Some(path)=std::env::var_os("RC2_ORIGINAL_ISO") else {eprintln!("NOT_TESTED: private original ISO unavailable");return;};
     let iso=IsoImage::open(path).unwrap();let file=iso.read_file(iso.find("/G/LEVEL0.WAD").unwrap()).unwrap();
@@ -153,6 +204,22 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     // original effect resource. This fixture's RNG seed is explicit too.
     let next=world.initialize(&loaded,|w,id,source|w.native_update(id,source,0)).unwrap_err();
     let rc_game2::world::TickError::Missing(next_missing)=next else {panic!("unexpected {next:?}")};
+    assert_eq!((next_missing.moby,next_missing.class,next_missing.source,next_missing.state),(23,0x132d,0x383eb8,0));
+    let controller_seed=world.rng.state;
+    assert!(!world.native_update(next_missing.moby,next_missing.source,0));
+    assert_eq!(world.rng.state,controller_seed,"missing descriptor may not consume RNG");
+    let controller_data=rc_game2::controller_132d::AranosControllerData::parse(0,overlay).unwrap();
+    assert!(rc_game2::controller_132d::AranosControllerData::parse(1,overlay).is_err());
+    let descriptor=*controller_data.descriptor();
+    world.controller_data=Some(controller_data);
+    let after_controller=world.initialize(&loaded,|w,id,source|w.native_update(id,source,0)).unwrap_err();
+    let controller=world.controller_132d.as_ref().unwrap();
+    assert_eq!(controller.owner,next_missing.moby);assert_eq!(controller.source_value,0x49);
+    assert_eq!(world.objects.get(next_missing.moby).unwrap().state,1);
+    assert_eq!(&world.objects.get(next_missing.moby).unwrap().pvars[..16],descriptor);
+    assert_ne!(world.rng.state,controller_seed);
+    assert!(!world.native_update(next_missing.moby,next_missing.source,0),"required state1 query/draw remains unported");
+    println!("ORIGINAL_GC_CONTROLLER_INIT_CPU_PASS owner={} owned_descriptor=true shared_rng_before={controller_seed:08x} after={:08x} next_init={after_controller:?}; STATE1_QUERY_DRAW_NOT_IMPLEMENTED",next_missing.moby,world.rng.state);
     let receiver=missing.moby;assert_eq!(world.objects.get(receiver).unwrap().state,1);
     let e=world.effects.as_ref().unwrap();assert!(e.pool.count>0);
     let sprite=e.pool.live().find(|(_,r)|rc_game::particles::rec::u32(r,0x20)==receiver as u32+1).unwrap().0;

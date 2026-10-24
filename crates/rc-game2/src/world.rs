@@ -18,6 +18,8 @@ pub struct World {
     pub preceding_owners:Vec<PrecedingOwner>,
     pub grid:rc_game::collision_query::MobyGrid,
     pub effects:Option<crate::effects::Effects>,
+    pub controller_data:Option<crate::controller_132d::AranosControllerData>,
+    pub controller_132d:Option<crate::controller_132d::Controller132d>,
     /// One stream for all GC classes/effects, never a separately seeded RNG
     /// per subsystem. The caller supplies its loader-boundary state.
     pub rng:rc_game::rng::Rng,
@@ -141,7 +143,8 @@ impl World {
         let mut pvar_indices=moby_to_instance.iter().map(|&i|if instances[i].base.o_class==0 {-1}else{instances[i].base.pvar_index}).collect::<Vec<_>>();
         pvar_indices.push(-1);
         Ok(Self {objects:Objects::new(records,dynamic_capacity),instance_to_moby,moby_to_instance,pvars,pvar_indices,groups,
-            gc:vec![GcState::default();count],preceding_owners,grid,effects:None,rng,hits:Default::default(),init_list,init_cursor:0,initialized:false})
+            gc:vec![GcState::default();count],preceding_owners,grid,effects:None,controller_data:None,controller_132d:None,
+            rng,hits:Default::default(),init_list,init_cursor:0,initialized:false})
     }
 
     pub fn local_pvar_bytes(&self,id:MobyId,field:usize,len:usize)->Result<&[u8]> {
@@ -183,6 +186,26 @@ impl World {
     pub fn native_update(&mut self,id:MobyId,source:u32,counter:u32)->bool {
         if !self.objects.get(id).is_some_and(|m|m.update_fn==Some(source)) {return false;}
         match source {
+            0x383eb8=>{
+                let m=self.objects.get(id).expect("GC class132d owner");
+                match m.state {
+                    0=>{
+                        let Some(data)=self.controller_data.as_ref() else {return false;};
+                        // Validate dependencies before mutating the owner or consuming RNG.
+                        if m.pvars.len()<16 {return false;}
+                        let descriptor=*data.descriptor();
+                        let controller=crate::controller_132d::Controller132d::initialize(id,&mut self.rng);
+                        let m=self.objects.get_mut(id).unwrap();
+                        // Original writes state directly, not through 0x31b8d0.
+                        m.state=1;m.update_dist=255;m.pvars[..16].copy_from_slice(&descriptor);
+                        self.controller_132d=Some(controller);true
+                    },
+                    // Requires actual 0x383fc0 query and 0x2e7718 queued
+                    // 0x3842f8 drawing. Do not register a pretend no-op.
+                    1=>false,
+                    _=>true,
+                }
+            },
             0x383b90=>{
                 let grid=&mut self.grid;
                 self.objects.delete(id,counter,|m|grid.remove(m)).expect("scheduler supplied live GC moby");true
@@ -322,7 +345,8 @@ mod tests {
         let n=records.len();World {objects:Objects::new(records,0),instance_to_moby:(0..n).map(Some).collect(),
             moby_to_instance:(0..n).collect(),pvars:PvarPlan {blocks:Vec::new(),pointer_fields:Vec::new(),shared_data:Vec::new(),shared_fields:Vec::new()},
             pvar_indices:vec![-1;n],groups:vec![Vec::new();2],gc:vec![GcState::default();n],preceding_owners:Vec::new(),
-            grid:rc_game::collision_query::MobyGrid::new(),effects:None,rng:rc_game::rng::Rng::new(),hits:Default::default(),init_list:Vec::new(),init_cursor:0,initialized:false}
+            grid:rc_game::collision_query::MobyGrid::new(),effects:None,controller_data:None,controller_132d:None,
+            rng:rc_game::rng::Rng::new(),hits:Default::default(),init_list:Vec::new(),init_cursor:0,initialized:false}
     }
     fn object(id:u32,slot:u8)->Moby {
         let mut m=Moby::init_instance(id,slot as i16,None);m.class_slot=slot;m.mode=mode::TARGETABLE;m.visible=1;m

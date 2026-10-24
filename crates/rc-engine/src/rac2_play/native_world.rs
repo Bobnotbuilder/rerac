@@ -6,7 +6,8 @@ use rc_formats::{level::LevelCore,moby_anim::{MobyAnimClass,AnimState},rac2::cla
 use rc_game2::{objects::{LoadedClass,ClassBinding},spawn::SpawnState,world::{World,TickError}};
 use crate::{level_load::LoadedLevel,moby_render::MobyOcclusion,moby_anim::MobyAnim};
 
-pub struct LevelContract {pub core:LevelCore,pub updates:AranosClassUpdates,pub rigid:rc_game2::collision::LiveRigidCollision}
+pub struct LevelContract {pub core:LevelCore,pub updates:AranosClassUpdates,pub rigid:rc_game2::collision::LiveRigidCollision,
+    pub controller_data:rc_game2::controller_132d::AranosControllerData}
 pub fn enabled()->bool {std::env::var("RC2_NATIVE_WORLD_SAVE_FIXTURE").is_ok_and(|v|v=="1")}
 
 pub struct NativeWorld {
@@ -36,6 +37,7 @@ impl NativeWorld {
         let mut world=World::load(&lv.gameplay,&mut classes,&mut state,rc_game::rng::Rng {state:1234},|p|Ok(rc_game2::collision::root_height(collision,p)))?;
         let defs=lv.particles.textures.as_ref().context("GC native world requires original particle definitions")?.defs.clone();
         world.effects=Some(rc_game2::effects::Effects::new(defs));
+        world.controller_data=Some(contract.controller_data.clone());
         let bindings=classes.iter().zip(animations).map(|(c,a)|(c.binding(),a)).collect();drop(classes);
         eprintln!("RC2_INTERNAL_WORLD_SAVE_FIXTURE: spawned={} rejected={} provenance=SYNTHETIC_SAVE_AND_RNG_INPUTS original_data=true not_original_New_Game_not_release",world.moby_to_instance.len(),world.instance_to_moby.iter().filter(|i|i.is_none()).count());
         Ok(Self {world,bindings,empty,blocked:false,ready:false})

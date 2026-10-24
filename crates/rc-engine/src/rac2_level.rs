@@ -104,6 +104,7 @@ pub fn load(root: &Path, index: u32) -> Result<LoadedLevel> {
         anyhow::ensure!(index==0,"internal GC native world source contracts require Aranos");
         Some(crate::rac2_play::native_world::LevelContract {
             updates:rc_formats::rac2::classes::AranosClassUpdates::parse(index,lump(Lump::Overlay)?)?,
+            controller_data:rc_game2::controller_132d::AranosControllerData::parse(index,lump(Lump::Overlay)?)?,
             rigid:rc_game2::collision::LiveRigidCollision::load(&core,&core_data)?,core,
         })
     } else {None};

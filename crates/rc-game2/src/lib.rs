@@ -6,6 +6,7 @@
 
 pub mod camera;
 pub mod collision;
+pub mod controller_132d;
 pub mod effects;
 pub mod front_end;
 pub mod front_audio;
