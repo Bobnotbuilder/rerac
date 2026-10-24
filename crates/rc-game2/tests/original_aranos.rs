@@ -213,12 +213,17 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     let descriptor=*controller_data.descriptor();
     world.controller_data=Some(controller_data);
     let after_controller=world.initialize(&loaded,|w,id,source|w.native_update(id,source,0)).unwrap_err();
+    assert!(matches!(after_controller,rc_game2::world::TickError::Missing(rc_game2::world::MissingUpdate {
+        moby:24,class:0x1330,source:0x3846d0,state:0,initializing:true
+    })),"initialization must advance to the actual next original callback: {after_controller:?}");
     let controller=world.controller_132d.as_ref().unwrap();
     assert_eq!(controller.owner,next_missing.moby);assert_eq!(controller.source_value,0x49);
     assert_eq!(world.objects.get(next_missing.moby).unwrap().state,1);
     assert_eq!(&world.objects.get(next_missing.moby).unwrap().pvars[..16],descriptor);
     assert_ne!(world.rng.state,controller_seed);
+    let after_init_seed=world.rng.state;
     assert!(!world.native_update(next_missing.moby,next_missing.source,0),"required state1 query/draw remains unported");
+    assert_eq!(world.rng.state,after_init_seed,"blocked query/draw must not replay initialization");
     println!("ORIGINAL_GC_CONTROLLER_INIT_CPU_PASS owner={} owned_descriptor=true shared_rng_before={controller_seed:08x} after={:08x} next_init={after_controller:?}; STATE1_QUERY_DRAW_NOT_IMPLEMENTED",next_missing.moby,world.rng.state);
     let receiver=missing.moby;assert_eq!(world.objects.get(receiver).unwrap().state,1);
     let e=world.effects.as_ref().unwrap();assert!(e.pool.count>0);

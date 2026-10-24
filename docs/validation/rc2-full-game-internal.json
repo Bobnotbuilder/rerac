@@ -1,27 +1,27 @@
 {
   "schema_version": 1,
   "scope": "IN_PROGRESS_FULL_GAME_DEVELOPMENT_NOT_RELEASE",
-  "updated_utc": "2026-10-24T17:29:54.644948+00:00",
+  "updated_utc": "2026-10-24T23:53:56.590411+00:00",
   "starting_local": "23e3bf84bf7cd2f60e1c1e1f240e33fbf7ba2ee4",
   "starting_public": "373ff2cf25b565b790cef16e988f03050d4ca084",
-  "current_local_code": "0e217fc64071fd0828ac270935afc8253f5327c6",
-  "current_public_code": "d7105d3ec60bbf822c3853b242cfb77852939776",
+  "current_local_code": "112c2aa968d18148c999237c7f1222e1e9cfa5ac",
+  "current_public_code": "a774e199aa7f05e92e630f3f764680303de0672d",
   "production_RC2_Play": false,
   "release_policy": "NO_USER_IPA_BEFORE_ALL_NON_HARDWARE_COMPLETE_ARANOS_GATES_PASS",
   "all_non_hardware_Aranos_gates_pass": false,
   "physical_full_Aranos": "NOT_TESTED",
   "FIRST_FATAL_BLOCKER": null,
-  "first_development_blocker": "GC_ARANOS_CLASS_132D_SOURCE_383EB8_INITIALIZATION_QUERY_AND_DRAW_SERVICES_UNPORTED",
+  "first_development_blocker": "GC_ARANOS_CLASS_1330_SOURCE_3846D0_INITIALIZATION_SERVICES_UNPORTED",
   "tests": {
     "formats": {
       "passed": 179,
       "ignored": 1,
       "optional_extracted_fixtures": "UNAVAILABLE_SKIP_MESSAGES_PRESERVED_ORIGINAL_ISO_REGRESSIONS_RUN_SEPARATELY",
-      "latest_log": "evidence/complete-directive-formats-tests.log"
+      "latest_log": "evidence/ps2recomp-mechanics-formats-20261025.log"
     },
     "rac1_game": {
       "passed": 715,
-      "latest_log": "evidence/complete-directive-rac1-tests.log"
+      "latest_log": "evidence/ps2recomp-mechanics-rac1-20261025.log"
     },
     "rac1_original_iso_classes": {
       "levels": 19,
@@ -31,23 +31,33 @@
       "execution_scope": "PRIOR_CHECKPOINT_SOURCE_UNCHANGED_THIS_SESSION"
     },
     "game2_units": {
-      "passed": 26,
-      "latest_log": "evidence/gc-world-final-game2-20261025.log"
+      "passed": 27,
+      "latest_log": "evidence/ps2recomp-mechanics-game2-20261025.log"
     },
     "original_rc2": {
-      "passed": 9,
-      "latest_log": "evidence/gc-world-final-original-20261025.log",
+      "passed": 10,
+      "latest_log": "evidence/mechanics-fall-original-20261025.log",
       "world_context": "EXPLICIT_SYNTHETIC_SAVE_AND_RNG_INPUTS_WITH_ORIGINAL_LEVEL_DATA_NOT_A_NEW_GAME_CAPTURE",
       "spawned": 467,
       "rejected": 5,
       "preceding_pvar_owners": 28,
       "initialization_stops_at": {
-        "moby": 23,
-        "class": "0x132d",
-        "source": "0x383eb8",
-        "state": 0
+        "moby": 24,
+        "class": "0x1330",
+        "source": "0x3846d0",
+        "state": 0,
+        "initializing": true
       },
-      "full_gameplay": false
+      "full_gameplay": false,
+      "controller132d_init": {
+        "state0": "IMPLEMENTED_CPU_TESTED",
+        "owner": 23,
+        "descriptor": "ORIGINAL_16_BYTES_IN_ACTUAL_PVAR_OWNER",
+        "rng_before": "d26e35d0",
+        "rng_after": "d795a3b6",
+        "state1_query_draw": "UNPORTED",
+        "purpose_1b26bc": "UNVERIFIED"
+      }
     },
     "ios_contracts": {
       "passed": 59,
@@ -82,12 +92,12 @@
     }
   },
   "native_validation": {
-    "current_run": 40116110147,
-    "current_source": "d7105d3ec60bbf822c3853b242cfb77852939776",
-    "current_status": "PENDING",
-    "current_source_status": "INTERNAL_CI_PENDING_ORIGINAL_GAME_GPU_AND_DEVICE_NOT_TESTED",
-    "last_all_jobs_pass_source": "c8c578520025c21c4495543a0913b2f009992e3e",
-    "last_all_jobs_pass_run": 40092030462,
+    "current_run": 40144142983,
+    "current_source": "a774e199aa7f05e92e630f3f764680303de0672d",
+    "current_status": "IN_PROGRESS",
+    "current_source_status": "INTEL_NATIVE_COMPILE_AND_HOSTED_REGRESSIONS_SYNTHETIC_GPU_PASS_ARM64_PENDING",
+    "last_all_jobs_pass_source": "d7105d3ec60bbf822c3853b242cfb77852939776",
+    "last_all_jobs_pass_run": 40116110147,
     "first_world_source": "e64a0ee00c466af99eaa0d2b54d094aee57e5e9c",
     "first_world_run": 40115286314,
     "first_world_intel": "PASS",
@@ -118,11 +128,14 @@
     "Original class0x12fa sprite initialization and live hit-trigger state1-to2 receiver; state2 effects explicitly blocked",
     "GC particle89 attached no-joint branch through existing native PartPool with GC full-record clear and shared world RNG",
     "Live owned rigid collision, transform/grid updates and deletion; original placement164 is runtime159",
-    "Opt-in internal world driver connected to existing engine FixedUpdate, object renderer and hero/camera collision queries; no independent renderer"
+    "Opt-in internal world driver connected to existing engine FixedUpdate, object renderer and hero/camera collision queries; no independent renderer",
+    "Original fall6 landing-lag steering suppression at2c1140; original-data chain and old-code negative control",
+    "Original class132d state0 owned descriptor/controller initialization at383eb8/3840b8 through one world RNG; next initialization callback now1330/object24",
+    "Private original overlay-to-ELF analysis workflow and3620-function PS2Recomp recovery; no generated C++ linked into app"
   ],
   "not_implemented": [
     "Original New Game/save-derived GC spawn/RNG context (current world input is an explicit fixture)",
-    "Remaining required GC class callbacks, including first initialization blocker0x132d and full world readiness",
+    "Remaining required GC class callbacks, including first initialization blocker0x1330 and132d state1 query/draw and full world readiness",
     "Complete hero/item update and melee states13/14/15, wrench spatial delivery and enemy/crate health/damage receivers",
     "GC sprite/effect GPU rendering, remaining particle branches and original animation-sound transport",
     "Required combat/enemies/weapons/pickups/bolts/interactions and posed/moving-object gameplay behavior",
@@ -143,7 +156,7 @@
   "shared_core_promoted": false,
   "installed_engine_pointer_changed": false,
   "other_engines_requiring_review": "No adoption; reusable initializer/animation/math unchanged. RAC1 shared parser regression exercised; PS3/PS4/Xbox/PC unchanged.",
-  "next_objective": "Port Aranos class0x132d source0x383eb8 with original initialization0x3840b8, query0x383fc0 and queued draw0x3842f8; preserve native RNG order and required render/query services. Resume World.initialize at moby23; do not skip callbacks. Then finish original New Game/save inputs, hero/item tick, wrench state0x13/spatial hits and actual crate/enemy health receivers.",
+  "next_objective": "Port original class1330/source3846d0 state0 dependencies: query2f51a0/conditional322730, service368560, camera access, class0xd54 allocation311320/owner link32a748 and remaining table/pose/script effects. Resume same initialization cursor at object24. Also retain class132d state1 query383fc0/queued3842f8 blocker; finish actual New Game state and hero/item/wrench/hit/damage chain before gameplay claims.",
   "performance": {
     "full_level_frame_timing": "NOT_TESTED",
     "full_level_memory": "NOT_TESTED",
@@ -164,11 +177,15 @@
     "crates/rc-game2/src/pvars.rs",
     "crates/rc-game2/src/spawn.rs",
     "crates/rc-game2/src/world.rs",
-    "crates/rc-game2/tests/original_aranos.rs"
+    "crates/rc-game2/tests/original_aranos.rs",
+    "crates/rc-game2/src/controller_132d.rs",
+    "tools/recovery/rc2_overlay_to_elf.py",
+    "tools/recovery/tests/test_rc2_overlay_to_elf.py",
+    ".github/workflows/build-ios-arm64.yml"
   ],
   "previous_checkpoint": {
-    "local": "928f0ed94232c4a4658306845b9f987a513c329a",
-    "public": "c8c578520025c21c4495543a0913b2f009992e3e"
+    "local": "0e217fc64071fd0828ac270935afc8253f5327c6",
+    "public": "d7105d3ec60bbf822c3853b242cfb77852939776"
   },
   "native_world": {
     "environment": "RC2_NATIVE_WORLD_SAVE_FIXTURE=1",
@@ -180,7 +197,7 @@
     "injected_receiver_hit_is_wrench_swing": false,
     "graphics_or_device_proof_for_current_world": false,
     "Aranos_complete": false,
-    "engine_adapter_compilation": "CURRENT_SOURCE_PENDING_NATIVE_CI"
+    "engine_adapter_compilation": "PASS_CURRENT_SOURCE_INTEL_NATIVE_CI_ARM64_PENDING"
   },
   "code_checkpoints": [
     {
@@ -195,5 +212,111 @@
       "local": "0e217fc64071fd0828ac270935afc8253f5327c6",
       "public": "d7105d3ec60bbf822c3853b242cfb77852939776"
     }
-  ]
+  ],
+  "ps2recomp_mechanics_recovery": {
+    "scope": "ORIGINAL_GAMEPLAY_MECHANICS_RECOVERY_INTERNAL_NOT_RELEASE",
+    "updated_utc": "2026-10-24T23:53:56.590411+00:00",
+    "starting_local_handoff": "4cae0b30c4d24041c8c6ceaaeca351ff9373a4d9",
+    "starting_local_code": "0e217fc64071fd0828ac270935afc8253f5327c6",
+    "starting_public_handoff": "5761c669226b36198b0066d0c4ac5369379ccacf",
+    "starting_public_code": "d7105d3ec60bbf822c3853b242cfb77852939776",
+    "local_implementation": "770c793e3180ec197d8746f572a207ff98c3ce36",
+    "current_local_code": "112c2aa968d18148c999237c7f1222e1e9cfa5ac",
+    "current_public_code": "a774e199aa7f05e92e630f3f764680303de0672d",
+    "first_development_blocker": "GC_ARANOS_CLASS_1330_SOURCE_3846D0_INITIALIZATION_SERVICES_UNPORTED",
+    "FIRST_FATAL_BLOCKER": null,
+    "device_runtime_executed": false,
+    "cpu_initialization_stop": {
+      "moby": 24,
+      "class": "0x1330",
+      "source": "0x3846d0",
+      "state": 0,
+      "initializing": true
+    },
+    "controller132d": {
+      "state0": "IMPLEMENTED_CPU_TESTED",
+      "owner": 23,
+      "descriptor": "ORIGINAL_16_BYTES_IN_ACTUAL_PVAR_OWNER",
+      "rng_before": "d26e35d0",
+      "rng_after": "d795a3b6",
+      "state1_query_draw": "UNPORTED",
+      "purpose_1b26bc": "UNVERIFIED"
+    },
+    "fall6": {
+      "change": "suppress air_control while signed landing lag nonzero; retain target/drag/gravity",
+      "source_branch": "L00:2c1140..2c1154",
+      "original_data_cpu": "PASS",
+      "old_code_negative_control": "EXPECTED_FAIL_EXIT101",
+      "device": "NOT_TESTED"
+    },
+    "inputs": {
+      "handoff_zip_sha256": "8d50debda444300931a0a6961c8c296b2d57f110d01fdf7929d3baf95d690a20",
+      "output_zip_sha256": "5e5bcc75b0e077fef7ba7f87a7a377325c2db1c06e4f582731d2f6ae236c04de",
+      "boot_sha256": "64dbf0d4c527d90a2a4ceb47b23d81848b62165a6449156729ca44711aa3e3ee",
+      "boot_matches_existing_private_source": true,
+      "PS2Recomp_revision": "e5636981a1c9de368f6b71e819c3dc188dfedbf4",
+      "archives_crc": "PASS"
+    },
+    "static_analysis": {
+      "boot_function_starts": 2884,
+      "boot_per_function_files": 2885,
+      "boot_recompiled": 2778,
+      "boot_unique_stub_addresses": 106,
+      "configured_stubs": 112,
+      "configured_without_function": 6,
+      "boot_source_comment_records": 255241,
+      "boot_source_comment_unique_pcs": 253705,
+      "boot_word_mismatches": 0,
+      "overlay_recompiled": 3620,
+      "overlay_decode_failures": 0,
+      "overlay_indirect_warning_records": 128,
+      "overlay_fallback_entries": 20508,
+      "overlay_additional_entrypoints": 43247,
+      "overlay_source_comment_records": 426951,
+      "overlay_source_comment_unique_pcs": 425370,
+      "overlay_word_mismatches": 0,
+      "overlay_call_sites": 30211,
+      "overlay_distinct_call_pairs": 16341,
+      "runtime_compiled_or_executed": false
+    },
+    "tests": {
+      "formats_pass": 179,
+      "formats_ignored": 1,
+      "rac1_units_pass": 715,
+      "gc_units_pass": 27,
+      "original_iso_cpu_pass": 10,
+      "ios_contracts_pass": 59,
+      "overlay_wrapper_pass": 4,
+      "fall_negative_control": "EXPECTED_FAIL",
+      "initial_math_oracle_failure": "retained; IEEE truncate-only oracle corrected with independently reconstructed existing PS2 guard-bit model; not hardware parity"
+    },
+    "native_validation": {
+      "run": 40144142983,
+      "source": "a774e199aa7f05e92e630f3f764680303de0672d",
+      "Intel_compile": "PASS",
+      "ARM64_and_simulator": "IN_PROGRESS",
+      "headless_and_synthetic_GPU": "PASS",
+      "last_all_jobs_pass_run": 40116110147,
+      "last_all_jobs_pass_source": "d7105d3ec60bbf822c3853b242cfb77852939776",
+      "local_engine_check": "BLOCKED_UNCACHED_PINNED_WINIT_OFFLINE",
+      "local_binary_retrieval": "BLOCKED_DOWNLOAD_HOST_DNS",
+      "device_discovery": "NO_CONNECTED_IPHONE",
+      "local_Metal": "Intel HD Graphics5000 supported",
+      "current_original_data_GPU": "NOT_TESTED",
+      "current_physical_iPhone": "NOT_TESTED",
+      "hosted_headless_log": "evidence/ps2recomp-mechanics-hosted-headless-20261025.log"
+    },
+    "release_policy": "NO_USER_IPA_BEFORE_COMPLETE_ARANOS_NON_HARDWARE_GATES",
+    "Aranos_complete": false,
+    "production_RC2_Play": false,
+    "user_facing_IPA": false,
+    "classifications": [
+      "GAME_SPECIFIC",
+      "SHARED_TESTING"
+    ],
+    "Shared_Core_promoted": false,
+    "installed_engine_pointer_changed": false,
+    "RAC1_runtime_saves_identity_changed": false,
+    "next_objective": "Port original class1330/source3846d0 state0 dependencies: query2f51a0/conditional322730, service368560, camera access, class0xd54 allocation311320/owner link32a748 and remaining table/pose/script effects. Resume same initialization cursor at object24. Also retain class132d state1 query383fc0/queued3842f8 blocker; finish actual New Game state and hero/item/wrench/hit/damage chain before gameplay claims."
+  }
 }
