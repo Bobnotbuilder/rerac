@@ -4,6 +4,48 @@
 //! query must come from the world. This module does not invent live targets.
 use rc_formats::buf::{invalid,Result};
 use rc_game::{hero::physics::{V4,dist3,len2,vsub},pad::{fast_arctan,fast_diff_rots},ps2v::Pf};
+use crate::hero::{Hero,physics::Env};
+
+#[derive(Clone,Copy,Debug,Default)]
+pub struct MeleeAim {
+    /// Hero +0xbe4 / +0xbe8 / +0xbec and +0xbc0.
+    pub target:Option<usize>,
+    pub aimed:i32,
+    pub yaw:f32,
+    pub direction:[f32;3],
+}
+
+impl MeleeAim {
+    /// Normal-body 0x2b76a8. The complete native tick must supply the real GC
+    /// active-target list and reset entry fields at the original state boundary.
+    /// The original skips item0x20 and already-aimed requests, including stores.
+    pub fn assist(&mut self,hero:&mut Hero,env:&Env,targets:&[Target],item:i32,
+        range:f32,yaw_cone:f32,pitch_cone:f32,gravity_frame:u8)->Result<()> {
+        if item==0x20 || self.aimed!=0 {return Ok(());}
+        let mut q=Query {hero_position:[Pf::f(hero.pos[0]),Pf::f(hero.pos[1]),Pf::f(hero.pos[2]),Pf::ONE],
+            hero_state:hero.state,ground_z:Pf::f(hero.ground_z),yaw:Pf::f(hero.rot[2]),range:Pf::f(range),
+            yaw_cone:Pf::f(yaw_cone),pitch_cone:Pf::f(pitch_cone),gravity_frame};
+        q.check()?;
+        let mut direction=hero.rows[0];
+        if hero.stick_mag>0.5 {
+            hero.stick_target(env,1.,0);q.yaw=Pf::f(hero.target_yaw);direction=hero.stick_dir;
+            self.target=None;self.aimed=1;
+        }
+        let chosen=select(&q,targets,-1,false,|_|unreachable!("GC wrench aim does not request visibility"))?;
+        if let Some(target)=chosen {
+            if self.target.is_none() || self.aimed!=0 {
+                let delta=vsub(target.position,q.hero_position);
+                self.yaw=fast_arctan(delta[0],delta[1]).to_f32();
+                self.direction=[delta[0].to_f32(),delta[1].to_f32(),0.];
+                self.target=Some(target.id);return Ok(());
+            }
+        }
+        // Includes the old-target + no-stick path; the original keeps that
+        // target identity while restoring the direction/yaw from this call.
+        self.yaw=q.yaw.to_f32();self.direction=[direction[0],direction[1],0.];
+        Ok(())
+    }
+}
 
 #[derive(Clone,Copy,Debug)]
 pub struct Target {
@@ -27,13 +69,14 @@ pub struct Query {
     pub range:Pf,
     pub yaw_cone:Pf,
     pub pitch_cone:Pf,
-    pub alternate_body:bool,
+    /// Hero +0x22c3: gravity frame, not the character/body mode.
+    pub gravity_frame:u8,
 }
 
 impl Query {
     fn check(&self)->Result<()> {
-        if self.alternate_body || matches!(self.hero_state,1|0x1d) {
-            return invalid("GC alternate-body/first-person targeting requires its original camera scoring path");
+        if self.gravity_frame!=0 || matches!(self.hero_state,1|0x1d) {
+            return invalid("GC gravity-frame/first-person targeting requires its original camera scoring path");
         }
         Ok(())
     }
@@ -82,7 +125,7 @@ pub fn select<'a>(query:&Query,targets:&'a [Target],class_type:i32,require_visib
 mod tests {
     use super::*;
     fn query()->Query {Query {hero_position:[Pf::ZERO;4],hero_state:0,ground_z:Pf::ZERO,yaw:Pf::ZERO,
-        range:Pf::f(20.),yaw_cone:Pf::f(-1.),pitch_cone:Pf::f(-1.),alternate_body:false}}
+        range:Pf::f(20.),yaw_cone:Pf::f(-1.),pitch_cone:Pf::f(-1.),gravity_frame:0}}
     fn target(id:usize,class:i16)->Target {Target {id,class,class_type:5,mode:0x1000,
         position:[Pf::ONE,Pf::ZERO,Pf::ZERO,Pf::ONE],creature_health:Some(Pf::ONE)}}
     #[test]
@@ -102,7 +145,7 @@ mod tests {
         assert_eq!(select(&q,&targets,-1,false,|_|true).unwrap().unwrap().id,1);
         assert!(select(&q,&targets,5,false,|_|true).unwrap().is_none());
         assert!(score(&Query{hero_state:1,..q},&targets[0]).is_err());
-        assert!(score(&Query{alternate_body:true,..q},&targets[0]).is_err());
+        assert!(score(&Query{gravity_frame:1,..q},&targets[0]).is_err());
         let airborne=Target{position:[Pf::ONE,Pf::ZERO,Pf::f(3.),Pf::ONE],..targets[0]};
         let jump=Query{hero_state:0x14,ground_z:Pf::f(3.),..q};
         assert!(score(&jump,&airborne).unwrap().unwrap()<score(&q,&airborne).unwrap().unwrap());

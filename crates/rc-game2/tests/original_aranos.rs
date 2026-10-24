@@ -118,12 +118,22 @@ fn original_aranos_class_binding_and_wrench_sweep_windows() {
     use rc_game2::targeting::{Query,Target};
     let position=|p:[f32;3]|[Pf::f(p[0]),Pf::f(p[1]),Pf::f(p[2]),Pf::ONE];
     let query=Query {hero_position:position(hero.position),hero_state:0,ground_z:Pf::f(hero.position[2]),
-        yaw:Pf::f(hero.rotation[2]),range:Pf::f(4096.),yaw_cone:Pf::f(-1.),pitch_cone:Pf::f(-1.),alternate_body:false};
+        yaw:Pf::f(hero.rotation[2]),range:Pf::f(4096.),yaw_cone:Pf::f(-1.),pitch_cone:Pf::f(-1.),gravity_frame:0};
     // Scalar scoring over original placements only: this is not the original
     // active-target list, spawn initialization, health or enemy AI execution.
     let candidate=Target {id:0,class:0x1f4,class_type:0,mode:0,position:position(crate_.position),creature_health:None};
     let score=rc_game2::targeting::score(&query,&candidate).unwrap().unwrap();assert!(score.to_f32().is_finite());
     assert!(score>query.range*Pf::b(0x3f4ccccd));
+    let mut native_hero=Hero::spawn(hero.position,hero.rotation[2]);let pad=PadState::default();
+    let env=Env {coll:&world,mobys:None,hero_moby:None,pad:&pad,cam_yaw:hero.rotation[2],cam_rows:native_hero.rows,mirror:false};
+    let mut aim=rc_game2::targeting::MeleeAim::default();
+    aim.assist(&mut native_hero,&env,&[],10,4.,-1.,-1.,0).unwrap();
+    assert_eq!(aim.yaw,hero.rotation[2]);assert_eq!(aim.direction[2],0.);assert_eq!(aim.target,None);
+    native_hero.stick=[0.8,0.];native_hero.stick_mag=0.8;
+    aim.assist(&mut native_hero,&env,&[],10,4.,-1.,-1.,0).unwrap();
+    assert_eq!(aim.aimed,1);assert_eq!(aim.yaw,native_hero.target_yaw);
+    let held=aim.yaw;native_hero.rot[2]+=0.4;
+    aim.assist(&mut native_hero,&env,&[],10,4.,-1.,-1.,0).unwrap();assert_eq!(aim.yaw,held);
     use rc_game::{collision_query::{coll_line,QueryFlags},ps2v::Pf};
     let v=|z|[Pf::f(247.),Pf::f(198.),Pf::f(z),Pf::ONE];
     let mut queries=0;
