@@ -6,7 +6,7 @@ use rc_formats::{level::LevelCore,moby_anim::{MobyAnimClass,AnimState},rac2::cla
 use rc_game2::{objects::{LoadedClass,ClassBinding},spawn::SpawnState,world::{World,TickError}};
 use crate::{level_load::LoadedLevel,moby_render::MobyOcclusion,moby_anim::MobyAnim};
 
-pub struct LevelContract {pub core:LevelCore,pub updates:AranosClassUpdates}
+pub struct LevelContract {pub core:LevelCore,pub updates:AranosClassUpdates,pub rigid:rc_game2::collision::LiveRigidCollision}
 pub fn enabled()->bool {std::env::var("RC2_NATIVE_WORLD_SAVE_FIXTURE").is_ok_and(|v|v=="1")}
 
 pub struct NativeWorld {
@@ -55,6 +55,10 @@ impl NativeWorld {
         drop(classes);
         if let Err(error)=result {self.report(error);return false;}
         self.ready=true;true
+    }
+
+    pub fn scene<'a>(&'a self,lv:&'a LoadedLevel)->rc_game::collision_query::MobyScene<'a> {
+        lv.rc2_world_contract.as_ref().expect("native world contract").rigid.scene(&self.world)
     }
 
     pub fn tick(&mut self,lv:&LoadedLevel,counter:u32,placement:usize,hero:&rc_game2::hero::Hero,

@@ -109,7 +109,8 @@ fn tick(
         None => rc_game::pad::PadInput::neutral(),
     };
     p.pad.update(Some(&input.bytes()), false);
-    let scene = lv.rc2_placement_collision.as_ref().map(|s| s.scene());
+    let scene = p.native_world.as_ref().map(|w|w.scene(lv))
+        .or_else(||lv.rc2_placement_collision.as_ref().map(|s|s.scene()));
     let class = &lv.mobys.anim[p.class];
     {
         let env = Env { coll, mobys: scene.as_ref(), hero_moby: Some(p.instance), pad: &p.pad, cam_yaw: p.camera.yaw(), cam_rows: p.camera.rows, mirror: false };
@@ -132,10 +133,6 @@ fn tick(
         } else { p.unsupported_state = None; }
     }
     p.camera.update(&cam_input(&p.hero, Some(coll), scene.as_ref(), Some(p.instance), [p.pad.rx.to_f32(), p.pad.ry.to_f32()]));
-    if let Some(world)=p.native_world.as_mut() {
-        if !world.tick(lv,p.ticks as u32,p.instance,&p.hero,p.anim.state,p.camera.pos) {return;}
-        if let (Some(o),Some(a))=(occl.as_mut(),anim.as_mut()) {world.drive(o,a);}
-    }
     if p.trace {
         let h = &p.hero;
         let a = [h.pos[0], h.pos[1], h.pos[2] + if h.group == 2 { 2.9 } else { 2.2 }];
@@ -158,6 +155,10 @@ fn tick(
             h.cap_hit, h.contact_point[0], h.contact_point[1], h.contact_point[2], h.contact_normal[0], h.contact_normal[1], h.contact_normal[2], h.cap_bottom, h.cap_top, h.cap_radius,
             p.camera.pos[0], p.camera.pos[1], p.camera.pos[2], p.camera.yaw(), p.camera.pitch()
         );
+    }
+    if let Some(world)=p.native_world.as_mut() {
+        if !world.tick(lv,p.ticks as u32,p.instance,&p.hero,p.anim.state,p.camera.pos) {return;}
+        if let (Some(o),Some(a))=(occl.as_mut(),anim.as_mut()) {world.drive(o,a);}
     }
     if let Some(o) = occl.as_mut() {
         o.drive(p.instance, p.hero.pos, p.hero.rows, p.scale, None, false);

@@ -30,20 +30,36 @@ pub struct PlacementCollision {
     pub unsupported: usize,
 }
 
+/// Collision resources over the ACTUAL native GC world. Rigid triangles use
+/// its owned transforms/grid, including spawn filtering, movement and deletion.
+/// Posed primitives stay excluded until their original class initialization is
+/// ported; rendering triangles are never substituted as collision geometry.
+pub struct LiveRigidCollision {classes:HashMap<i16,MobyCollision>,cache:Mutex<PoseCache>}
+
+impl LiveRigidCollision {
+    pub fn load(core:&LevelCore,data:&[u8])->Result<Self> {
+        let (_,classes)=rigid_classes(core,data)?;
+        Ok(Self {classes,cache:Mutex::new(PoseCache::default())})
+    }
+    pub fn scene<'a>(&'a self,world:&'a crate::world::World)->MobyScene<'a> {
+        MobyScene {mobys:world,grid:&world.grid,classes:&self.classes,cache:&self.cache}
+    }
+}
+
+fn rigid_classes(core:&LevelCore,data:&[u8])->Result<(HashMap<i32,MobyClassHeader>,HashMap<i16,MobyCollision>)> {
+    if core.game!=rc_formats::Game::Rac2 {return invalid("GC rigid collision requires an explicitly tagged GC core");}
+    let mut classes=HashMap::new();let mut headers=HashMap::new();
+    for (id,blob) in moby_collision::parse_level(core,data)? {
+        if blob.faces.is_empty() || !blob.prims.is_empty() || blob.joint_counts!=[0,0] {continue;}
+        let raw=core.block(data,&format!("moby_class/{id:04}")).expect("parsed class block");
+        headers.insert(id,Buf(raw).pod(0,"GC collision class header")?);classes.insert(id as i16,blob);
+    }
+    Ok((headers,classes))
+}
+
 impl PlacementCollision {
     pub fn load(core: &LevelCore, data: &[u8], instances: &[MobyInstance]) -> Result<Self> {
-        if core.game != rc_formats::Game::Rac2 { return invalid("GC placement collision requires an explicitly tagged GC core"); }
-        let mut classes = HashMap::new();
-        let mut headers = HashMap::new();
-        for (id, blob) in moby_collision::parse_level(core, data)? {
-            // Joint poses and primitive initialization must come from native GC
-            // class behavior, never zeros or RAC1 class handlers.
-            if blob.faces.is_empty() || !blob.prims.is_empty() || blob.joint_counts != [0, 0] { continue; }
-            let raw = core.block(data, &format!("moby_class/{id:04}")).expect("parsed class block");
-            let header: MobyClassHeader = Buf(raw).pod(0, "GC collision class header")?;
-            headers.insert(id, header);
-            classes.insert(id as i16, blob);
-        }
+        let (headers,classes)=rigid_classes(core,data)?;
         Ok(Self::build(instances, headers, classes))
     }
 

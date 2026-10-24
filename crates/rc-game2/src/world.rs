@@ -40,6 +40,15 @@ pub enum TickError {NotInitialized,Missing(MissingUpdate),InvalidClass(i16),Effe
 #[derive(Debug,PartialEq,Eq)]
 pub struct Active {pub updates:Vec<MobyId>,pub targets:Vec<MobyId>}
 
+impl rc_game::collision_query::MobySource for World {
+    fn moby(&self,id:usize)->Option<rc_game::collision_query::CollMoby> {
+        self.objects.get(id).map(rc_game::collision_query::CollMoby::of)
+    }
+    fn joints(&self,_id:usize,count:usize)->Vec<[u32;4]> {
+        assert_eq!(count,0,"GC live rigid scene must not request invented joint poses");Vec::new()
+    }
+}
+
 impl World {
     /// Static owner portion of the original loader. Non-moby owners must be
     /// supplied in original service/camera order; ambiguous aliases fail closed

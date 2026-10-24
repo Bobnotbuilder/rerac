@@ -169,6 +169,24 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     assert!(world.native_update(receiver,0x383ce0,1));
     assert_eq!(world.objects.get(receiver).unwrap().state,2);assert_eq!(world.objects.get(receiver).unwrap().hit_slot,255);
     assert!(!world.native_update(receiver,0x383ce0,2),"original impact/audio/debris may not be omitted");
+    let rigid=rc_game2::collision::LiveRigidCollision::load(&core,&data).unwrap();
+    let floor=world.instance_to_moby[164].unwrap();
+    use rc_game::collision_query::{coll_line_m,QueryFlags};
+    let (a,b)=([247.,198.,55.],[247.,198.,45.]);
+    let raised=coll_line_m(&coll,Some(&rigid.scene(&world)),a,b,QueryFlags(2),Some(0)).unwrap();
+    assert_eq!(raised.moby,Some(floor));assert!((raised.point[2]-50.33382).abs()<0.002);
+    // Structural live-transform/grid checks, not a claim that the original
+    // platform's gameplay callback moves it by this diagnostic displacement.
+    let m=world.objects.get_mut(floor).unwrap();m.position[2]+=1.;
+    let animation=&animations[classes.iter().position(|c|c.o_class==0xac1).unwrap()];
+    rc_game::moby_update::scheduler::rebuild_matrix(m,Some(animation));world.grid.register(m);
+    let moved=coll_line_m(&coll,Some(&rigid.scene(&world)),a,b,QueryFlags(2),Some(0)).unwrap();
+    assert_eq!(moved.moby,Some(floor));assert!((moved.point[2]-raised.point[2]-1.).abs()<0.002);
+    let grid=&mut world.grid;world.objects.delete(floor,2,|m|grid.remove(m)).unwrap();
+    assert!(world.grid.cells_of(floor as u16).is_empty());
+    let removed=coll_line_m(&coll,Some(&rigid.scene(&world)),a,b,QueryFlags(2),Some(0)).unwrap();
+    assert_eq!(removed.moby,None);assert_eq!(removed.point[2],49.734375);
+    println!("ORIGINAL_GC_LIVE_RIGID_CHAIN_PASS placement164_runtime={floor} floor={} moved={} removed_to_world={}; TEST_DISPLACEMENT_ONLY_NOT_ORIGINAL_MOVING_PLATFORM_BEHAVIOUR",raised.point[2],moved.point[2],removed.point[2]);
     println!("ORIGINAL_GC_LIVE_RECEIVER_CHAIN_PASS owner={receiver} sprite={sprite} type=89 explicit_hit_to_state2=true next_init={next_missing:?}; WRENCH_SPATIAL_HIT_AND_DESTRUCTION_UNIMPLEMENTED");
     println!("ORIGINAL_GC_NATIVE_WORLD_BOUNDARY spawned={count} rejected={} preceding_owners={} first_native_callback={missing:?}; EXPLICIT_SAVE_FIXTURE_NOT_NEW_GAME_CAPTURE LIVE_CLASS_GAMEPLAY_BLOCKED GPU_NOT_TESTED",placements.len()-count,world.preceding_owners.len());
 }
