@@ -6,7 +6,7 @@
     {
       "system": "native_ARM64_Bevy_Metal_backend",
       "status": "REUSED_UNCHANGED",
-      "evidence_and_limits": "Existing backend and iOS policies retained; Build8 physical preview is USER_REPORTED; current integrated ARM64 build pending."
+      "evidence_and_limits": "Existing backend/iOS policies retained; final native ARM64/Intel and synthetic simulator/Metal checks PASS. Build8 physical preview USER_REPORTED; current original scene and physical gameplay not tested."
     },
     {
       "system": "resource_loading",
@@ -112,12 +112,36 @@
       "system": "full_Aranos_iPhone_playthrough",
       "status": "NOT_YET_TESTED",
       "evidence_and_limits": "No current physical device access; no complete-level acceptance or compatibility percentage."
+    },
+    {
+      "system": "frontend_movie_PCM_transport",
+      "status": "REUSED_WITH_ADAPTER",
+      "evidence_and_limits": "Existing native Ring/MixerStream output reused for original decoded PCM; three engine transport tests and nine video units PASS; all samples of ten original frontend entries covered locally. Speaker output and GC gain/options/A-V latency untested; no menu SFX/music or level audio."
     }
   ],
   "classification_note": "RC2_SPECIFIC_IMPLEMENTATION_REQUIRED describes RAC1 compatibility requirements. For hero and camera, that implementation is already supplied by adopted upstream rc-game2; it is not an instruction to recreate it.",
   "original_data_tests": "crates/rc-game2/tests/original_aranos.rs; crates/rc-video/tests/rac2_original_frontend.rs",
   "RAC1_regressions": "formats175/data16/game715;2968 class outputs identical across19 available levels; iOS59; upstream game2 9",
-  "new_GPU_execution": false,
+  "new_GPU_execution": "SYNTHETIC_ONLY_NO_ORIGINAL_SCENE",
   "new_iPhone_execution": false,
-  "shared_core_promoted": false
+  "shared_core_promoted": false,
+  "runtime_source": "13ba7879b59985de9cd19850352627eae08d97de",
+  "workflow_run": 40042654037,
+  "native_Intel": "PASS",
+  "native_ARM64": "PASS",
+  "headless": "PASS",
+  "iOS_simulator": "PASS_NO_ORIGINAL_DATA",
+  "synthetic_Metal": "PASS_NOT_ORIGINAL_SCENE",
+  "movie_pcm_followup": {
+    "runtime_source": "13ba7879b59985de9cd19850352627eae08d97de",
+    "workflow_run": 40042654037,
+    "compile_status": "PASS_NATIVE_ARM64_AND_INTEL",
+    "transport": "REUSED_WITH_ADAPTER",
+    "original_PCM_tick_integrity": "PASS_ALL_SAMPLES_TEN_FRONTEND_ENTRIES",
+    "speaker_device_output": "NOT_TESTED",
+    "GC_mixer_gain_and_AV_latency": "NOT_VERIFIED_UNITY_GAIN_EXPERIMENTAL",
+    "new_movie_state_and_transport_tests": "PASS_3_NEW_TESTS_ENGINE_83_PASS_1_IGNORED",
+    "menu_SFX_music_and_level_audio": "NOT_IMPLEMENTED",
+    "iOS_simulator": "PASS_NO_ORIGINAL_DATA"
+  }
 }

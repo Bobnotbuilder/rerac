@@ -39,4 +39,12 @@ The original upstream extractor compiled unchanged and copied 96 Tier 0 files (3
 
 First fatal runtime blocker: none in CPU testing; native GPU startup not yet executed. First development dependency: hosted native engine compilation and original-data GPU validation. No physical iPhone is visible to this managed session; xctrace lists only the Mac and local CoreSimulator services reject connections. No frame time/memory/energy claim or full-level completion claim is made.
 
-[Per-system machine-readable compatibility matrix](rc2-upstream-integration.json) separates already-adopted GC-specific player/camera implementations from missing GC combat/progression. The existing native video decoder also passed an original-data CPU test decoding the first three 512×416 frames of each logo/title movie (0xb2–0xbb), including PCM decoding; frontend audio output remains unwired.
+[Per-system machine-readable compatibility matrix](rc2-upstream-integration.json) separates already-adopted GC-specific player/camera implementations from missing GC combat/progression. The existing native video decoder also passed an original-data CPU test decoding the first three 512×416 frames of each logo/title movie (0xb2–0xbb), including PCM decoding; frontend audio output was unwired at that checkpoint; the latest candidate adds the experimental transport below.
+
+## Previous validated runtime
+
+Runtime85104ee8b6782cf001647a635aebf59d250706b6 passed all hosted native compilation, packaging/symbol, headless, synthetic Metal and iOS simulator checks. These checks contain no original game data; original Ratchet/Aranos GPU and physical iPhone testing remain blocked/unperformed. [Final session report, IPA, checksum and exact boundaries](rc2-build9-upstream-report.md). Earlier pending-check statements describe their checkpoint time.
+
+## Movie PCM continuation
+
+Public13ba7879b59985de9cd19850352627eae08d97de adapts the RC2 frontend to existing Ring/MixerStream native PCM output. Original PCM is passed unchanged; original GC gain/options and audiovisual latency are unverified, so this is experimental. Movie skip/change/NewGame clears queued audio. Video units9pass; all samples in ten original frontend entries pass CPU tick coverage; iOS contracts59pass. Engine/native validation PASS in run40042654037, including83 engine unit passes/1ignored and all3new movie transport tests; no speaker output, original GPU or phone claim. No in-level audio or progression added.
