@@ -158,3 +158,22 @@ fn original_aranos_raised_placement_floor_and_jump() {
     assert!(max_jump>raised.point[2]+0.5);
     println!("ORIGINAL_RC2_RAISED_COLLISION_CPU_PASS placement={id} class=0xac1 registered={} old_ground={} corrected_ground={} jump_apex={max_jump}; EXACT_DEVICE_SPOT_AND_PS2_ORACLE_NOT_VERIFIED DEVICE_RETEST_REQUIRED",placements.registered,before.pos[2],after.pos[2]);
 }
+
+#[test]
+fn original_frontend_navigation_sound_renders_through_shared_native_mixer() {
+    let Some(path)=std::env::var_os("RC2_ORIGINAL_ISO") else {eprintln!("NOT_TESTED: private original ISO unavailable");return;};
+    let iso=IsoImage::open(path).unwrap();let read=|p:&str|iso.read_file(iso.find(p).unwrap()).unwrap();
+    let hdr=read("/RC2.HDR");let toc=rac2::toc::Toc::parse(&hdr).unwrap();let misc=read("/G/MISC.WAD");
+    let blob=rac2::front_end::FrontEnd::parse(wad::decompress(&misc[toc.misc_part(rac2::toc::MISC_FRONT_END).unwrap().bytes()]).unwrap()).unwrap();
+    let elf=read("/SCUS_972.68");let boot=rac2::boot::BootElf::parse(&elf).unwrap();
+    let defs=boot.frontend_sound_defs().unwrap();assert_eq!(defs.len(),20);assert_eq!(defs[3].index,2);
+    let mut audio=rc_game2::front_audio::FrontAudio::load(&blob,&boot).unwrap();
+    assert_eq!(audio.bank_sound_count(),135);
+    assert!(audio.play(u32::MAX).is_err());
+    let mut frame=Vec::new();let mut nonzero=0usize;
+    audio.render(&mut frame);assert!(frame.iter().all(|s|*s==[0,0]));
+    assert!(audio.play(3).unwrap()>0);
+    for _ in 0..60 {audio.render(&mut frame);assert_eq!(frame.len(),800);nonzero+=frame.iter().filter(|s|**s!=[0,0]).count();}
+    assert!(nonzero>100);assert_eq!(audio.unsupported_grains(),0);
+    println!("ORIGINAL_RC2_MENU_SOUND_CPU_PASS request=3 bank_sound=2 bank_sounds=135 samples=48000 nonzero={nonzero} unsupported_grains=0; DEVICE_OUTPUT_GAIN_AND_ORIGINAL_ORACLE_NOT_TESTED");
+}

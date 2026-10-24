@@ -10,6 +10,9 @@ pub const GLYPHS: u32 = 0x263b10;
 pub const GLYPHS_2: u32 = 0x263eb0;
 /// The main menu's definition (`FUN_002d63b0` → `FUN_00342dc0(gui, 0x261520)`).
 pub const MAIN_MENU: u32 = 0x261520;
+/// Bound by boot0x26f240..0x26f27c, consumed by0x2e6c90.
+pub const FRONTEND_SOUND_DEFS: u32 = 0x238c00;
+pub const FRONTEND_SOUND_COUNT: usize = 20;
 
 pub struct BootElf<'a> {
     elf: &'a [u8],
@@ -39,6 +42,12 @@ impl<'a> BootElf<'a> {
             }
         }
         invalid(format!("boot ELF: {vaddr:#x}+{n:#x} is not in a loaded segment"))
+    }
+
+    /// Original already-indexed frontend SoundDefs, without a RAC1 remap.
+    pub fn frontend_sound_defs(&self) -> Result<Vec<crate::sound_bank::SoundDef>> {
+        Buf(self.read(FRONTEND_SOUND_DEFS, FRONTEND_SOUND_COUNT * 0x20)?)
+            .pod_slice(0, FRONTEND_SOUND_COUNT, "GC frontend sound definitions")
     }
 
     /// A glyph table (`GLYPHS`, `GLYPHS_2`): 256 × `{u, v, y offset (signed), advance}` (`FUN_0027fcb0`). The tables

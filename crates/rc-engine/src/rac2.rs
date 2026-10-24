@@ -19,7 +19,8 @@
 //!   `⌊k·fps/60⌋` at frame k). Original decoded movie PCM uses the existing native audio
 //!   transport at 48 kHz stereo (800 samples per tick); RC_AUDIO=0 disables it.
 //!   Experimental unity gain: original GC mixer gain/options and audiovisual
-//!   latency parity are not verified. Menu sounds and music remain unimplemented.
+//!   latency parity are not verified. Navigation SFX use the original bank and native mixer; GC master-volume parity
+//!   and speaker output require testing. Menu music and missing page actions remain unimplemented.
 //!
 //! Environment: `RC_PLAY_SCRIPT` (crate::input_map::Script) drives the pad by frame, `RC_SCREENSHOT` +
 //! `RC_SCREENSHOT_FRAME` capture a frame (crate::determinism), `RC_RAC2_TRACE=1` logs the front end's movies and rows.
@@ -49,6 +50,7 @@ pub struct Data {
     root: PathBuf,
     assets: FrontAssets,
     textures: Vec<Texture>,
+    audio: Option<rc_game2::front_audio::FrontAudio>,
     /// Per movie row: its bytes' range across [`MOVIE_FILES`], and the files' sizes.
     movies: Vec<Option<toc::Movie>>,
     movie_files: Vec<u64>,
@@ -68,6 +70,7 @@ impl Data {
         let sprites = gui_sprite::parse(hud.get(block.bytes()).context("HUD.WAD: the GUI block is past the file")?)?;
         let elf = read("SCUS_972.68")?;
         let boot = BootElf::parse(&elf)?;
+        let audio = if crate::audio_out::enabled() { Some(rc_game2::front_audio::FrontAudio::load(&blob, &boot).context("RC2 original frontend audio")?) } else { None };
         let assets = FrontAssets { glyphs: boot.glyphs(GLYPHS)?, glyphs_2: boot.glyphs(GLYPHS_2)?, strings: blob.strings(0)?, main_menu: boot.menu(MAIN_MENU)?, sprites };
         // The frame buffer's pictures are opaque; the texture set keeps its own alpha.
         let opaque = |p: Picture| { let mut rgba = p.rgba; rgba.chunks_mut(4).for_each(|c| c[3] = 0x80); Texture { width: p.width, height: p.height, rgba } };
@@ -86,7 +89,7 @@ impl Data {
         #[cfg(target_os = "ios")]
         crate::ios::diagnostic("RC2_NATIVE_FRONTEND_DATA_READY", &format!("menu_rows={} sprites={} movies={} graphics_unverified",
             assets.main_menu.len(), assets.sprites.len(), movies.iter().flatten().count()));
-        Ok(Data { root: root.to_path_buf(), assets, textures, movies, movie_files })
+        Ok(Data { root: root.to_path_buf(), assets, textures, audio, movies, movie_files })
     }
 }
 
@@ -187,6 +190,7 @@ pub(crate) struct Rac2 {
     movie: Option<Playing>,
     /// The movie's picture for the next draw.
     picture: Option<Vec<u8>>,
+    sound: Vec<[i16; 2]>,
     movie_ended: bool,
     script: Option<crate::input_map::Script>,
     ticks: u64,
@@ -233,6 +237,7 @@ impl Plugin for FrontEndPlugin {
             front: FrontEnd::new(seed),
             movie: None,
             picture: None,
+            sound: Vec::with_capacity(800),
             movie_ended: false,
             script: self.script.clone(),
             ticks: 0,
@@ -279,7 +284,18 @@ fn tick(
     let ended = std::mem::take(&mut r.movie_ended);
     for req in r.front.tick(held, ended, &r.data.assets) {
         match req {
-            Request::Sound(n) => if r.trace { println!("rac2: frame {}: sound {n} (not played)", r.ticks) },
+            Request::Sound(n) => {
+                if let Some(audio) = &mut r.data.audio {
+                    match audio.play(n) {
+                        Ok(handle) => {
+                            println!("rac2: menu sound request={n} native_handle={handle}");
+                            #[cfg(target_os = "ios")]
+                            crate::ios::diagnostic("RC2_NATIVE_MENU_SOUND", &format!("request={n} native_handle={handle} speaker_and_gain_retest_required"));
+                        }
+                        Err(e) => eprintln!("rac2: original menu sound {n} failed: {e}"),
+                    }
+                }
+            },
             // New Game (kind 4): the level. The save-slot page in between is not ported (module docs).
             Request::Row { kind: 4, .. } => {
                 println!("rac2: New Game: level {:02}", crate::level_load::level_index());
@@ -302,17 +318,27 @@ fn tick(
             Playing::start(&r.data, id)
         });
     }
+    let mut pcm = [[0i16; 2]; 800];
     if let Some(m) = r.movie.as_mut() {
         if let Some(p) = m.advance() { r.picture = Some(p); }
-        if let Some(out) = &audio {
+        if audio.is_some() {
             // advance() has received the decoded PCM before the first picture.
             // Its frame counter now points to the next 60 Hz playback tick.
-            out.push(&rc_video::movie::pcm_for_tick(m.audio.as_deref().unwrap_or(&[]), m.frame - 1));
+            pcm = rc_video::movie::pcm_for_tick(m.audio.as_deref().unwrap_or(&[]), m.frame - 1);
         }
         if m.ended {
             r.movie_ended = true;
             r.movie = None;
         }
+    }
+    if let Some(out) = &audio {
+        if let Some(menu) = &mut r.data.audio {
+            menu.render(&mut r.sound);
+            for (p, s) in pcm.iter_mut().zip(&r.sound) {
+                for channel in 0..2 { p[channel] = (p[channel] as i32 + s[channel] as i32).clamp(i16::MIN as i32, i16::MAX as i32) as i16; }
+            }
+        }
+        out.push(&pcm);
     }
     r.ticks += 1;
 }

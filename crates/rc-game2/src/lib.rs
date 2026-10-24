@@ -7,5 +7,6 @@
 pub mod camera;
 pub mod collision;
 pub mod front_end;
+pub mod front_audio;
 pub mod gui;
 pub mod hero;

@@ -4,7 +4,7 @@
 //! | Part | Contents |
 //! | --- | --- |
 //! | 0 | the texture set (`FUN_00292650`): `{data offset, count, table offset, data base}`, rows `{palette, pixels, w, h}` |
-//! | 1 | GS data for `FUN_002b7700` (not read here) |
+//! | 1 | native sound bank loaded by `FUN_002b7700` (boot0x26f0ac) |
 //! | 2 | the menu backdrop: 16-byte header `{w, h}`, then w×h RGBA32 |
 //! | 3–8 | not read here |
 //! | 9 | the text: six language tables (`FUN_0026ede8`'s relocation loop) |
@@ -16,6 +16,8 @@ use std::collections::HashMap;
 
 /// Parts of the blob.
 pub const TEXTURES: usize = 0;
+/// The boot passes part1 to the native SBlk bank loader.
+pub const SOUND_BANK: usize = 1;
 pub const BACKDROP: usize = 2;
 pub const TEXT: usize = 9;
 /// "Sony Computer Entertainment America presents", "A game created and developed by", the copyright page.
