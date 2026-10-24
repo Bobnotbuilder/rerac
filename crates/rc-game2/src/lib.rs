@@ -13,3 +13,4 @@ pub mod hero;
 pub mod hits;
 pub mod items;
 pub mod melee;
+pub mod objects;

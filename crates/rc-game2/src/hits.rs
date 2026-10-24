@@ -41,6 +41,16 @@ impl HitLog {
         self.records.get(slot.0 as usize).filter(|r|r.target==Some(target))
     }
 
+    /// GC 0x31dce8: filter the target's current hit. A rejected mask clears
+    /// the target slot unless a2 requested retention; an absent/stale record
+    /// leaves it untouched. A match is not consumed by this lookup.
+    pub fn find(&self,target:MobyId,slot:&mut HitSlot,mask:u32,keep_rejected:bool)->Option<&HitRecord> {
+        let record=self.current(target,*slot)?;
+        if record.flags&mask!=0 {return Some(record);}
+        if !keep_rejected {*slot=HitSlot::default();}
+        None
+    }
+
     /// Weaker hits merge flags into the existing record without advancing the
     /// ring. Equal/stronger hits allocate and retain existing flags. Reset the
     /// target's HitSlot on its native lifetime initialization, as 0x311478 does.
@@ -84,5 +94,14 @@ mod tests {
         assert!(log.current(MobyId(0),first).is_none());
         log.deliver(MobyId(0),&mut first,Pf::ONE,None,0x10000,z,z);
         assert_eq!(log.current(MobyId(0),first).unwrap().flags,0x10000);
+    }
+    #[test]
+    fn receiver_mask_lookup_preserves_or_clears_only_the_rejected_record() {
+        let mut log=HitLog::default();let mut slot=HitSlot::default();let id=MobyId(2);let z=[Pf::ZERO;4];
+        log.deliver(id,&mut slot,Pf::ONE,None,0x10000,z,z);
+        assert!(log.find(id,&mut slot,0x20000,true).is_none());assert!(log.current(id,slot).is_some());
+        assert!(log.find(id,&mut slot,0x10000,false).is_some());assert!(log.current(id,slot).is_some());
+        let mut stale=slot;assert!(log.find(MobyId(3),&mut stale,0,false).is_none());assert_eq!(stale,slot);
+        assert!(log.find(id,&mut slot,0x20000,false).is_none());assert_eq!(slot,HitSlot::default());
     }
 }

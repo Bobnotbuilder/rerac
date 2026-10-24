@@ -201,6 +201,23 @@ fn original_aranos_ground_combo_timing_and_native_pose_playback() {
     let blob=core.block(&data,&format!("moby_class/{:04}",definition.class)).unwrap();
     let wrench=moby::parse_moby_class_for(Game::Rac2,blob).unwrap();
     let wrench_class=ma::MobyAnimClass::new(&wrench,ma::parse_sequences(blob,&wrench).unwrap());
+    let updates=rac2::classes::AranosClassUpdates::parse(0,overlay).unwrap();
+    let slot=core.moby_classes.iter().position(|c|c.o_class==0x47).unwrap();
+    let loaded=rc_game2::objects::LoadedClass::from_core(0,&core,slot,&wrench,&wrench_class,&updates).unwrap();
+    assert!(rc_game2::objects::LoadedClass::from_core(1,&core,slot,&wrench,&wrench_class,&updates).is_err());
+    assert_eq!(loaded.class(),0x47);assert_eq!(loaded.source_update(),Some(0x38d318));
+    let mut objects=rc_game2::objects::Objects::new(Vec::new(),2);
+    objects.free_slot_pass(0);assert_eq!(objects.free_slots(),2);
+    let first=objects.create(&loaded,0).unwrap();
+    let m=objects.get(first).unwrap();assert_eq!((m.o_class,m.hit_slot,m.alpha,m.group),(0x47,255,128,-1));
+    assert_eq!(m.pvars,vec![0;128]);assert_eq!(m.scale,wrench.header.scale);
+    assert_eq!(m.update_fn,Some(0x38d318));assert!(m.has_class);
+    objects.get_mut(first).unwrap().pvars[0]=93;
+    let mut removed=false;
+    objects.delete(first,10,|m|{assert_eq!((m.state,m.delete_tick),(254,12));removed=true;}).unwrap();assert!(removed);
+    assert_eq!(objects.create(&loaded,11),Some(1));
+    let reused=objects.create(&loaded,12).unwrap();assert_eq!(reused,first);
+    assert_eq!(objects.get(reused).unwrap().pvars,vec![0;128]);
     let mut hand=rc_game2::items::WrenchAnimation::initial_animation(&wrench_class).unwrap();
     assert_eq!(hand.state.seq_b,1);
     let mut combo=GroundCombo::new(&table);let mut pose_count=0;
@@ -247,7 +264,7 @@ fn original_aranos_ground_combo_timing_and_native_pose_playback() {
     assert_eq!(combo.enter(recent,100.).step,0,"recent third swing wraps");
     assert_eq!(combo.enter(recent,100.).step,1,"GC short return can chain through a different state");
     assert_eq!(combo.enter(EntryHistory{saved_timer:22,..recent},100.).step,0,"27 ticks closes short return");
-    println!("ORIGINAL_RC2_GROUND_COMBO_TIMING_CPU_PASS original_table=0x25d910 sequences=0x17..0x19 poses={pose_count} original_hand_attachment_matrices={pose_count}; ITEM_OWNERSHIP_RECEIVER_DAMAGE_PHYSICS_GPU_NOT_IMPLEMENTED_OR_TESTED");
+    println!("ORIGINAL_RC2_GROUND_COMBO_TIMING_CPU_PASS original_table=0x25d910 sequences=0x17..0x19 poses={pose_count} original_hand_attachment_matrices={pose_count} native_gc_dynamic_creation_and_reuse=true; ITEM_OWNERSHIP_RECEIVER_DAMAGE_PHYSICS_GPU_NOT_IMPLEMENTED_OR_TESTED");
 }
 
 #[test]
