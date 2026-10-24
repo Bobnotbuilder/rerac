@@ -218,6 +218,18 @@ fn original_aranos_ground_combo_timing_and_native_pose_playback() {
     assert_eq!(objects.create(&loaded,11),Some(1));
     let reused=objects.create(&loaded,12).unwrap();assert_eq!(reused,first);
     assert_eq!(objects.get(reused).unwrap().pvars,vec![0;128]);
+    use rc_game2::items::{HandSlot,CreateContext,CreateResult};
+    let mut slot=HandSlot::default();let mut hand_objects=rc_game2::objects::Objects::new(Vec::new(),1);
+    let c=CreateContext {frame:1,counter:80,request:0,target:0,wrench_flag:0,saved_item:0,ammo:0,hero_light:0x1234,hero_ambient:[40,50,60,0]};
+    assert_eq!(slot.create_wrench(CreateContext{frame:0,..c},&definition,&loaded,&wrench_class,&mut hand_objects).unwrap(),CreateResult::Wait);
+    assert_eq!(slot.create_wrench(CreateContext{saved_item:12,..c},&definition,&loaded,&wrench_class,&mut hand_objects).unwrap(),CreateResult::OtherItemRequired(12));
+    assert_eq!(slot.create_wrench(CreateContext{request:12,..c},&definition,&loaded,&wrench_class,&mut hand_objects).unwrap(),CreateResult::Wait);
+    assert_eq!(slot.create_wrench(c,&definition,&loaded,&wrench_class,&mut hand_objects).unwrap(),CreateResult::Created(0));
+    assert_eq!((slot.item,slot.item_id,slot.ownership,slot.fire_mask),(Some(0),10,2,button::SQUARE));
+    assert_eq!((slot.disabled,slot.modifier_joints),(0,[-1;3]));
+    let m=hand_objects.get(0).unwrap();assert_eq!((m.draw_dist,m.visible,m.light,m.ambient),(32,1,0x1234,[40,50,60,0]));
+    assert_eq!(m.anim.seq_b,1);assert_eq!(m.pvars,vec![0;128]);
+    assert_eq!(slot.create_wrench(c,&definition,&loaded,&wrench_class,&mut hand_objects).unwrap(),CreateResult::Wait);
     let mut hand=rc_game2::items::WrenchAnimation::initial_animation(&wrench_class).unwrap();
     assert_eq!(hand.state.seq_b,1);
     let mut combo=GroundCombo::new(&table);let mut pose_count=0;

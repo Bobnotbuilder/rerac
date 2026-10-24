@@ -5,6 +5,75 @@ use rc_formats::{buf::{invalid,Result},moby_anim::{self,AnimState,MobyAnimClass,
 use crate::melee::ComboEntry;
 use rc_formats::rac2::melee::MeleeTiming;
 use rc_game::{hero::physics::{V4,vadd,vsub,vscale},ps2v::Pf};
+use rc_formats::rac2::items::AranosWrenchDefinition;
+use crate::objects::{LoadedClass,Objects};
+
+#[derive(Clone,Copy,Debug)]
+pub struct CreateContext {
+    /// GC 0x1b1858, compared as signed by the create-after gate.
+    pub frame:i32,
+    /// Independent allocation/deletion counter at 0x1b1948.
+    pub counter:u32,
+    /// Hero +0x22c8 and +0x22e4, not RAC1's request enum.
+    pub request:i32,
+    pub target:i32,
+    /// 0x1a7a10 and 0x1a7398.
+    pub wrench_flag:u8,
+    pub saved_item:i32,
+    pub ammo:i32,
+    pub hero_light:u32,
+    pub hero_ambient:[u8;4],
+}
+
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub enum CreateResult {Wait,OtherItemRequired(i32),PoolFull,Created(usize)}
+
+/// Hand slot of 0x2afc68. Other item creation/switching and all seven slots'
+/// update loop remain separate ports. This does not enable a gameplay state.
+pub struct HandSlot {
+    pub item:Option<usize>,
+    pub item_id:i32,
+    pub ownership:i32,
+    pub create_after:i32,
+    pub fire_mask:u32,
+    pub disabled:u8,
+    pub byte_22bb:u8,
+    pub modifier_joints:[i16;3],
+    pub animation:Option<WrenchAnimation>,
+}
+
+impl Default for HandSlot {
+    fn default()->Self {Self {item:None,item_id:0,ownership:0,create_after:0,fire_mask:0,disabled:0,
+        byte_22bb:0,modifier_joints:[-1;3],animation:None}}
+}
+
+impl HandSlot {
+    /// Exact normal wrench creation branch 0x2afc98..0x2afe8c, after the
+    /// original class resource is available. The class-bank decompression is
+    /// replaced by the verified native loaded-class resource, not by a VM.
+    pub fn create_wrench(&mut self,c:CreateContext,definition:&AranosWrenchDefinition,
+        loaded:&LoadedClass,class:&MobyAnimClass,objects:&mut Objects)->Result<CreateResult> {
+        if self.item.is_some() || self.create_after>=c.frame || c.request!=0 && c.request!=c.target {
+            return Ok(CreateResult::Wait);
+        }
+        let id=if c.target!=0 {c.target}else if c.wrench_flag!=0 || c.saved_item==0 {10}else{c.saved_item};
+        if id!=10 {return Ok(CreateResult::OtherItemRequired(id));}
+        if loaded.class()!=0x47 || definition.class!=0x47 {return invalid("GC hand wrench resource class mismatch");}
+        let animation=WrenchAnimation::initial_animation(class)?;
+        self.modifier_joints=[-1;3];self.item_id=id;
+        let Some(item)=objects.create(loaded,c.counter) else {return Ok(CreateResult::PoolFull);};
+        let m=objects.get_mut(item).expect("created native GC slot");
+        m.draw_dist=0x20;m.visible=1;m.light=c.hero_light;m.ambient=c.hero_ambient;
+        // GC +0x63, the same native metal packet register field as RAC1.
+        if m.b73!=0 {m.b73=0x10;}
+        m.anim=animation.state;
+        m.b7c=moby_anim::loop_sound_of(class,m.anim.seq_b);
+        self.item=Some(item);self.ownership=2;self.fire_mask=0x80;
+        self.disabled=if definition.ammo_flag!=0 && c.ammo==0 {255}else{0};
+        self.byte_22bb=definition.byte_1c;self.animation=Some(animation);
+        Ok(CreateResult::Created(item))
+    }
+}
 
 /// 0x38d638..0x38d698 in the original class-0x47 update. This gates
 /// collision work, not a hit or damage result. The full callback must also
