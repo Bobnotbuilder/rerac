@@ -1,3 +1,7 @@
+## Latest full-game source checkpoint — release withheld
+
+Local code `928f0ed94232c4a4658306845b9f987a513c329a` / public `c8c578520025c21c4495543a0913b2f009992e3e`. Local tests: formats179pass/1ignored, GCunits18pass, originalRC2 fixtures8pass. RAC1 original ISO regressions:19levels/2968 identical classes and29784 identical pvar-block comparisons. Native GC pvar link/shared plans are implemented; actual spawn/class/tick execution and full Aranos remain INCOMPLETE. Current internal CI40092030462 pending; last all-jobs-pass source95bf206/run40089826366. No new original-data GPU/physical-iPhone/full-level/performance validation; no user-facing IPA. Next: original GC static spawn/class initialization and genuine target list, then full melee physics and receiver callbacks. No Shared Core adoption or save/app identity change.
+
 ## Current release policy — complete Aranos required
 
 The 24 October full-game directive supersedes earlier offers of feature-test IPAs below. Do not present another user-facing IPA until **all non-hardware complete-Aranos acceptance gates pass**. CI packages are INTERNAL_EXPERIMENTAL only. Physical complete-level acceptance remains NOT_TESTED unless actually executed. Aranos and the campaign remain INCOMPLETE; keep developing through the missing original gameplay systems. Retain the prior source/assets/saves and rollback points.
