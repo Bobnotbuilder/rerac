@@ -5,12 +5,12 @@ use rc_formats::{buf::{invalid,Result},level::LevelCore,moby::MobyClass,moby_ani
     rac2::classes::AranosClassUpdates,Game};
 use rc_game::{moby_runtime::{ClassInfo,Moby,MobyId,MobyTable,Seq0Info},moby_update::scheduler};
 
-pub struct LoadedClass {class:i16,info:ClassInfo}
+pub struct LoadedClass<'a> {class:i16,info:ClassInfo,animation:&'a MobyAnimClass}
 
-impl LoadedClass {
+impl<'a> LoadedClass<'a> {
     /// The core's loaded class order provides the native slot. The GC source
     /// callback identity comes only from its original registry, not RAC1's.
-    pub fn from_core(level:u32,core:&LevelCore,slot:usize,class:&MobyClass,anim:&MobyAnimClass,
+    pub fn from_core(level:u32,core:&LevelCore,slot:usize,class:&MobyClass,anim:&'a MobyAnimClass,
         updates:&AranosClassUpdates)->Result<Self> {
         if level!=0 {return invalid("GC source update binding is validated only for Aranos level 0");}
         if core.game!=Game::Rac2 {return invalid("GC class adapter requires explicitly tagged GC core");}
@@ -25,7 +25,7 @@ impl LoadedClass {
         let mut info=scheduler::class_info(class,slot as u8,(update!=0).then_some(update));
         info.seq0=anim.sequence(0).map(|q|Seq0Info {frame_count:q.header.frame_count,
             loop_sound_bit7:q.header.loop_sound&0x80!=0});
-        Ok(Self {class:entry.o_class as i16,info})
+        Ok(Self {class:entry.o_class as i16,info,animation:anim})
     }
 
     pub fn class(&self)->i16 {self.class}
@@ -46,8 +46,12 @@ impl Objects {
     /// GC 0x311320: same first-reusable-slot allocation and zeroed 0x80-byte
     /// pvar block. Reuse the existing native allocator and semantic initializer.
     /// A source_update identity does not grant a native class implementation.
-    pub fn create(&mut self,class:&LoadedClass,counter:u32)->Option<MobyId> {
-        self.table.create(class.class,Some(&class.info),counter as u64)
+    pub fn create(&mut self,class:&LoadedClass<'_>,counter:u32)->Option<MobyId> {
+        let id=self.table.create(class.class,Some(&class.info),counter as u64)?;
+        // GC 0x311600 -> 0x3116e0, shared sequence-header bookkeeping only.
+        // No RAC1 sound lookup or class update executes in this helper.
+        rc_game::moby_update::anim_sound::init(&mut self.table.mobys[id],Some(class.animation));
+        Some(id)
     }
 
     /// Slot bookkeeping of GC 0x311288; no class behavior executes here.

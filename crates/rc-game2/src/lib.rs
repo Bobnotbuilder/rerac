@@ -14,3 +14,4 @@ pub mod hits;
 pub mod items;
 pub mod melee;
 pub mod objects;
+pub mod targeting;

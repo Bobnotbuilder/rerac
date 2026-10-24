@@ -1,6 +1,6 @@
-//! GC wrench animation binding through existing native generic moby animation.
-//! This is the animation portion of the item contract, not a class initializer,
-//! dynamic allocator, ownership state, hand attachment or damage implementation.
+//! GC hand creation, attachment, animation and swept-query kernels, using the
+//! existing native object storage, math and animation. Full item switching,
+//! class updates, receiver damage and gameplay tick integration remain missing.
 use rc_formats::{buf::{invalid,Result},moby_anim::{self,AnimState,MobyAnimClass,MobyFrame,Rows}};
 use crate::melee::ComboEntry;
 use rc_formats::rac2::melee::MeleeTiming;
@@ -52,7 +52,7 @@ impl HandSlot {
     /// original class resource is available. The class-bank decompression is
     /// replaced by the verified native loaded-class resource, not by a VM.
     pub fn create_wrench(&mut self,c:CreateContext,definition:&AranosWrenchDefinition,
-        loaded:&LoadedClass,class:&MobyAnimClass,objects:&mut Objects)->Result<CreateResult> {
+        loaded:&LoadedClass<'_>,class:&MobyAnimClass,objects:&mut Objects)->Result<CreateResult> {
         if self.item.is_some() || self.create_after>=c.frame || c.request!=0 && c.request!=c.target {
             return Ok(CreateResult::Wait);
         }

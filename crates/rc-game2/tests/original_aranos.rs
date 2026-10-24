@@ -110,6 +110,20 @@ fn original_aranos_class_binding_and_wrench_sweep_windows() {
     let data=wad::decompress(w.lump(Lump::CoreData).unwrap().unwrap()).unwrap();
     let core=level::parse_level_core_for(Game::Rac2,w.lump(Lump::CoreIndex).unwrap().unwrap(),data.len()).unwrap();
     let world=rc_formats::collision::parse_collision(&core,&data).unwrap();
+    let gameplay=wad::decompress(w.part_bytes(Part::Gameplay).unwrap().unwrap()).unwrap();
+    let placed=rac2::gameplay::moby_instances(&gameplay).unwrap();
+    let hero=&placed.iter().find(|p|p.base.o_class==0).unwrap().base;
+    let crate_=&placed.iter().find(|p|p.base.o_class==0x1f4).unwrap().base;
+    assert_eq!(registry.source_update(0x1f4),0x39c870);
+    use rc_game2::targeting::{Query,Target};
+    let position=|p:[f32;3]|[Pf::f(p[0]),Pf::f(p[1]),Pf::f(p[2]),Pf::ONE];
+    let query=Query {hero_position:position(hero.position),hero_state:0,ground_z:Pf::f(hero.position[2]),
+        yaw:Pf::f(hero.rotation[2]),range:Pf::f(4096.),yaw_cone:Pf::f(-1.),pitch_cone:Pf::f(-1.),alternate_body:false};
+    // Scalar scoring over original placements only: this is not the original
+    // active-target list, spawn initialization, health or enemy AI execution.
+    let candidate=Target {id:0,class:0x1f4,class_type:0,mode:0,position:position(crate_.position),creature_health:None};
+    let score=rc_game2::targeting::score(&query,&candidate).unwrap().unwrap();assert!(score.to_f32().is_finite());
+    assert!(score>query.range*Pf::b(0x3f4ccccd));
     use rc_game::{collision_query::{coll_line,QueryFlags},ps2v::Pf};
     let v=|z|[Pf::f(247.),Pf::f(198.),Pf::f(z),Pf::ONE];
     let mut queries=0;
@@ -119,7 +133,7 @@ fn original_aranos_class_binding_and_wrench_sweep_windows() {
             [b[0].to_f32(),b[1].to_f32(),b[2].to_f32()],QueryFlags(2))
     }).expect("original world floor must be hit by the interpolated line");
     assert_eq!(queries,3);assert_eq!(hit.point[2],49.734375);
-    println!("ORIGINAL_GC_CLASS_BINDINGS_PASS entries=233 wrench_source=0x38d318 inclusive_sweep_ticks={active_ticks} native_sweep_world_queries={queries} floor_z={}; GC_MOBY_DAMAGE_AND_NATIVE_CLASS_LIFECYCLE_NOT_IMPLEMENTED",hit.point[2]);
+    println!("ORIGINAL_GC_CLASS_BINDINGS_PASS entries=233 wrench_source=0x38d318 inclusive_sweep_ticks={active_ticks} native_sweep_world_queries={queries} floor_z={}; GC_RECEIVER_DAMAGE_AND_CLASS_UPDATE_SCHEDULING_NOT_IMPLEMENTED",hit.point[2]);
 }
 
 #[test]
@@ -210,6 +224,7 @@ fn original_aranos_ground_combo_timing_and_native_pose_playback() {
     objects.free_slot_pass(0);assert_eq!(objects.free_slots(),2);
     let first=objects.create(&loaded,0).unwrap();
     let m=objects.get(first).unwrap();assert_eq!((m.o_class,m.hit_slot,m.alpha,m.group),(0x47,255,128,-1));
+    let seq0=wrench_class.sequence(0).unwrap();assert_eq!((m.b7c,m.anim.trigger_count),(seq0.header.loop_sound,seq0.header.trigger_count));
     assert_eq!(m.pvars,vec![0;128]);assert_eq!(m.scale,wrench.header.scale);
     assert_eq!(m.update_fn,Some(0x38d318));assert!(m.has_class);
     objects.get_mut(first).unwrap().pvars[0]=93;
@@ -276,7 +291,7 @@ fn original_aranos_ground_combo_timing_and_native_pose_playback() {
     assert_eq!(combo.enter(recent,100.).step,0,"recent third swing wraps");
     assert_eq!(combo.enter(recent,100.).step,1,"GC short return can chain through a different state");
     assert_eq!(combo.enter(EntryHistory{saved_timer:22,..recent},100.).step,0,"27 ticks closes short return");
-    println!("ORIGINAL_RC2_GROUND_COMBO_TIMING_CPU_PASS original_table=0x25d910 sequences=0x17..0x19 poses={pose_count} original_hand_attachment_matrices={pose_count} native_gc_dynamic_creation_and_reuse=true; ITEM_OWNERSHIP_RECEIVER_DAMAGE_PHYSICS_GPU_NOT_IMPLEMENTED_OR_TESTED");
+    println!("ORIGINAL_RC2_GROUND_COMBO_TIMING_CPU_PASS original_table=0x25d910 sequences=0x17..0x19 poses={pose_count} original_hand_attachment_matrices={pose_count} native_gc_dynamic_creation_and_reuse=true; FULL_ITEM_TICK_RECEIVER_DAMAGE_MELEE_PHYSICS_GPU_NOT_IMPLEMENTED_OR_TESTED");
 }
 
 #[test]
