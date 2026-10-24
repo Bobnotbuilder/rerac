@@ -1,3 +1,19 @@
+## Build 9 device-gap continuation — current, 24 October 2026
+
+**Build 9 remains INCOMPLETE.** Supplied iPhone evidence establishes user-reported Ratchet/Aranos rendering, walking and introductory audio on the prior experimental baseline. Exact baseline binary/source linkage is pending. It supersedes older statements below that original character/terrain had never rendered on a device.
+
+The current revision adds original rigid placement collision to shared hero/camera queries, source-linked input/collision diagnostics, and original frontend navigation sound through the existing native 989snd/SPU/PCM engine. Original-data CPU tests pass: raised placement floor/body/jump/follow-camera and navigation sound; 11 unit tests and 59 iOS contracts pass. All final hosted native/regression/synthetic Metal/iOS27 checks pass. The corrective candidate is NOT yet physical-device tested and is not a complete level. Primary classifications: GAME_SPECIFIC collision/audio adapters, SHARED_DIAGNOSTICS RC2 traces, SHARED_TESTING fixtures. No Shared Core component/version or other-engine adoption changed.
+
+[Experimental unsigned Build 9 IPA](https://github.com/Bobnotbuilder/rerac/actions/runs/40067825252/artifacts/12550182516) / [matching debugging symbols](https://github.com/Bobnotbuilder/rerac/actions/runs/40067825252/artifacts/12549843892).
+
+Inner IPA SHA256 `b14ba41f60c6cb8d983f1ccd512abfefd64abbe5d98bd8cd111cd43d16f37480`; ARM64 executable/dSYM UUID `09cce03d-595a-393f-93d5-d179d7a265e0`. Runtime source `79be9c3db6e5383b1efa3264c72fe067c96dff85`.
+
+RAC1, saves, effective identity, Build 8 and previous device-baseline rollback retained. Production RC2 Play stays disabled; no Shared Core promotion or installed-engine adoption. First remaining gameplay development blocker: original GC class/hero-item/damage and mission behavior is not ported. Posed/dynamic collision, required actions/combat/enemies/pickups, HUD/level audio/scripts/checkpoints/death/respawn and legitimate completion remain incomplete. Next: retest the raised location/jump/menu audio with source-linked device logs, and reconstruct the original GC initialization/weapon/damage dependencies before enabling class handlers. Full start-to-finish iPhone/Backbone acceptance is open.
+
+Full report: `docs/validation/rc2-build9-device-gaps.md`; structured receipt: `docs/validation/rc2-build9-device-gaps.json`. Older sections below are historical receipts, superseded only for the evidence and capabilities described here.
+
+---
+
 # Build 9 upstream integration (in progress)
 
 Classification: GAME_SPECIFIC, PLATFORM_SPECIFIC, SHARED_TESTING. No Shared Core promotion.

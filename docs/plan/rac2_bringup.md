@@ -68,13 +68,21 @@ end (0x26ede8); after each run `0x131cb8` copies the code overlay of what was lo
 | Pair | Offset | Size | Use |
 | --- | --- | --- | --- |
 | 0 | 0x80 | 0x11400 | texture set (`0x292650`): `{data offset, count, table offset, …}`, rows `{palette, pixels, w, h}` (16-byte units from the data, 8-bit, 256-colour CSM1 palettes); slot 1 is the 16×16-cell font |
-| 1 | 0x11480 | 0xe1088 | `0x2b7700` (textures) |
+| 1 | 0x11480 | 0xe1088 | native SBlk v1 sound bank, loaded through `0x2b7700` (135 sounds) |
 | 2 | 0xf2540 | 0xd0010 | the menu backdrop: 16-byte header `{512, 416}`, then 512×416 RGBA32 (the station interior) |
 | 3–8 | 0x1c2580.. | | not mapped yet |
 | 9 | 0x1f8980 | 0xd17b0 | text: six language tables (index 1 empty); each `{count, size}` then `count` rows `{string offset from the table, id, -1, 0}` |
 | 10 | 0x2ca140 | 0x4ab7 | splash "Sony Computer Entertainment America presents" (WAD: `{w, h}` 16-byte header, RGBA32) |
 | 11 | 0x2cec00 | 0x4533 | splash "A game created and developed by" |
 | 12 | 0x2d3140 | 0x5d38 | the copyright page (shown by game mode 1) |
+
+**Frontend sound follow-up (GameStudio Build 9).** Boot `0x26f0ac` loads part 1;
+`0x26f240/0x26f264` bind 20 sound definitions at `0x238c00`. Menu navigation
+`0x348d24` requests 3 through `0x2e6c90`; definition 3 selects bank sound 2.
+The native frontend now reuses the existing 989snd/SPU renderer for this request.
+Original-data CPU waveform testing passes; physical output and GC gain/options
+parity remain unverified. The earlier textures label for part 1 was incorrect.
+These addresses are in the boot ELF, not the level overlay at the same address.
 
 **Boot sequence** (0x26ede8): wait for the memory card and pad checks; unpack the blob; splash 10 fades in
 (`0x26ea00`: 0x80 → 0 in steps of 2), 45 frames; fade 30; splash 11; sound and text set up; then movie 0xb2 (the

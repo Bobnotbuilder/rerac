@@ -1,0 +1,286 @@
+{
+  "phase": "BUILD9_PHYSICAL_DEVICE_GAPS",
+  "status": "NATIVE_CPU_SYNTHETIC_PASS_DEVICE_CORRECTIONS_UNTESTED_COMPLETE_LEVEL_INCOMPLETE",
+  "starting_local_source": "2b440458b91479c915e0d9d29556c44f3ed9eb35",
+  "starting_public_source": "16b219566e221360341472ba1c275edb1d2c654a",
+  "previous_runtime": "13ba7879b59985de9cd19850352627eae08d97de",
+  "local_source": "6f460ee242b44f93227b2e8f43d7df2a7519b33e",
+  "updated_utc": "2026-10-24T06:12:56.543933+00:00",
+  "device_baseline": {
+    "evidence": "USER_REPORTED_AND_SCREENSHOT_SUPPORTED",
+    "exact_binary_provenance": "NOT_LINKED_TO_LOG_OR_UUID",
+    "Ratchet_and_Aranos_visible": true,
+    "walking": true,
+    "intro_audio": true,
+    "complete_level": false,
+    "screenshot_sha256": "fb4597e52842e972d086ff456321a71656fd8393ef9174df64190d5881921e9d",
+    "archive_sha256": "8e4334a33eccad51f3a8e79013d8d9dbfa72c038207fb33dcd4298ef658f7c5c"
+  },
+  "implemented": [
+    "Original rigid placement collision supplied to shared hero/camera queries",
+    "Raw controller and native action edge diagnostics",
+    "Opt-in per-tick collision/input trace",
+    "Original frontend navigation request3 -> bank sound2 through existing native989snd/SPU/PCM transport"
+  ],
+  "CPU_original_tests": {
+    "passed": 4,
+    "failed": 0,
+    "seconds": 5.61,
+    "raised_floor": {
+      "xy": [
+        247,
+        198
+      ],
+      "class": "0xac1",
+      "placement": 164,
+      "world_z": 49.734375,
+      "placement_z": 50.33382,
+      "jump_apex_z": 51.38469,
+      "registered_unconditional_rigid_placements": 30,
+      "follow_camera": "NATIVE_UPDATE_WITH_PLACEMENT_SCENE_FINITE"
+    },
+    "menu_sound": {
+      "request": 3,
+      "bank_sound": 2,
+      "bank_size": 135,
+      "output_samples": 48000,
+      "nonzero_frames": 3480,
+      "unsupported_grains": 0,
+      "physical_output": "NOT_TESTED"
+    }
+  },
+  "CPU_units": {
+    "passed": 11,
+    "failed": 0
+  },
+  "ios_contracts": {
+    "passed": 59,
+    "failed": 0
+  },
+  "current_candidate_device_tested": false,
+  "complete_level_validated": false,
+  "FIRST_FATAL_BLOCKER": null,
+  "KNOWN_MISSING_CAPABILITIES": [
+    {
+      "id": "RC2_COLLISION_SURFACES",
+      "category": "GAME_SPECIFIC",
+      "source": "physical_device_user_observation",
+      "requirement": "Accurate original RC2 floor/raised surface collision, dynamic object collision and player grounding",
+      "blocking_now": true,
+      "classification": "GAME_SPECIFIC",
+      "baseline_evidence": "Tester reports Ratchet walks through some elevated surfaces at current Aranos location",
+      "current_status": "ORIGINAL_RIGID_PLACEMENTS_CPU_TESTED_DEVICE_RETEST_REQUIRED_POSED_DYNAMIC_MISSING"
+    },
+    {
+      "id": "RC2_BUTTON_ACTION_DISPATCH",
+      "category": "INPUT",
+      "source": "physical_device_user_observation",
+      "requirement": "Real Backbone button presses drive every implemented RC2 hero action and menus; implement missing actions where native input already exists",
+      "blocking_now": true,
+      "classification": "GAME_SPECIFIC",
+      "baseline_evidence": "Tester reports no usable gameplay buttons/actions; distinguish transport input from missing gameplay handlers",
+      "current_status": "INCOMPLETE"
+    },
+    {
+      "id": "RC2_WEAPONS_COMBAT",
+      "category": "GAME_SPECIFIC",
+      "source": "repo_audit_and_physical_test",
+      "requirement": "Original available Aranos weapons, attacks, hit detection, damage, enemies, bolts and pickups",
+      "blocking_now": true,
+      "classification": "GAME_SPECIFIC",
+      "baseline_evidence": "RC2 hero source and user test lack weapon/damage states",
+      "current_status": "INCOMPLETE"
+    },
+    {
+      "id": "RC2_HUD",
+      "category": "GAME_SPECIFIC",
+      "source": "physical_device_user_observation",
+      "requirement": "Original HUD health, bolts, ammunition, weapon selection, prompts and pauses relevant to Aranos",
+      "blocking_now": true,
+      "classification": "GAME_SPECIFIC",
+      "baseline_evidence": "Screenshot shows none of the expected in-level HUD",
+      "current_status": "INCOMPLETE"
+    },
+    {
+      "id": "RC2_MENU_SOUNDS",
+      "category": "AUDIO",
+      "source": "repo_audit_and_physical_test",
+      "requirement": "Authentic menu SFX/music using real RC2 assets",
+      "blocking_now": true,
+      "classification": "GAME_SPECIFIC",
+      "baseline_evidence": "rc-engine/src/rac2.rs Request::Sound currently logged as '(not played)'; tester hears startup audio but no menu audio",
+      "current_status": "ORIGINAL_NAVIGATION_REQUEST3_CPU_TESTED_DEVICE_OUTPUT_GAIN_AND_REMAINING_FRONTEND_AUDIO_UNTESTED"
+    },
+    {
+      "id": "RC2_LEVEL_AUDIO",
+      "category": "AUDIO",
+      "source": "repo_audit",
+      "requirement": "Original in-level ambient, music, dialogue, UI and object/weapon/enemy sounds via native CoreAudio transport",
+      "blocking_now": true,
+      "classification": "GAME_SPECIFIC",
+      "baseline_evidence": "Build9 validation handoff states RC2 in-level audio is not implemented",
+      "current_status": "INCOMPLETE"
+    },
+    {
+      "id": "RC2_MOBY_INTERACTIONS_AI",
+      "category": "GAME_SPECIFIC",
+      "source": "repo_audit",
+      "requirement": "RC2 original moby behaviour, dynamic platforms/doors, destructibles, enemy AI, triggers",
+      "blocking_now": true,
+      "classification": "GAME_SPECIFIC",
+      "baseline_evidence": "Current RC2 engine supports placement/rendering more than actual class scripts",
+      "current_status": "INCOMPLETE"
+    },
+    {
+      "id": "RC2_SCRIPTS_CHECKPOINTS_DEATH",
+      "category": "GAME_SPECIFIC",
+      "source": "repo_audit",
+      "requirement": "Original level scene/script events, death/respawn, checkpoint semantics and any required save-slot flows",
+      "blocking_now": true,
+      "classification": "GAME_SPECIFIC",
+      "baseline_evidence": "Current RC2 game-state/progression and saving are explicitly incomplete/disabled",
+      "current_status": "INCOMPLETE"
+    },
+    {
+      "id": "RC2_LEVEL_COMPLETION",
+      "category": "GAME_SPECIFIC",
+      "source": "repo_audit",
+      "requirement": "Complete authentic Aranos playable route through legitimate original end-of-level transition",
+      "blocking_now": true,
+      "classification": "GAME_SPECIFIC",
+      "baseline_evidence": "No start-to-finish playthrough; validation handoff explicitly says BUILD9_INCOMPLETE",
+      "current_status": "INCOMPLETE"
+    }
+  ],
+  "source_files": [
+    "crates/rc-engine/src/ios.rs",
+    "crates/rc-engine/src/ios_gamepad.rs",
+    "crates/rc-engine/src/level_load.rs",
+    "crates/rc-engine/src/rac2.rs",
+    "crates/rc-engine/src/rac2_level.rs",
+    "crates/rc-engine/src/rac2_play.rs",
+    "crates/rc-engine/src/title_world.rs",
+    "crates/rc-formats/src/rac2/boot.rs",
+    "crates/rc-formats/src/rac2/front_end.rs",
+    "crates/rc-game2/src/camera.rs",
+    "crates/rc-game2/src/collision.rs",
+    "crates/rc-game2/src/front_audio.rs",
+    "crates/rc-game2/src/hero/physics.rs",
+    "crates/rc-game2/src/lib.rs",
+    "crates/rc-game2/tests/original_aranos.rs"
+  ],
+  "Shared_Core_promoted": false,
+  "other_engines_requiring_review": [],
+  "public_source": "79be9c3db6e5383b1efa3264c72fe067c96dff85",
+  "collision_local_source": "046b899b401e768a539bb82a596b466bcdc4e5c3",
+  "collision_public_source": "fab631f8eaf608ac7e4c5de2476a2c34436bf698",
+  "collision_run": 40066408738,
+  "collision_run_status": "SUCCESS_ALL_JOBS",
+  "source_clean": true,
+  "latest_native_validation": "SUCCESS_ALL_JOBS",
+  "upstream_reuse_audit": {
+    "pin": "89c87e98f9d8296187df2a6310c67b32144090d3",
+    "latest_rc_game2_change": "3bd05251e10d56cae86aeadd63514dbcf654207c",
+    "date": "2026-10-16",
+    "newer_RC2_combat_or_enemy_implementation_found": false
+  },
+  "latest_native_run": 40067825252,
+  "collision_ipa": {
+    "source": "fab631f8eaf608ac7e4c5de2476a2c34436bf698",
+    "run": 40066408738,
+    "status": "SUCCESS_ALL_JOBS",
+    "scope": "RIGID_COLLISION_AND_INPUT_TRACE_NO_MENU_SOUND_ADAPTER",
+    "ipa_artifact": 12548814316,
+    "symbols_artifact": 12548849268,
+    "ipa_sha256": "89815265f8707bf03f1609d6637b83935f1a5ec13ed144a671c9d25e44483922",
+    "dsym_uuid": "d28a522a-159b-35b5-8957-997428b16f4d",
+    "original_device_retest": "NOT_TESTED"
+  },
+  "intermediate_audio_run": {
+    "run": 40067258283,
+    "status": "CANCELLED_BEFORE_START_BY_PENDING_RUN_REPLACEMENT",
+    "source": "d147e1cdb9490e5240ece9e6221259cb69d1e53b",
+    "code_preserved_in_final_candidate": true
+  },
+  "latest_candidate_ipa": {
+    "source": "79be9c3db6e5383b1efa3264c72fe067c96dff85",
+    "local_source": "6f460ee242b44f93227b2e8f43d7df2a7519b33e",
+    "run": 40067825252,
+    "status": "SUCCESS_ALL_JOBS",
+    "scope": "EXPERIMENTAL_RIGID_PLACEMENT_COLLISION_ORIGINAL_MENU_NAVIGATION_SOUND_INPUT_TRACE_INCOMPLETE_ARANOS",
+    "ipa_artifact": 12550182516,
+    "symbols_artifact": 12549843892,
+    "ipa_url": "https://github.com/Bobnotbuilder/rerac/actions/runs/40067825252/artifacts/12550182516",
+    "symbols_url": "https://github.com/Bobnotbuilder/rerac/actions/runs/40067825252/artifacts/12549843892",
+    "ipa_sha256": "b14ba41f60c6cb8d983f1ccd512abfefd64abbe5d98bd8cd111cd43d16f37480",
+    "dsym_uuid": "09cce03d-595a-393f-93d5-d179d7a265e0",
+    "outer_artifact_zip_sha256": "dcdae27b9350f7df3b01fd2ae2ccee9bdbbd2c1134635857e8df25d61b1ef326",
+    "original_device_retest": "NOT_TESTED",
+    "complete_level": false
+  },
+  "first_development_blocker": "ORIGINAL_GC_CLASS_HERO_ITEM_DAMAGE_AND_MISSION_BEHAVIOUR_NOT_PORTED",
+  "next_objective": "Retest source-linked raised-floor/jump/navigation sound on iPhone; reconstruct original GC class/hero-item initialization and required weapon/damage behavior using original code/data, then mission scripts and completion.",
+  "public_runtime_tree_audit": {
+    "runtime_local": "6f460ee242b44f93227b2e8f43d7df2a7519b33e",
+    "runtime_public": "79be9c3db6e5383b1efa3264c72fe067c96dff85",
+    "public_tree": "786d653b36464af9492351cfccc50c01692b16b1",
+    "matched_blobs": 1223,
+    "local_blobs": 1223,
+    "different_or_missing": [],
+    "remote_optional_extra_paths": [
+      "docs/assets/rerac-logo.png",
+      "tools/ghidra/names/clusters.tsv"
+    ]
+  },
+  "fix_classifications": {
+    "collision_audio_adapters": "GAME_SPECIFIC",
+    "RC2_traces": "SHARED_DIAGNOSTICS",
+    "fixtures": "SHARED_TESTING"
+  },
+  "next_melee_blocker_evidence": {
+    "kind": "STATIC_ORIGINAL_CODE_DATA_EVIDENCE_NOT_EXECUTION",
+    "level": 0,
+    "physics_dispatch": {
+      "address": "0x2ba8e0",
+      "jump_table": "0x2a0160",
+      "state13": "0x2bddd8",
+      "state14": "0x2bd378",
+      "state15": "0x2bd98c"
+    },
+    "state13_melee_table": {
+      "address": "0x25d910",
+      "stride": "0x2c",
+      "first_three_rows_inspected": true,
+      "differs_from_RAC1_COMBO": true,
+      "field_semantics_require_remaining_state_entry_transition_and_item_update_validation": true
+    },
+    "source_logs": {
+      "build9-gc-state13-physics.log": "4d5045fc9f2f590c1d186d503d9f0fe7b6a57ac1912d2eb939cce14699471dfb",
+      "build9-gc-melee-table.log": "a398e8f9f9062eae89b1f8dab28be2e183962218fd42999d80f8d7601fdecb12"
+    },
+    "native_melee_implemented": false
+  },
+  "final_hosted_regressions": {
+    "rc_game": {
+      "passed": 715,
+      "failed": 0
+    },
+    "rc_formats": {
+      "passed": 175,
+      "ignored": 1,
+      "failed": 0
+    },
+    "rc_data": {
+      "passed": 16,
+      "failed": 0
+    },
+    "rc_engine": {
+      "passed": 83,
+      "ignored": 1,
+      "failed": 0
+    },
+    "physical_RAC1": "NOT_TESTED",
+    "original_media_on_CI": false,
+    "repeated_tiers_are_not_unique_coverage": true
+  }
+}
