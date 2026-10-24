@@ -83,6 +83,97 @@ fn camera_input<'a>(hero: &'a Hero, coll: &'a rc_formats::collision::Collision, 
 }
 
 #[test]
+fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary() {
+    let Some(path)=std::env::var_os("RC2_ORIGINAL_ISO") else {eprintln!("NOT_TESTED: private original ISO unavailable");return;};
+    let iso=IsoImage::open(path).unwrap();let file=iso.read_file(iso.find("/G/LEVEL0.WAD").unwrap()).unwrap();
+    let wad=LevelWad::parse(&file).unwrap();let overlay=wad.lump(Lump::Overlay).unwrap().unwrap();
+    let registry=rac2::classes::AranosClassUpdates::parse(0,overlay).unwrap();
+    let data=rc_formats::wad::decompress(wad.lump(Lump::CoreData).unwrap().unwrap()).unwrap();
+    let core=level::parse_level_core_for(Game::Rac2,wad.lump(Lump::CoreIndex).unwrap().unwrap(),data.len()).unwrap();
+    let gameplay=rc_formats::wad::decompress(wad.part_bytes(Part::Gameplay).unwrap().unwrap()).unwrap();
+    let placements=rac2::gameplay::moby_instances(&gameplay).unwrap();
+    let classes=moby::parse_level_mobys(&core,&data).unwrap();
+    let animations=classes.iter().map(|c| {
+        let sequences=if c.o_class==0 {(0..core.ratchet_seqs.len()).map(|i|
+            core.block(&data,&format!("ratchet_seq/{i:03}")).map(|b|ma::parse_sequence_joints(b,0,Some(c.class.header.joint_count as usize)).unwrap())).collect()}
+        else {ma::parse_sequences(core.block(&data,&format!("moby_class/{:04}",c.o_class)).unwrap(),&c.class).unwrap()};
+        ma::MobyAnimClass::new(&c.class,sequences)
+    }).collect::<Vec<_>>();
+    let empty=ma::MobyAnimClass {joint_count:0,skeleton:Vec::new(),rest:Vec::new(),parent_word:Vec::new(),sequences:Vec::new()};
+    let mut loaded=core.moby_classes.iter().enumerate().map(|(entry,c)| {
+        if let Some(i)=classes.iter().position(|k|k.o_class==c.o_class) {
+            rc_game2::objects::LoadedClass::from_core(0,&core,entry,&classes[i].class,&animations[i],&registry).unwrap()
+        } else {rc_game2::objects::LoadedClass::without_header(0,&core,entry,&empty,&registry).unwrap()}
+    }).collect::<Vec<_>>();
+    // Explicit save-input fixture, not a claimed capture of New Game state.
+    // Fallback3 is 0x2e4450's zero-statistics result. No all-spawn shortcut.
+    let mut state=rc_game2::spawn::SpawnState {progress:vec![0;16],fallback_progress:(0..16).map(|i|(i,3)).collect(),
+        mission_status:(-1..16).map(|i|(i,0)).collect(),disabled:vec![0;2048],saved:vec![0;1024],
+        reload_saved:Some(vec![0;1024]),reload:false,omitted:Default::default()};
+    let coll=rc_formats::collision::parse_collision(&core,&data).unwrap();
+    let mut world=rc_game2::world::World::load(&gameplay,&mut loaded,&mut state,
+        |p|Ok(rc_game2::collision::root_height(&coll,p))).unwrap();
+    let count=world.moby_to_instance.len();assert!(count>0 && count<placements.len());
+    for (id,&placement) in world.moby_to_instance.iter().enumerate() {
+        assert_eq!(world.instance_to_moby[placement],Some(id));
+        let source=&placements[placement];let m=world.objects.get(id).unwrap();
+        assert_eq!(m.o_class as i32,source.base.o_class);assert_eq!(m.spawn_id,source.extra[0] as i16);
+        if m.o_class==0 {assert!(m.pvars.is_empty());}
+        else if source.base.pvar_index>=0 {
+            assert_eq!(m.pvars.len(),rac2::gameplay::unrelocated_pvar(&gameplay,source.base.pvar_index).unwrap().unwrap().len());
+            assert!(world.pvars.blocks[source.base.pvar_index as usize].is_none(),"pvar bytes must reside in live owner");
+        }
+    }
+    let mut local_reads=0;
+    for &(index,field) in &world.pvars.pointer_fields {
+        for (id,&placement) in world.moby_to_instance.iter().enumerate() {
+            if placements[placement].base.pvar_index!=index || placements[placement].base.o_class==0 {continue;}
+            let raw=rc_formats::buf::Buf(&world.objects.get(id).unwrap().pvars).i32(field as usize).unwrap();
+            assert_eq!(world.local_pvar_bytes(id,field as usize,0).is_ok(),raw>=0 && raw as usize<=world.objects.get(id).unwrap().pvars.len());
+            local_reads+=1;
+        }
+    }
+    assert!(local_reads>0);
+    assert!(world.gc.iter().all(|s|*s==Default::default()));
+    assert_eq!(world.objects.get(count).unwrap().state,0xfd,"original reserved class0 record is static and unavailable for reuse");
+    let blocked=world.initialize(&loaded,|w,id,source|w.native_update(id,source,0)).unwrap_err();
+    let rc_game2::world::TickError::Missing(missing)=blocked else {panic!("unexpected {blocked:?}")};
+    assert!(missing.initializing);assert_eq!(registry.source_update(missing.class as i32),missing.source);
+    let before=world.objects.get(missing.moby).unwrap().anim;
+    assert_eq!(world.initialize(&loaded,|w,id,source|w.native_update(id,source,0)),Err(rc_game2::world::TickError::Missing(missing)));
+    assert_eq!(world.objects.get(missing.moby).unwrap().anim.t.to_bits(),before.t.to_bits());
+    assert_eq!(world.tick(0,[0.;4],&loaded,|_,_,_|false),Err(rc_game2::world::TickError::NotInitialized));
+    assert_eq!((missing.class,missing.source,missing.state),(0x12fa,0x383ce0,0));
+    assert_eq!(world.objects.get(1).unwrap().state,0xfd,"original delete-only callback must execute");
+    assert!(world.grid.cells_of(1).is_empty());
+    for id in [2,3,4] {assert_eq!(world.objects.get(id).unwrap().state,1,"original link-wait init must execute");}
+    let defs=rc_formats::particle_tex::parse_part_defs(wad.lump(Lump::CoreIndex).unwrap().unwrap(),core.header.part_defs_offset).unwrap();
+    world.effects=Some(rc_game2::effects::Effects::new(defs,rc_game::rng::Rng {state:1234}));
+    // Continue the SAME initialization cursor after providing the required
+    // original effect resource. This fixture's RNG seed is explicit too.
+    let next=world.initialize(&loaded,|w,id,source|w.native_update(id,source,0)).unwrap_err();
+    let rc_game2::world::TickError::Missing(next_missing)=next else {panic!("unexpected {next:?}")};
+    let receiver=missing.moby;assert_eq!(world.objects.get(receiver).unwrap().state,1);
+    let e=world.effects.as_ref().unwrap();assert!(e.pool.count>0);
+    let sprite=e.pool.live().find(|(_,r)|rc_game::particles::rec::u32(r,0x20)==receiver as u32+1).unwrap().0;
+    assert_eq!(e.pool.recs[sprite][0],0x59);assert_eq!(e.pool.recs[sprite][9],0x34);
+    assert_eq!(rc_game::particles::rec::i16(&e.pool.recs[sprite],10),-1);
+    let camera=[247.,194.,52.,0.];world.effects.as_mut().unwrap().update(&world.objects,camera).unwrap();
+    assert!(rc_game::particles::rec::v3(&world.effects.as_ref().unwrap().pool.recs[sprite],0x10).iter().all(|v|v.is_finite()));
+    use rc_game::ps2v::Pf;
+    assert_eq!(rc_formats::buf::Buf(&world.objects.get(receiver).unwrap().pvars).i32(0).unwrap(),0);
+    // Direct delivery is explicitly injected; this is NOT a wrench swing,
+    // spatial hit, health deduction or original destruction/effects claim.
+    world.deliver_hit(receiver,Pf::ONE,Some(0),0x10000,[Pf::ZERO;4],[Pf::ZERO;4]).unwrap();
+    assert_ne!(world.objects.get(receiver).unwrap().hit_slot,255);
+    assert!(world.native_update(receiver,0x383ce0,1));
+    assert_eq!(world.objects.get(receiver).unwrap().state,2);assert_eq!(world.objects.get(receiver).unwrap().hit_slot,255);
+    assert!(!world.native_update(receiver,0x383ce0,2),"original impact/audio/debris may not be omitted");
+    println!("ORIGINAL_GC_LIVE_RECEIVER_CHAIN_PASS owner={receiver} sprite={sprite} type=89 explicit_hit_to_state2=true next_init={next_missing:?}; WRENCH_SPATIAL_HIT_AND_DESTRUCTION_UNIMPLEMENTED");
+    println!("ORIGINAL_GC_NATIVE_WORLD_BOUNDARY spawned={count} rejected={} preceding_owners={} first_native_callback={missing:?}; EXPLICIT_SAVE_FIXTURE_NOT_NEW_GAME_CAPTURE LIVE_CLASS_GAMEPLAY_BLOCKED GPU_NOT_TESTED",placements.len()-count,world.preceding_owners.len());
+}
+
+#[test]
 fn original_aranos_class_binding_and_wrench_sweep_windows() {
     let Some(path)=std::env::var_os("RC2_ORIGINAL_ISO") else {eprintln!("NOT_TESTED: private original ISO unavailable");return;};
     let iso=IsoImage::open(path).unwrap();let file=iso.read_file(iso.find("/G/LEVEL0.WAD").unwrap()).unwrap();

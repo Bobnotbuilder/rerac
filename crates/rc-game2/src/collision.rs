@@ -12,6 +12,15 @@ use rc_game::{collision_query::{CollMoby, MobyGrid, MobyScene, MobySource, PoseC
 use rc_game::collision_query::mobys::GRID_NONE;
 use std::{collections::HashMap, sync::Mutex};
 
+/// Static loader's GC0x31ce20 with lift0.5 / flags0: line from z+0.5
+/// down to absolute z0.01, QueryFlags2; no hit returns0. This differs from
+/// treating the record's z as an arbitrary local downward-ray length.
+pub fn root_height(world:&rc_formats::collision::Collision,position:[f32;3])->f32 {
+    let high=[position[0],position[1],(Pf::f(position[2])+Pf::f(0.5)).to_f32()];
+    let low=[position[0],position[1],f32::from_bits(0x3c23d70a)];
+    rc_game::collision_query::coll_line(world,high,low,rc_game::collision_query::QueryFlags(2)).map_or(0.,|h|h.point[2])
+}
+
 pub struct PlacementCollision {
     records: Vec<Option<CollMoby>>,
     classes: HashMap<i16, MobyCollision>,

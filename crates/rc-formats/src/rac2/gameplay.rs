@@ -181,6 +181,25 @@ pub struct Rac2MobyInstance {
     pub extra: [i32; 4],
 }
 
+/// GC's own fields before class+0x28 (L00 0x3025fc..0x302650).
+/// The shared `base` record is a geometry view; its RAC1 spawn field names
+/// must not be used to decide whether a GC placement exists.
+#[derive(Clone,Copy,Debug)]
+pub struct SpawnFields {
+    pub mission:i32, pub selector:i32, pub flags:i32, pub id:i32,
+    pub b4:i32, pub alternate_b4:i32, pub b6:i32, pub alternate_b6:i32,
+    pub threshold:i32,
+}
+
+impl Rac2MobyInstance {
+    pub fn spawn_fields(&self)->SpawnFields {
+        SpawnFields {mission:self.base.unknown_4,selector:self.base.spawn_flags,
+            flags:self.base.spawn_id,id:self.extra[0],b4:self.extra[1],
+            alternate_b4:self.extra[2],b6:self.extra[3],
+            alternate_b6:self.base.unknown_10,threshold:self.base.unknown_14}
+    }
+}
+
 /// The static moby instances (`s32 count, s32 spawnable, pad[2]`, then records stepped by their size word).
 pub fn moby_instances(gameplay: &[u8]) -> Result<Vec<Rac2MobyInstance>> {
     let Some(s) = section(gameplay, "moby_instances")? else { return Ok(Vec::new()) };

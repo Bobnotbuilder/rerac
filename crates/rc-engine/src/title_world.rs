@@ -109,7 +109,7 @@ pub fn load(root: &std::path::Path) -> anyhow::Result<TitleData> {
         hud: None,
         water: Default::default(),
         sea: Default::default(),
-        collision: None, rc2_placement_collision: None,
+        collision: None, rc2_placement_collision: None, rc2_world_contract: None,
         death_z: 0.0,
         audio: None,
         gameplay: gameplay.to_vec(),

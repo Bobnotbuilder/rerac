@@ -6,6 +6,7 @@
 
 pub mod camera;
 pub mod collision;
+pub mod effects;
 pub mod front_end;
 pub mod front_audio;
 pub mod gui;
@@ -15,4 +16,6 @@ pub mod items;
 pub mod melee;
 pub mod objects;
 pub mod pvars;
+pub mod spawn;
 pub mod targeting;
+pub mod world;

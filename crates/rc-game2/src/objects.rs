@@ -5,7 +5,17 @@ use rc_formats::{buf::{invalid,Result},level::LevelCore,moby::MobyClass,moby_ani
     rac2::classes::AranosClassUpdates,Game};
 use rc_game::{moby_runtime::{ClassInfo,Moby,MobyId,MobyTable,Seq0Info},moby_update::scheduler};
 
-pub struct LoadedClass<'a> {class:i16,info:ClassInfo,animation:&'a MobyAnimClass}
+pub struct LoadedClass<'a> {pub(crate) class:i16,pub(crate) info:ClassInfo,pub(crate) animation:&'a MobyAnimClass}
+
+/// Owned identity/header state retained by a host between ticks. Animation
+/// storage stays in the existing level resource; no model/pose bank is copied.
+#[derive(Clone,Copy)]
+pub struct ClassBinding {class:i16,info:ClassInfo}
+impl ClassBinding {
+    pub fn bind<'a>(&self,animation:&'a MobyAnimClass)->LoadedClass<'a> {
+        LoadedClass {class:self.class,info:self.info,animation}
+    }
+}
 
 impl<'a> LoadedClass<'a> {
     /// The core's loaded class order provides the native slot. The GC source
@@ -15,14 +25,19 @@ impl<'a> LoadedClass<'a> {
         if level!=0 {return invalid("GC source update binding is validated only for Aranos level 0");}
         if core.game!=Game::Rac2 {return invalid("GC class adapter requires explicitly tagged GC core");}
         let Some(entry)=core.moby_classes.get(slot) else {return invalid("GC loaded class slot absent");};
-        if slot>=255 || entry.offset_in_asset_wad<=0 || !(0..=0x7fff).contains(&entry.o_class) {
+        if entry.offset_in_asset_wad<=0 || !(0..=0x7fff).contains(&entry.o_class) {
             return invalid("GC loaded class slot has no supported header");
         }
+        // 0x300208 has independent counters for loaded headers (+1e00)
+        // and headerless bindings (+1e04). Core-entry index is NOT the slot
+        // when a headerless class occurs earlier in the original table.
+        let native_slot=core.moby_classes[..slot].iter().filter(|c|c.offset_in_asset_wad>0).count();
+        if native_slot>=240 {return invalid("GC loaded class exceeds original slot bank");}
         let update=updates.source_update(entry.o_class);
         // This is a pure header view, not scheduler execution. Common native
         // fields have the same semantics despite changed raw GC moby offsets:
         // class +aa, hit +a8, update +64, pvar +68 and animation +40..+60.
-        let mut info=scheduler::class_info(class,slot as u8,(update!=0).then_some(update));
+        let mut info=scheduler::class_info(class,native_slot as u8,(update!=0).then_some(update));
         info.seq0=anim.sequence(0).map(|q|Seq0Info {frame_count:q.header.frame_count,
             loop_sound_bit7:q.header.loop_sound&0x80!=0});
         Ok(Self {class:entry.o_class as i16,info,animation:anim})
@@ -30,6 +45,25 @@ impl<'a> LoadedClass<'a> {
 
     pub fn class(&self)->i16 {self.class}
     pub fn source_update(&self)->Option<u32> {self.info.update_fn}
+    pub fn binding(&self)->ClassBinding {ClassBinding {class:self.class,info:self.info}}
+
+    /// 0x300234/0x32e244 and InitMobyInstance's mismatch branch0x3114e4.
+    /// This is a real GC logic-only class, not a missing external mesh
+    /// substituted with fabricated geometry. The empty animation view cannot
+    /// render anything and only participates in generic no-op pose bookkeeping.
+    pub fn without_header(level:u32,core:&LevelCore,entry:usize,empty:&'a MobyAnimClass,
+        updates:&AranosClassUpdates)->Result<Self> {
+        if level!=0 || core.game!=Game::Rac2 || empty.joint_count!=0 || !empty.sequences.is_empty() {
+            return invalid("GC headerless binding requires Aranos and an empty animation view");
+        }
+        let Some(c)=core.moby_classes.get(entry) else {return invalid("GC headerless entry absent");};
+        if c.offset_in_asset_wad>0 || !(0..=0x7fff).contains(&c.o_class) {return invalid("GC headerless binding has a header or invalid class");}
+        let slot=core.moby_classes[..entry].iter().filter(|c|c.offset_in_asset_wad<=0).count();
+        if slot>=240 {return invalid("GC headerless class exceeds original slot bank");}
+        let update=updates.source_update(c.o_class);
+        Ok(Self {class:c.o_class as i16,info:ClassInfo {slot:slot as u8,no_header:true,
+            update_fn:(update!=0).then_some(update),..Default::default()},animation:empty})
+    }
 }
 
 pub struct Objects {table:MobyTable}
@@ -42,6 +76,7 @@ impl Objects {
     }
     pub fn get(&self,id:MobyId)->Option<&Moby> {self.table.mobys.get(id)}
     pub fn get_mut(&mut self,id:MobyId)->Option<&mut Moby> {self.table.mobys.get_mut(id)}
+    pub fn records(&self)->&[Moby] {&self.table.mobys}
 
     /// GC 0x311320: same first-reusable-slot allocation and zeroed 0x80-byte
     /// pvar block. Reuse the existing native allocator and semantic initializer.

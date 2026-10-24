@@ -38,11 +38,16 @@ impl PvarPlan {
     /// the block base after the original relocation, not a null pointer.
     /// Cross-block/shared-data pointers need a separate validated adapter.
     pub fn local_bytes(&self,index:usize,field:usize,len:usize)->Result<&[u8]> {
+        let Some(Some(block))=self.blocks.get(index) else {return invalid("GC local pointer block was not copied");};
+        self.local_bytes_in(index,field,block,len)
+    }
+
+    /// Same reference contract after allocation moves bytes into a live owner.
+    pub(crate) fn local_bytes_in<'a>(&self,index:usize,field:usize,block:&'a [u8],len:usize)->Result<&'a [u8]> {
         if index>i32::MAX as usize || field>i32::MAX as usize
             || !self.pointer_fields.contains(&(index as i32,field as i32)) {
             return invalid("GC pvar field is not a verified local pointer");
         }
-        let Some(Some(block))=self.blocks.get(index) else {return invalid("GC local pointer block was not copied");};
         let offset=Buf(block).i32(field)?;
         let offset=usize::try_from(offset).map_err(|_|rc_formats::FormatError::Invalid("GC local pointer precedes its block".into()))?;
         Ok(Buf(block).sub(offset,len,"GC local pointer range")?.bytes())
@@ -51,8 +56,12 @@ impl PvarPlan {
     /// GC 0x302fd8..0x302fe4 writes a pointer into the shared blob, overriding
     /// earlier relocation at that field. Native bytes retain the blob offset.
     pub fn shared_bytes(&self,index:usize,field:usize,len:usize)->Result<&[u8]> {
-        if !self.shared_fields.contains(&(index,field)) {return invalid("GC pvar field is not a verified shared pointer");}
         let Some(Some(block))=self.blocks.get(index) else {return invalid("GC shared pointer block was not copied");};
+        self.shared_bytes_in(index,field,block,len)
+    }
+
+    pub(crate) fn shared_bytes_in(&self,index:usize,field:usize,block:&[u8],len:usize)->Result<&[u8]> {
+        if !self.shared_fields.contains(&(index,field)) {return invalid("GC pvar field is not a verified shared pointer");}
         let offset=usize::try_from(Buf(block).i32(field)?).map_err(|_|rc_formats::FormatError::Invalid("GC shared pointer precedes blob".into()))?;
         Ok(Buf(&self.shared_data).sub(offset,len,"GC shared pointer range")?.bytes())
     }

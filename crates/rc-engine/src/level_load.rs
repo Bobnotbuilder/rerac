@@ -45,6 +45,8 @@ pub struct LoadedLevel {
     pub collision: Option<rc_formats::collision::Collision>,
     /// GC original rigid placement meshes; RAC1 uses its existing live scheduler scene.
     pub rc2_placement_collision: Option<rc_game2::collision::PlacementCollision>,
+    /// GC source bindings for internal native-world bring-up, never RAC1 data.
+    pub rc2_world_contract: Option<crate::rac2_play::native_world::LevelContract>,
     /// Level settings +0x28: the death height the game copies to `0x15f638` (player_controller.md §10).
     pub death_z: f32,
     /// Sound bank, defs, sound instances and music (crate::audio_out); None with `RC_AUDIO=0`.
@@ -178,7 +180,7 @@ pub fn load_level(root: &Path, index: u32) -> Result<LoadedLevel> {
     let moby_class_order = core.moby_classes.iter().map(|e| e.o_class).collect();
     Ok(LoadedLevel {
         tfrags, textures, fog, background, mobys, ties, shrubs, sky, occlusion, tfrag_lod, particles, hud, water, sea, collision, rc2_placement_collision: None, death_z, audio,
-        gameplay, moby_class_order, timings: t,
+        gameplay, moby_class_order, timings: t, rc2_world_contract: None,
     })
 }
 

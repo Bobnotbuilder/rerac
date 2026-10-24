@@ -100,6 +100,12 @@ pub fn load(root: &Path, index: u32) -> Result<LoadedLevel> {
         .and_then(|s| s.get(0x28..0x2c))
         .map_or(f32::NEG_INFINITY, |b| f32::from_le_bytes(b.try_into().unwrap()));
     let moby_class_order = core.moby_classes.iter().map(|e| e.o_class).collect();
+    let rc2_world_contract=if crate::rac2_play::native_world::enabled() {
+        anyhow::ensure!(index==0,"internal GC native world source contracts require Aranos");
+        Some(crate::rac2_play::native_world::LevelContract {
+            updates:rc_formats::rac2::classes::AranosClassUpdates::parse(index,lump(Lump::Overlay)?)?,core,
+        })
+    } else {None};
     println!(
         "rac2: level {index} ({name}): {} tfrags, {} textures, {} tie classes / {} instances, {} shrub classes / {} instances, {} moby classes / {} instances, sky {}, collision {}",
         tfrags.len(), textures.len(), ties.classes.len(), ties.instances.len(), shrubs.classes.len(), shrubs.instances.len(),
@@ -112,6 +118,6 @@ pub fn load(root: &Path, index: u32) -> Result<LoadedLevel> {
         tfrags.len(), textures.len(), mobys.classes.len(), mobys.instances.len(), collision.is_some()));
     Ok(LoadedLevel {
         tfrags, textures, fog, background, mobys, ties, shrubs, sky, occlusion, tfrag_lod, particles, hud: None,
-        water: Default::default(), sea: Default::default(), collision, rc2_placement_collision, death_z, audio: None, gameplay, moby_class_order, timings: t,
+        water: Default::default(), sea: Default::default(), collision, rc2_placement_collision, rc2_world_contract, death_z, audio: None, gameplay, moby_class_order, timings: t,
     })
 }

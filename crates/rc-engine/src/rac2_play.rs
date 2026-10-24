@@ -28,6 +28,8 @@ use rc_game2::camera::{CamInput, FollowCamera};
 use rc_game2::hero::physics::Env;
 use rc_game2::hero::{hero_update, Hero};
 
+pub(crate) mod native_world;
+
 pub struct Rac2PlayPlugin;
 
 impl Plugin for Rac2PlayPlugin {
@@ -62,6 +64,7 @@ struct Play {
     ticks: u64,
     trace: bool,
     unsupported_state: Option<i32>,
+    native_world: Option<native_world::NativeWorld>,
 }
 
 fn switch_camera(keys: Res<ButtonInput<KeyCode>>, mut source: ResMut<CameraSource>) {
@@ -94,6 +97,11 @@ fn tick(
         return;
     };
     let p = &mut *p;
+    if let Some(world)=p.native_world.as_mut() {
+        // Internal original-data world path. No hero input advances across a
+        // missing mandatory class initializer; never claim a complete level.
+        if !world.initialize(lv) {return;}
+    }
     let Some(coll) = lv.collision.as_ref() else { return };
     let input = match &script.0 {
         Some(s) => s.at(p.ticks),
@@ -124,6 +132,10 @@ fn tick(
         } else { p.unsupported_state = None; }
     }
     p.camera.update(&cam_input(&p.hero, Some(coll), scene.as_ref(), Some(p.instance), [p.pad.rx.to_f32(), p.pad.ry.to_f32()]));
+    if let Some(world)=p.native_world.as_mut() {
+        if !world.tick(lv,p.ticks as u32,p.instance,&p.hero,p.anim.state,p.camera.pos) {return;}
+        if let (Some(o),Some(a))=(occl.as_mut(),anim.as_mut()) {world.drive(o,a);}
+    }
     if p.trace {
         let h = &p.hero;
         let a = [h.pos[0], h.pos[1], h.pos[2] + if h.group == 2 { 2.9 } else { 2.2 }];
@@ -169,6 +181,11 @@ fn tick(
 
 /// The hero at Ratchet's instance (class 0).
 fn start(lv: &crate::level_load::LoadedLevel) -> Option<Play> {
+    let native_world=if native_world::enabled() {
+        match native_world::NativeWorld::load_fixture(lv) {
+            Ok(world)=>Some(world),Err(error)=>{eprintln!("RC2_INTERNAL_WORLD_LOAD_BLOCKED: {error:#}");return None;}
+        }
+    } else {None};
     let m = &lv.mobys;
     let Some(instance) = m.instances.iter().position(|i| i.o_class == 0) else {
         eprintln!("rac2: no class-0 instance on this level: no Ratchet, no game tick");
@@ -189,6 +206,7 @@ fn start(lv: &crate::level_load::LoadedLevel) -> Option<Play> {
         anim: RatchetAnim::new(&m.anim[class]),
         hero, class, instance, scale, pad: PadState::default(), camera, ticks: 0,
         unsupported_state: None,
+        native_world,
         trace: std::env::var("RC_PLAY_TRACE").is_ok_and(|v| v.trim() == "1"),
     })
 }

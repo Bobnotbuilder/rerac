@@ -10,6 +10,10 @@ pub struct MobyId(pub u32);
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub struct HitSlot(u8);
 impl Default for HitSlot {fn default()->Self {Self(0xff)}}
+impl HitSlot {
+    pub(crate) fn from_raw(raw:u8)->Self {Self(raw)}
+    pub(crate) fn raw(self)->u8 {self.0}
+}
 
 #[derive(Clone,Copy,Debug,PartialEq)]
 pub struct HitRecord {
