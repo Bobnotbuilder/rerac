@@ -40,11 +40,14 @@ pub const SECTIONS: [(&str, &str); HEADER_WORDS] = [
     ("moby_classes", "content"),
     ("moby_instances", "content"),
     ("moby_groups", "order"),
-    ("shared_data", "order"),
-    ("pvar_moby_links", "order"),
+    // L00 0x302f40..0x302fec, including a signed high16 field offset.
+    ("shared_data", "content"),
+    // L00 0x302d30..0x302da0: pairs remap instance ids through the s16 map.
+    ("pvar_moby_links", "content"),
     ("pvar_table", "content"),
     ("pvar_data", "order"),
-    ("pvar_pointer_fixups", "order"),
+    // L00 0x302da8..0x302e0c: pairs add the copied pvar block base.
+    ("pvar_pointer_fixups", "content"),
     ("cuboids", "content"),
     ("spheres", "order"),
     ("cylinders", "order"),
@@ -104,6 +107,32 @@ pub fn unrelocated_pvar(gameplay: &[u8], index: i32) -> Result<Option<&[u8]>> {
     if offset<0 || size<0 { return invalid("negative GC pvar extent"); }
     let data=section(gameplay,"pvar_data")?.ok_or_else(|| crate::buf::FormatError::Invalid("GC instance references absent pvar bytes".into()))?;
     Ok(Some(Buf(data).sub(offset as usize,size as usize,"GC original pvar")?.bytes()))
+}
+
+/// Original GC pair lists, with each terminator bounded to its own section.
+/// Header offsets 0x58 / 0x64 are confirmed by L00 0x302d30 / 0x302da8;
+/// never pass this gameplay file to RAC1's public section/layout reader.
+pub fn pvar_fixups(gameplay:&[u8])->Result<crate::gameplay::PvarFixups> {
+    let ranges=sections(gameplay)?;
+    let list=|name:&str,header:usize|->Result<Vec<(i32,i32)>> {
+        let Some((_,range))=ranges.iter().find(|(n,_)|*n==name) else {return Ok(Vec::new());};
+        crate::gameplay::fixup_list(Buf(&gameplay[..range.end]),header)
+    };
+    Ok(crate::gameplay::PvarFixups {moby_links:list("pvar_moby_links",0x58)?,pointers:list("pvar_pointer_fixups",0x64)?})
+}
+
+#[derive(Clone,Debug,Default)]
+pub struct SharedPvars {pub data:Vec<u8>,pub fields:Vec<(u16,i16,i32)>}
+
+/// GC shared pvar blob at header0x54. Reuses the generic byte/record readers,
+/// bounded to this section. GC reads the high half as signed (`0x302fb8`),
+/// whereas RAC1's public reader retains its existing u16 field representation.
+pub fn shared_pvars(gameplay:&[u8])->Result<SharedPvars> {
+    let ranges=sections(gameplay)?;
+    let Some((_,range))=ranges.iter().find(|(n,_)|*n=="shared_data") else {return Ok(SharedPvars::default());};
+    let bounded=&gameplay[..range.end];
+    Ok(SharedPvars {data:crate::gameplay::pvar_shared_data_at(bounded,0x54)?,
+        fields:crate::gameplay::pvar_shared_records_at(bounded,0x54)?.into_iter().map(|(i,o,d)|(i,o as i16,d)).collect()})
 }
 
 /// R&C2's tie instance (0x60 bytes): R&C1's record without the 64 per-light-slot colours (0x50..0xd0), so
@@ -197,5 +226,29 @@ mod pvar_tests {
         data[0xa4..0xa8].copy_from_slice(&5u32.to_le_bytes());assert!(unrelocated_pvar(&data,0).is_err());
         data[0xa4..0xa8].copy_from_slice(&(-1i32).to_le_bytes());assert!(unrelocated_pvar(&data,0).is_err());
         data[23*4..24*4].fill(0);assert!(unrelocated_pvar(&data,0).is_err());
+    }
+    #[test]
+    fn gc_fixups_require_a_terminator_inside_their_own_section() {
+        let mut data=vec![0;0xc0];
+        data[22*4..23*4].copy_from_slice(&0xa0u32.to_le_bytes());
+        data[25*4..26*4].copy_from_slice(&0xb0u32.to_le_bytes());
+        data[0xa0..0xa4].copy_from_slice(&2i32.to_le_bytes());
+        data[0xa4..0xa8].copy_from_slice(&8i32.to_le_bytes());
+        data[0xa8..0xac].copy_from_slice(&(-1i32).to_le_bytes());
+        data[0xb0..0xb4].copy_from_slice(&(-1i32).to_le_bytes());
+        let f=pvar_fixups(&data).unwrap();assert_eq!(f.moby_links,vec![(2,8)]);assert!(f.pointers.is_empty());
+        // A terminator in the next section must not rescue the first list.
+        data[0xa8..0xac].fill(0);assert!(pvar_fixups(&data).is_err());
+    }
+    #[test]
+    fn gc_shared_field_offset_is_signed_and_records_are_section_bounded() {
+        let mut data=vec![0;0xbc];
+        data[21*4..22*4].copy_from_slice(&0xa0u32.to_le_bytes());
+        data[0xa0..0xa4].copy_from_slice(&4i32.to_le_bytes());
+        data[0xa4..0xa8].copy_from_slice(&1i32.to_le_bytes());
+        data[0xb0..0xb4].copy_from_slice(&[9,8,7,6]);
+        data[0xb4..0xb8].copy_from_slice(&0xfffc0002u32.to_le_bytes());
+        let shared=shared_pvars(&data).unwrap();assert_eq!(shared.data,[9,8,7,6]);assert_eq!(shared.fields,vec![(2,-4,0)]);
+        data.pop();assert!(shared_pvars(&data).is_err());
     }
 }

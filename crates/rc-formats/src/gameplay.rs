@@ -141,8 +141,12 @@ pub const PVAR_SHARED_DATA_POINTER: usize = 0x4c;
 
 /// The shared data blob of section 0x4c (`data[size]`; empty when the section is absent or empty).
 pub fn parse_pvar_shared_data(gameplay: &[u8]) -> Result<Vec<u8>> {
+    pvar_shared_data_at(gameplay,PVAR_SHARED_DATA_POINTER)
+}
+
+pub(crate) fn pvar_shared_data_at(gameplay:&[u8],header:usize)->Result<Vec<u8>> {
     let g = Buf(gameplay);
-    let p = g.u32(PVAR_SHARED_DATA_POINTER)? as usize;
+    let p = g.u32(header)? as usize;
     if p == 0 { return Ok(Vec::new()); }
     let size = g.i32(p)?;
     if size < 0 { return invalid("negative shared data size"); }
@@ -151,8 +155,12 @@ pub fn parse_pvar_shared_data(gameplay: &[u8]) -> Result<Vec<u8>> {
 
 /// The records of section 0x4c: `(pvar_index, byte_offset, data_offset)`.
 pub fn parse_pvar_shared_records(gameplay: &[u8]) -> Result<Vec<(u16, u16, i32)>> {
+    pvar_shared_records_at(gameplay,PVAR_SHARED_DATA_POINTER)
+}
+
+pub(crate) fn pvar_shared_records_at(gameplay:&[u8],header:usize)->Result<Vec<(u16,u16,i32)>> {
     let g = Buf(gameplay);
-    let p = g.u32(PVAR_SHARED_DATA_POINTER)? as usize;
+    let p = g.u32(header)? as usize;
     if p == 0 { return Ok(Vec::new()); }
     let (size, count) = (g.i32(p)?, g.i32(p + 4)?);
     if size < 0 || count < 0 { return invalid("negative shared data size / count"); }
@@ -171,7 +179,9 @@ pub struct PvarFixups {
     pub pointers: Vec<(i32, i32)>,
 }
 
-fn fixup_list(g: Buf, header: usize) -> Result<Vec<(i32, i32)>> {
+// Header-agnostic pair-list reader, also used by the independently verified GC
+// section adapter. The caller supplies the correct game's pointer offset/bounds.
+pub(crate) fn fixup_list(g: Buf, header: usize) -> Result<Vec<(i32, i32)>> {
     let mut p = g.u32(header)? as usize;
     let mut out = Vec::new();
     if p == 0 { return Ok(out); }

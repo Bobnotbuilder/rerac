@@ -13,6 +13,10 @@ fn scan(root:&Path, level_id:u32, out:&mut impl Write)->Result<usize,Box<dyn std
     let core=level::parse_level_core_for(Game::Rac2,w.lump(Lump::CoreIndex)?.ok_or("no core index")?,data.len())?;
     let gp=wad::decompress(w.part_bytes(Part::Gameplay)?.ok_or("no gameplay part")?)?;
     let instances=gameplay::moby_instances(&gp)?;
+    let fixups=gameplay::pvar_fixups(&gp)?;
+    let shared=gameplay::shared_pvars(&gp)?;
+    writeln!(out,"PVAR_SHARED\t{level_id}\t-\t{}\t{}\t-\t-\t-\t-\tBOUNDED_BLOB_AND_FIELDS_ONLY_NO_CLASS_BEHAVIOUR",shared.data.len(),shared.fields.len())?;
+    writeln!(out,"PVAR_FIXUPS\t{level_id}\t-\t{}\t{}\t-\t-\t-\t-\tBOUNDED_PAIR_LISTS_ONLY_NO_RUNTIME_RELOCATION_OR_SPAWN",fixups.moby_links.len(),fixups.pointers.len())?;
     let collision=moby_collision::parse_level(&core,&data)?;
     let mut placed:BTreeMap<i32,(usize,usize,usize)>=BTreeMap::new();
     for i in &instances {

@@ -178,6 +178,42 @@ fn original_oozla_legacy_gc_class_preserves_geometry_and_native_conversion_seman
 }
 
 #[test]
+fn original_gc_pvar_links_follow_explicit_mapping_without_host_pointer_writes() {
+    let Some(path)=std::env::var_os("RC2_ORIGINAL_ISO") else {eprintln!("NOT_TESTED: private original ISO unavailable");return;};
+    let iso=IsoImage::open(path).unwrap();let file=iso.read_file(iso.find("/G/LEVEL0.WAD").unwrap()).unwrap();
+    let w=LevelWad::parse(&file).unwrap();let gameplay=wad::decompress(w.part_bytes(Part::Gameplay).unwrap().unwrap()).unwrap();
+    let original_hash=rc_formats::sha1::sha1(&gameplay);
+    let instances=rac2::gameplay::moby_instances(&gameplay).unwrap();let fixups=rac2::gameplay::pvar_fixups(&gameplay).unwrap();
+    let copied=instances.iter().map(|i|i.base.pvar_index).chain(fixups.moby_links.iter().chain(&fixups.pointers).map(|f|f.0)).filter(|&i|i>=0).collect::<Vec<_>>();
+    let first=fixups.moby_links.iter().find_map(|&(index,offset)| {
+        let block=rac2::gameplay::unrelocated_pvar(&gameplay,index).unwrap().unwrap();
+        let value=rc_formats::buf::Buf(block).i32(offset as usize).unwrap();
+        (value>=0).then_some((index,offset,value as usize))
+    }).expect("original Aranos has a nonnegative pvar moby link");
+    // Explicit test-only spawn mask: one real referenced placement is absent.
+    // This is a loader contract test, never the original level's spawn result.
+    let mut next=0;let mapping=(0..instances.len()).map(|i|if i==first.2 {None}else{let id=next;next+=1;Some(id)}).collect::<Vec<_>>();
+    let plan=rc_game2::pvars::PvarPlan::copy_and_link(&gameplay,&copied,&mapping).unwrap();
+    let block=plan.blocks[first.0 as usize].as_ref().unwrap();
+    assert_eq!(rc_formats::buf::Buf(block).i32(first.1 as usize).unwrap(),-1);
+    assert!(rc_game2::pvars::PvarPlan::copy_and_link(&gameplay,&copied,&mapping[..mapping.len()-1]).is_err());
+    assert_eq!(original_hash,rc_formats::sha1::sha1(&gameplay));
+    let mut local_reads=0;
+    for &(index,offset) in &plan.pointer_fields {
+        let original=rac2::gameplay::unrelocated_pvar(&gameplay,index).unwrap().unwrap();
+        if !fixups.moby_links.contains(&(index,offset)) {
+            let o=offset as usize;assert_eq!(&original[o..o+4],&plan.blocks[index as usize].as_ref().unwrap()[o..o+4]);
+            let relative=rc_formats::buf::Buf(original).i32(o).unwrap();
+            if relative>=0 && (relative as usize)<original.len() {
+                assert_eq!(plan.local_bytes(index as usize,o,1).unwrap(),&original[relative as usize..relative as usize+1]);local_reads+=1;
+            }
+        }
+    }
+    assert!(local_reads>0);assert!(plan.local_bytes(first.0 as usize,first.1 as usize,usize::MAX).is_err());
+    println!("ORIGINAL_GC_PVAR_PLAN_CPU_PASS moby_link_records={} relative_pointer_fields={} bounded_local_reads={local_reads}; EXPLICIT_TEST_MAPPING_ONLY_NO_CLASS_INITIALIZERS_OR_GAMEPLAY",fixups.moby_links.len(),plan.pointer_fields.len());
+}
+
+#[test]
 fn original_aranos_ground_combo_timing_and_native_pose_playback() {
     use rc_game::{hero::anim::AnimCtl,ps2v::Pf};
     use rc_game2::melee::{GroundCombo,EntryHistory,Recovery,JumpRequest,WrenchUse,WeaponDecision,wrench_request};
