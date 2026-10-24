@@ -83,6 +83,37 @@ fn camera_input<'a>(hero: &'a Hero, coll: &'a rc_formats::collision::Collision, 
 }
 
 #[test]
+fn original_oozla_legacy_gc_class_preserves_geometry_and_native_conversion_semantics() {
+    let Some(path)=std::env::var_os("RC2_ORIGINAL_ISO") else {eprintln!("NOT_TESTED: private original ISO unavailable");return;};
+    let iso=IsoImage::open(path).unwrap();let file=iso.read_file(iso.find("/G/LEVEL1.WAD").unwrap()).unwrap();
+    let w=LevelWad::parse(&file).unwrap();let data=wad::decompress(w.lump(Lump::CoreData).unwrap().unwrap()).unwrap();
+    let core=level::parse_level_core_for(Game::Rac2,w.lump(Lump::CoreIndex).unwrap().unwrap(),data.len()).unwrap();
+    let blob=core.block(&data,"moby_class/2700").unwrap();let hash=rc_formats::sha1::sha1(blob);
+    assert_eq!(blob[0xb],255,"original GC old-format marker");
+    // The original GC converter explicitly consumes RAC1-format vertex tables.
+    // This is a geometry oracle, never a RAC1 gameplay/scheduler invocation.
+    let old=moby::parse_moby_class_for(Game::Rac1,blob).unwrap();
+    let gc=moby::parse_moby_class_for(Game::Rac2,blob).unwrap();
+    assert_eq!((gc.header.rac1_byte_b,gc.header.bangles,gc.header.mip_dist,gc.header.rac1_short_2e),(0,0,5,0));
+    assert_eq!(gc.high_lod.len(),2);assert_eq!(gc.low_lod.len(),1);
+    let mut vertices=0;let mut triangles=0;
+    for (a,b) in old.high_lod.iter().chain(&old.low_lod).zip(gc.high_lod.iter().chain(&gc.low_lod)) {
+        assert_eq!(a.vertices.len(),b.vertices.len());assert_eq!(a.triangles,b.triangles);
+        assert_eq!(a.index_bytes,b.index_bytes);assert_eq!(a.texture_indices,b.texture_indices);
+        assert!(!a.rgba_multipliers.is_empty());assert!(b.rgba_multipliers.is_empty(),"GC clears the old multiplier pointer");
+        assert_eq!(b.unresolved_duplicates,0);
+        for (a,b) in a.vertices.iter().zip(&b.vertices) {
+            assert_eq!((a.raw,a.x,a.y,a.z,a.st,a.normal_azimuth,a.normal_elevation,a.id,a.duplicate),
+                (b.raw,b.x,b.y,b.z,b.st,b.normal_azimuth,b.normal_elevation,b.id,b.duplicate));
+            assert_eq!((a.skin.count,a.skin.joints,a.skin.weights),(b.skin.count,b.skin.joints,b.skin.weights));
+        }
+        vertices+=b.vertices.len();triangles+=b.triangles.len();
+    }
+    assert_eq!(hash,rc_formats::sha1::sha1(blob));
+    println!("ORIGINAL_RC2_LEGACY_CLASS_CPU_PASS level=1 class=0xa8c packets=3 vertices={vertices} triangles={triangles}; GPU_AND_LEVEL_TRANSITION_NOT_TESTED");
+}
+
+#[test]
 fn original_aranos_ground_combo_timing_and_native_pose_playback() {
     use rc_game::{hero::anim::AnimCtl,ps2v::Pf};
     use rc_game2::melee::{GroundCombo,EntryHistory,Recovery,JumpRequest,WrenchUse,WeaponDecision,wrench_request};

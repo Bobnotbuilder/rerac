@@ -39,7 +39,8 @@ pub struct MobyClassHeader {
     pub low_lod_joint_count: u8,
     /// 0x0a: first glow packet of the high-LOD list (0xff / past the end: none); docs/plan/moby_skinning_lighting.md §10.
     pub rac1_byte_a: u8,
-    /// 0x0b: first glow packet of the low-LOD list (0xff / past the end: none).
+    /// 0x0b: RAC1 first glow packet of the low-LOD list (0xff / past the end: none).
+    /// GC: nonzero marks the legacy class conversion (L00 0x2ffea4).
     pub rac1_byte_b: u8,
     /// 0x0c: animation sequence count; the pointer list is at 0x48.
     pub sequence_count: u8,
@@ -450,7 +451,7 @@ struct ListState { cache: Vec<Option<MobyVertex>>, slots: Vu0Slots, texture: i32
 
 impl ListState { fn new() -> Self { ListState { cache: vec![None; 512], slots: Vu0Slots::default(), texture: -1 } } }
 
-fn read_packet(game: crate::Game, blob: Buf, e: &MobyPacketEntry, metal: bool, state: &mut ListState) -> Result<MobySubmesh> {
+fn read_packet(game: crate::Game, legacy_gc: bool, blob: Buf, e: &MobyPacketEntry, metal: bool, state: &mut ListState) -> Result<MobySubmesh> {
     // VIF list: ST (regular only), indices, optional ad-gifs.
     let list = blob.sub(e.vif_list_offset as usize, e.vif_list_size as usize * 0x10, "moby VIF list")?;
     let codes = parse_vif(list.bytes())?;
@@ -519,6 +520,7 @@ fn read_packet(game: crate::Game, blob: Buf, e: &MobyPacketEntry, metal: bool, s
         // code converts an R&C1-layout class ("moby %d is in an old format", L00 0x2ffe70) by halving the eight words
         // to u16s, moving the rest down 0x10 bytes and zeroing the multiplier offset.
         let (h, head) = match game {
+            crate::Game::Rac2 if legacy_gc => (blob.pod::<MobyVertexTableHeader>(vo, "GC legacy vertex table header")?, 0x20),
             crate::Game::Rac1 => (blob.pod::<MobyVertexTableHeader>(vo, "moby vertex table header")?, 0x20),
             crate::Game::Rac2 => {
                 let w: [u16; 8] = blob.pod(vo, "moby vertex table header")?;
@@ -546,7 +548,12 @@ fn read_packet(game: crate::Game, blob: Buf, e: &MobyPacketEntry, metal: bool, s
         if !ofs.is_multiple_of(8) { ofs += 4; }
         sub.duplicates = blob.pod_slice(ofs, h.duplicate_vertex_count as usize, "moby duplicate vertices")?;
         // The vertex records end where the multiplier blob starts (R&C1) or with the packet's vertex data (R&C2).
-        let records_end = if game == crate::Game::Rac2 { e.vertex_data_size as u32 * 0x10 } else { h.unknown_e };
+        // GC's original loader (L00 0x2fffbc..0x300004) compacts legacy
+        // u32 headers and clears the multiplier pointer. Decode the immutable
+        // source directly, using its old endpoint, and discard its multipliers
+        // as that converter does. Never use the trailing multiplier bytes as
+        // vertex epilogue records or apply RAC1 colour semantics to GC.
+        let records_end = if game == crate::Game::Rac2 && !legacy_gc { e.vertex_data_size as u32 * 0x10 } else { h.unknown_e };
         if records_end < h.vertex_table_offset { return invalid("moby packet: unknown_e before vertex table"); }
         let epilogue = ((records_end - h.vertex_table_offset) / 0x10) as usize;
         let epilogue = epilogue.wrapping_sub(in_file);
@@ -614,7 +621,14 @@ pub fn parse_moby_class(blob: &[u8]) -> Result<MobyClass> { parse_moby_class_for
 /// 0x2ffe70, walks the same fields); its packets differ only in the vertex table header ([`read_packet`]).
 pub fn parse_moby_class_for(game: crate::Game, blob: &[u8]) -> Result<MobyClass> {
     let b = Buf(blob);
-    let h: MobyClassHeader = b.pod(0, "moby class header")?;
+    let mut h: MobyClassHeader = b.pod(0, "moby class header")?;
+    // L00 0x2ffea4 tests byte0xb, not packet plausibility or the class id.
+    // Keep the original source immutable; normalize only native header fields.
+    let legacy_gc = game == crate::Game::Rac2 && h.rac1_byte_b != 0;
+    if legacy_gc {
+        let old_mip = b.i32(0x2c)?.min(0x3fc00);
+        h.rac1_byte_b = 0; h.bangles = 0; h.mip_dist = (old_mip >> 10) as u8; h.rac1_short_2e = 0;
+    }
     let sequence_pointers = if h.sequence_count > 0 { b.pod_slice(0x48, h.sequence_count as usize, "moby sequence pointers")? } else { Vec::new() };
     let (mut high_lod, mut low_lod, mut metal) = (Vec::new(), Vec::new(), Vec::new());
     if h.packet_table_offset > 0 {
@@ -624,7 +638,7 @@ pub fn parse_moby_class_for(game: crate::Game, blob: &[u8]) -> Result<MobyClass>
         // Vertex cache, VU0 slots and GS texture state carry across the packets of one list.
         let list = |first: usize, count: usize, is_metal: bool, out: &mut Vec<MobySubmesh>| -> Result<()> {
             let mut st = ListState::new();
-            for e in &entries[first..first + count] { out.push(read_packet(game, b, e, is_metal, &mut st)?); }
+            for e in &entries[first..first + count] { out.push(read_packet(game, legacy_gc, b, e, is_metal, &mut st)?); }
             Ok(())
         };
         list(0, h.high_lod_count as usize, false, &mut high_lod)?;
@@ -649,7 +663,7 @@ pub fn attach_packets(game: crate::Game, class: &mut MobyClass, mesh: &[u8]) -> 
     let entries: Vec<MobyPacketEntry> = b.pod_slice(table, total, "moby mesh packet table")?;
     let list = |first: usize, count: usize, is_metal: bool| -> Result<Vec<MobySubmesh>> {
         let mut st = ListState::new();
-        entries[first..first + count].iter().map(|e| read_packet(game, b, e, is_metal, &mut st)).collect()
+        entries[first..first + count].iter().map(|e| read_packet(game, false, b, e, is_metal, &mut st)).collect()
     };
     class.high_lod = list(0, high, false)?;
     class.low_lod = list(high, low, false)?;

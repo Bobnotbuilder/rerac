@@ -29,6 +29,7 @@ fn scan(root:&Path, level_id:u32, out:&mut impl Write)->Result<usize,Box<dyn std
         let Some(blob)=core.block(&data,&format!("moby_class/{:04}",c.o_class)) else {return Err("missing class block".into())};
         let (n,pvars,conditional)=placed.remove(&c.o_class).unwrap_or_default();
         let h:moby::MobyClassHeader=Buf(blob).pod(0,"GC class header")?;
+        if h.rac1_byte_b!=0 {writeln!(out,"LEGACY_CLASS\t{level_id}\t{:#x}\t-\t-\t-\t-\t-\t-\tORIGINAL_GC_OLD_FORMAT_CONVERSION_REQUIRED",c.o_class)?;}
         let coll=collision.iter().find(|(id,_)|*id==c.o_class).map(|(_,c)|c);
         let triangles=coll.map_or(0,|c|c.faces.len());let primitives=coll.map_or(0,|c|c.prims.len());
         // Parsing geometry never grants a class a gameplay handler.
