@@ -34,7 +34,7 @@
 use crate::hero::physics::{add, dot, len, scale, sub, V3};
 use crate::hero::Hero;
 use rc_formats::collision::Collision;
-use rc_game::collision_query::{coll_line, coll_sphere, QueryFlags};
+use rc_game::collision_query::{coll_line_m, coll_sphere_m, MobyScene, QueryFlags};
 
 const HALF_PI: f32 = std::f32::consts::FRAC_PI_2;
 /// `$gp+0x2474` (40°) and `+0x2470` (1.75°): the stick pitch's range and step.
@@ -111,6 +111,8 @@ pub fn target_point(hero: &Hero) -> V3 { add(hero.pos, scale(hero.rows[2], 1.6))
 pub struct CamInput<'a> {
     pub hero: &'a Hero,
     pub coll: Option<&'a Collision>,
+    pub mobys: Option<&'a MobyScene<'a>>,
+    pub hero_moby: Option<usize>,
     /// The right stick (`0x138280` / `0x138284`), up / left negative.
     pub rstick: [f32; 2],
     /// Options `0x1a7bb0` (yaw normal) and `0x1a7bac` (pitch normal).
@@ -120,10 +122,10 @@ pub struct CamInput<'a> {
 
 impl CamInput<'_> {
     /// `0x2de878(a, b, flags, Ratchet, 0)`: the hit point.
-    fn line(&self, a: V3, b: V3, flags: u32) -> Option<V3> { self.coll.and_then(|c| coll_line(c, a, b, QueryFlags(flags))).map(|o| o.point) }
+    fn line(&self, a: V3, b: V3, flags: u32) -> Option<V3> { self.coll.and_then(|c| coll_line_m(c, self.mobys, a, b, QueryFlags(flags), self.hero_moby)).map(|o| o.point) }
     /// `0x2df8d8(r, c, flags, …)`: the closest point and the pushed-out centre.
     fn sphere(&self, r: f32, c: V3, flags: u32) -> Option<(V3, V3)> {
-        self.coll.and_then(|m| coll_sphere(m, c, r, QueryFlags(flags))).map(|o| (o.point, o.pushed_centre.unwrap_or(c)))
+        self.coll.and_then(|m| coll_sphere_m(m, self.mobys, c, r, QueryFlags(flags), self.hero_moby)).map(|o| (o.point, o.pushed_centre.unwrap_or(c)))
     }
 }
 

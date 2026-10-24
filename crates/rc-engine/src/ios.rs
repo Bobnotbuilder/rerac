@@ -73,6 +73,10 @@ pub fn prepare() -> anyhow::Result<PathBuf> {
         let root = crate::disc_source::mobile_startup(root)?;
         let support = documents.join("RC2NativeSupport");
         std::fs::create_dir_all(&support)?;
+        if std::fs::read(root.join("ENABLE_COLLISION_TRACE.txt")).is_ok_and(|v| v == b"RC2_COLLISION_INPUT_TRACE_V1\n") {
+            std::env::set_var("RC_PLAY_TRACE", "1");
+            diagnostic("RC2_NATIVE_TRACE_ENABLED", "per-tick collision/input diagnostics; temporary test only");
+        }
         std::env::set_var("RC_DATA_DIR", &root);
         std::env::set_var("RC_SAVE_DIR", "0"); // upstream RC2 saves are not implemented
         std::env::set_var("RC_SETTINGS_FILE", support.join("settings.json"));

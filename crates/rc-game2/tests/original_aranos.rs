@@ -47,7 +47,7 @@ fn original_aranos_character_pose_movement_jump_and_camera() {
     for tick in 0..240 {
         let input=if tick==60 {PadInput::neutral().press(button::CROSS)} else {PadInput::neutral()};
         pad.update(Some(&input.bytes()),false);
-        let env=Env{coll:&collision,pad:&pad,cam_yaw:camera.yaw(),cam_rows:camera.rows,mirror:false};
+        let env=Env{mobys:None,hero_moby:None,coll:&collision,pad:&pad,cam_yaw:camera.yaw(),cam_rows:camera.rows,mirror:false};
         assert_eq!(hero_update(&mut hero,&env,&mut anim.ctl(&class)),HeroTick::Ran);
         if tick==59 {launch_z=hero.pos[2]}
         if tick>=60 {max_z=max_z.max(hero.pos[2]);jump_state|=hero.state==7;}
@@ -61,7 +61,7 @@ fn original_aranos_character_pose_movement_jump_and_camera() {
     let before=hero.pos;
     for _ in 0..12 {
         pad.update(Some(&PadInput::neutral().stick(0.,-1.).bytes()),false);
-        let env=Env{coll:&collision,pad:&pad,cam_yaw:camera.yaw(),cam_rows:camera.rows,mirror:false};
+        let env=Env{mobys:None,hero_moby:None,coll:&collision,pad:&pad,cam_yaw:camera.yaw(),cam_rows:camera.rows,mirror:false};
         assert_eq!(hero_update(&mut hero,&env,&mut anim.ctl(&class)),HeroTick::Ran);
         camera.update(&camera_input(&hero,&collision,[0.;2]));
     }
@@ -71,7 +71,7 @@ fn original_aranos_character_pose_movement_jump_and_camera() {
 }
 
 fn camera_input<'a>(hero: &'a Hero, coll: &'a rc_formats::collision::Collision, rstick: [f32;2]) -> CamInput<'a> {
-    CamInput {hero,coll:Some(coll),rstick,yaw_normal:true,pitch_normal:true}
+    CamInput {hero,mobys:None,hero_moby:None,coll:Some(coll),rstick,yaw_normal:true,pitch_normal:true}
 }
 
 #[test]
@@ -112,4 +112,49 @@ fn original_aranos_environment_and_frontend_contract() {
     assert_eq!(mobys.len(),187);assert_eq!(mobs.len(),472);
     let instances=rac2::gameplay::tie_instances(&gameplay).unwrap();
     println!("ORIGINAL_RC2_ENVIRONMENT_FRONTEND_CPU_PASS fragments={} textures={} tie_classes={} tie_instances={} shrub_classes={} gui_sprites={} main_menu_rows={} menu_quads={} moby_classes=187 moby_instances=472 NewGame_request=true; GPU_NOT_TESTED",fragments.len(),textures.len(),ties.len(),instances.len(),shrubs.len(),assets.sprites.len(),assets.main_menu.len(),draws.len());
+}
+
+#[test]
+fn original_aranos_raised_placement_floor_and_jump() {
+    let Some(path)=std::env::var_os("RC2_ORIGINAL_ISO") else {eprintln!("NOT_TESTED: private original ISO unavailable");return;};
+    let iso=IsoImage::open(path).unwrap();let read=|p:&str|iso.read_file(iso.find(p).unwrap()).unwrap();
+    let file=read("/G/LEVEL0.WAD");let w=LevelWad::parse(&file).unwrap();
+    let data=wad::decompress(w.lump(Lump::CoreData).unwrap().unwrap()).unwrap();
+    let core=level::parse_level_core_for(Game::Rac2,w.lump(Lump::CoreIndex).unwrap().unwrap(),data.len()).unwrap();
+    let gameplay=wad::decompress(w.part_bytes(Part::Gameplay).unwrap().unwrap()).unwrap();
+    let instances=rac2::gameplay::moby_instances(&gameplay).unwrap().into_iter().map(|m|m.base).collect::<Vec<_>>();
+    let placements=rc_game2::collision::PlacementCollision::load(&core,&data,&instances).unwrap();
+    let scene=placements.scene();let world=rc_formats::collision::parse_collision(&core,&data).unwrap();
+    use rc_game::collision_query::{coll_line,coll_line_m,coll_capsule_m,QueryFlags};
+    let (a,b)=([247.,198.,55.],[247.,198.,45.]);
+    let old=coll_line(&world,a,b,QueryFlags(2)).unwrap();
+    let raised=coll_line_m(&world,Some(&scene),a,b,QueryFlags(2),Some(0)).unwrap();
+    assert_eq!(old.point[2],49.734375);
+    let id=raised.moby.expect("raised surface must come from original placement geometry");
+    assert_eq!(id,164);assert_eq!(instances[id].o_class,0xac1);
+    assert!((raised.point[2]-50.33382).abs()<0.002);
+    let body=coll_capsule_m(&world,Some(&scene),[247.,198.,50.5],0.1,0.45,QueryFlags(0x24),Some(0)).unwrap();
+    assert_eq!(body.moby,Some(id));assert!(body.pushed_centre.unwrap().iter().all(|v|v.is_finite()));
+    let ratchet=moby::parse_moby_class_for(Game::Rac2,core.block(&data,"moby_class/0000").unwrap()).unwrap();
+    let sequences=(0..core.ratchet_seqs.len()).map(|i|core.block(&data,&format!("ratchet_seq/{i:03}")).map(|b|ma::parse_sequence_joints(b,0,Some(111)).unwrap())).collect();
+    let class=ma::MobyAnimClass::new(&ratchet,sequences);
+    let run=|with_placements:bool| {
+        let mut hero=Hero::spawn([247.,198.,51.2],0.);let mut anim=RatchetAnim::new(&class);let mut pad=PadState::default();
+        let mut max_jump=f32::NEG_INFINITY;
+        for tick in 0..240 {
+            let input=if tick==90 {PadInput::neutral().press(button::CROSS)}else{PadInput::neutral()};
+            pad.update(Some(&input.bytes()),false);
+            let env=Env{coll:&world,mobys:with_placements.then_some(&scene),hero_moby:Some(0),pad:&pad,cam_yaw:0.,cam_rows:[[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]],mirror:false};
+            assert_eq!(hero_update(&mut hero,&env,&mut anim.ctl(&class)),HeroTick::Ran);
+            if tick>=90 {max_jump=max_jump.max(hero.pos[2]);}
+            assert!(hero.pos.iter().all(|v|v.is_finite()));
+        }
+        (hero,max_jump)
+    };
+    let (before,_)=run(false);let (after,max_jump)=run(true);
+    assert!(before.grounded());assert!(after.grounded());
+    assert!((before.pos[2]-old.point[2]).abs()<0.03);
+    assert!((after.pos[2]-raised.point[2]).abs()<0.03);
+    assert!(max_jump>raised.point[2]+0.5);
+    println!("ORIGINAL_RC2_RAISED_COLLISION_CPU_PASS placement={id} class=0xac1 registered={} old_ground={} corrected_ground={} jump_apex={max_jump}; EXACT_DEVICE_SPOT_AND_PS2_ORACLE_NOT_VERIFIED DEVICE_RETEST_REQUIRED",placements.registered,before.pos[2],after.pos[2]);
 }

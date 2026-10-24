@@ -35,6 +35,7 @@ struct NativeController {
     entity: Option<Entity>,
     identity: u64,
     first_input_logged: bool,
+    last_buttons: u16,
     thread_error_logged: bool,
 }
 
@@ -80,6 +81,7 @@ fn poll(mut native: NonSendMut<NativeController>, mut commands: Commands,
         }
         native.identity = frame.identity;
         native.first_input_logged = false;
+        native.last_buttons = 0;
         if frame.identity != 0 {
             let entity = *native.entity.get_or_insert_with(|| commands.spawn_empty().id());
             connections.write(GamepadConnectionEvent::new(entity, GamepadConnection::Connected {
@@ -89,6 +91,11 @@ fn poll(mut native: NonSendMut<NativeController>, mut commands: Commands,
         }
     }
     if frame.identity != 0 {
+        let mask = frame.buttons.iter().enumerate().fold(0u16, |mask, (i, v)| mask | ((value(*v, 0.0) > 0.5) as u16) << i);
+        if mask != native.last_buttons && crate::disc_source::current() == crate::disc_source::Game::Rac2 {
+            crate::ios::diagnostic("RC2_NATIVE_RAW_BUTTON_EDGE", &format!("native_slots={mask:#06x} previous={:#06x} axes={:?}", native.last_buttons, frame.axes));
+        }
+        native.last_buttons = mask;
         if !native.first_input_logged && (frame.axes.iter().any(|v| v.abs() > 0.2)
             || frame.buttons.iter().any(|v| *v > 0.5)) {
             native.first_input_logged = true;

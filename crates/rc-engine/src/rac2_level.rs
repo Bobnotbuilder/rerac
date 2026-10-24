@@ -82,6 +82,11 @@ pub fn load(root: &Path, index: u32) -> Result<LoadedLevel> {
     let sky = crate::sky_render::load(&core, &core_data, index).context("loading the sky")?;
     let mut textures = textures;
     let mut mobys = crate::moby_render::load_mobys_with_gs(root, &core, &core_data, &gameplay, gs_ram, collision.as_ref()).context("loading mobys")?;
+    let rc2_placement_collision = Some(rc_game2::collision::PlacementCollision::load(&core, &core_data, &mobys.instances)
+        .context("RC2_NATIVE_PLACEMENT_COLLISION")?);
+    if let Some(c) = &rc2_placement_collision {
+        println!("rac2: rigid collision placements={} unsupported_or_noncolliding={}", c.registered, c.unsupported);
+    }
     attach_ratchet(root, &core, &mut mobys, &mut textures, 0).context("RC2_NATIVE_RATCHET_ARMOR_REQUIRED")?;
     anyhow::ensure!(mobys.instances.iter().any(|m| m.o_class == 0), "RC2_NATIVE_RATCHET_SPAWN_REQUIRED");
     let occlusion = crate::occlusion::load(&core, &core_data, &gameplay, &tfrags, &ties.instances, &mobys.instances).context("loading occlusion")?;
@@ -107,6 +112,6 @@ pub fn load(root: &Path, index: u32) -> Result<LoadedLevel> {
         tfrags.len(), textures.len(), mobys.classes.len(), mobys.instances.len(), collision.is_some()));
     Ok(LoadedLevel {
         tfrags, textures, fog, background, mobys, ties, shrubs, sky, occlusion, tfrag_lod, particles, hud: None,
-        water: Default::default(), sea: Default::default(), collision, death_z, audio: None, gameplay, moby_class_order, timings: t,
+        water: Default::default(), sea: Default::default(), collision, rc2_placement_collision, death_z, audio: None, gameplay, moby_class_order, timings: t,
     })
 }

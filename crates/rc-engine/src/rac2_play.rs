@@ -61,6 +61,7 @@ struct Play {
     camera: FollowCamera,
     ticks: u64,
     trace: bool,
+    unsupported_state: Option<i32>,
 }
 
 fn switch_camera(keys: Res<ButtonInput<KeyCode>>, mut source: ResMut<CameraSource>) {
@@ -100,14 +101,43 @@ fn tick(
         None => rc_game::pad::PadInput::neutral(),
     };
     p.pad.update(Some(&input.bytes()), false);
+    let scene = lv.rc2_placement_collision.as_ref().map(|s| s.scene());
     let class = &lv.mobys.anim[p.class];
     {
-        let env = Env { coll, pad: &p.pad, cam_yaw: p.camera.yaw(), cam_rows: p.camera.rows, mirror: false };
+        let env = Env { coll, mobys: scene.as_ref(), hero_moby: Some(p.instance), pad: &p.pad, cam_yaw: p.camera.yaw(), cam_rows: p.camera.rows, mirror: false };
         let mut ctl = p.anim.ctl(class);
-        hero_update(&mut p.hero, &env, &mut ctl);
+        let before = p.hero.state;
+        let result = hero_update(&mut p.hero, &env, &mut ctl);
+        if p.pad.raw_pressed != 0 || p.pad.raw_released != 0 {
+            let detail = format!("tick={} raw_input={:#06x} pad_raw={:#x} pressed={:#x} released={:#x} before={before:#x} after={:#x} result={result:?} attack_weapon_select_pause=NOT_IMPLEMENTED", p.ticks, input.buttons, p.pad.raw, p.pad.raw_pressed, p.pad.raw_released, p.hero.state);
+            println!("rac2 input: {detail}");
+            #[cfg(target_os = "ios")]
+            crate::ios::diagnostic("RC2_NATIVE_ACTION_EDGE", &detail);
+        }
+        if let rc_game2::hero::HeroTick::Unported(state) = result {
+            if p.unsupported_state != Some(state) {
+                eprintln!("rac2: unsupported hero state {state:#x}; native gameplay cannot advance this state");
+                #[cfg(target_os = "ios")]
+                crate::ios::diagnostic("RC2_NATIVE_UNPORTED_STATE", &format!("tick={} state={state:#x}", p.ticks));
+                p.unsupported_state = Some(state);
+            }
+        } else { p.unsupported_state = None; }
     }
-    p.camera.update(&cam_input(&p.hero, Some(coll), [p.pad.rx.to_f32(), p.pad.ry.to_f32()]));
+    p.camera.update(&cam_input(&p.hero, Some(coll), scene.as_ref(), Some(p.instance), [p.pad.rx.to_f32(), p.pad.ry.to_f32()]));
     if p.trace {
+        let h = &p.hero;
+        let a = [h.pos[0], h.pos[1], h.pos[2] + if h.group == 2 { 2.9 } else { 2.2 }];
+        let b = [h.pos[0], h.pos[1], h.pos[2] - 48.0];
+        let world_hit = rc_game::collision_query::coll_line(coll, a, b, rc_game::collision_query::QueryFlags(2));
+        let combined = rc_game::collision_query::coll_line_m(coll, scene.as_ref(), a, b, rc_game::collision_query::QueryFlags(2), Some(p.instance));
+        let cell = h.pos.map(|v| (v / 4.0).floor() as i16);
+        let candidates = lv.rc2_placement_collision.as_ref().map(|s| s.candidates(h.pos));
+        let detail = format!("tick={} input={:02x?} pos={:?} ground={:?} normal={:?} height={} air={} capsule={}/{}/{} flags=line:0x2,cap:0x24 cell={cell:?} cell_index={:?} candidates={candidates:?} world={:?} combined={:?}",
+            p.ticks, input.bytes(), h.pos, h.ground_point, h.ground_normal, h.height, h.air_ticks, h.cap_bottom, h.cap_top, h.cap_radius,
+            coll.cell_at(cell[0],cell[1],cell[2]), world_hit.map(|o|(o.kind,o.point,o.tri)), combined.map(|o|(o.moby,o.kind,o.point,o.tri)));
+        println!("rac2 collision: {detail}");
+        #[cfg(target_os = "ios")]
+        crate::ios::diagnostic("RC2_NATIVE_COLLISION_TRACE", &detail);
         let v = rc_game::hero::anim::AnimCtl::view(&p.anim.ctl(class));
         let h = &p.hero;
         println!(
@@ -148,7 +178,8 @@ fn start(lv: &crate::level_load::LoadedLevel) -> Option<Play> {
     let inst = &m.instances[instance];
     let scale = m.placed.get(instance).copied().flatten().map_or(1.0, |pl| pl.scale);
     let hero = Hero::spawn(inst.position, inst.rotation[2]);
-    let camera = FollowCamera::new(&cam_input(&hero, lv.collision.as_ref(), [0.0; 2]));
+    let scene = lv.rc2_placement_collision.as_ref().map(|s| s.scene());
+    let camera = FollowCamera::new(&cam_input(&hero, lv.collision.as_ref(), scene.as_ref(), Some(instance), [0.0; 2]));
     println!("rac2: Ratchet at ({:.1}, {:.1}, {:.1}), yaw {:.2}: game tick on", inst.position[0], inst.position[1], inst.position[2], inst.rotation[2]);
     #[cfg(target_os = "ios")]
     crate::ios::diagnostic("RC2_NATIVE_PLAYER_CPU_START", &format!(
@@ -157,13 +188,14 @@ fn start(lv: &crate::level_load::LoadedLevel) -> Option<Play> {
     Some(Play {
         anim: RatchetAnim::new(&m.anim[class]),
         hero, class, instance, scale, pad: PadState::default(), camera, ticks: 0,
+        unsupported_state: None,
         trace: std::env::var("RC_PLAY_TRACE").is_ok_and(|v| v.trim() == "1"),
     })
 }
 
 /// The camera's inputs: the options' yaw and pitch normal (`0x1a7bb0` / `0x1a7bac`, the defaults).
-fn cam_input<'a>(hero: &'a Hero, coll: Option<&'a rc_formats::collision::Collision>, rstick: [f32; 2]) -> CamInput<'a> {
-    CamInput { hero, coll, rstick, yaw_normal: true, pitch_normal: true }
+fn cam_input<'a>(hero: &'a Hero, coll: Option<&'a rc_formats::collision::Collision>, mobys: Option<&'a rc_game::collision_query::MobyScene<'a>>, hero_moby: Option<usize>, rstick: [f32; 2]) -> CamInput<'a> {
+    CamInput { hero, coll, mobys, hero_moby, rstick, yaw_normal: true, pitch_normal: true }
 }
 
 fn camera_view(c: &FollowCamera) -> CameraView {

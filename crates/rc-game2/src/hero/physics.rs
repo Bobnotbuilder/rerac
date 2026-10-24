@@ -24,11 +24,11 @@
 //! | Step snap | `0x2b5358` (mode 0) | [`Hero::step_snap`] |
 //!
 //! Not ported here (noted where they are called): the gravity frames 1 and 2 (`0x18c0e3`, R&C2's gravity surfaces),
-//! the platform carry (`0x189f20`), the moby collision of the queries (world only), the water surfaces of the probe.
+//! the platform carry (`0x189f20`), posed primitive collision and class-driven placement changes, the water surfaces of the probe.
 
 use super::Hero;
 use rc_formats::collision::Collision;
-use rc_game::collision_query::{coll_capsule, coll_line, coll_sphere_hero_groups, CollOutput, QueryFlags};
+use rc_game::collision_query::{coll_capsule_m, coll_line_m, MobyScene, coll_sphere_hero_groups, CollOutput, QueryFlags};
 use rc_game::pad::PadState;
 
 pub type V3 = [f32; 3];
@@ -39,6 +39,8 @@ pub const DT: f32 = 1.0 / 60.0;
 /// What the hero reads outside its block.
 pub struct Env<'a> {
     pub coll: &'a Collision,
+    pub mobys: Option<&'a MobyScene<'a>>,
+    pub hero_moby: Option<usize>,
     pub pad: &'a PadState,
     /// The camera's yaw `0x1b8d58` (the camera update of the previous tick).
     pub cam_yaw: f32,
@@ -49,8 +51,8 @@ pub struct Env<'a> {
 }
 
 impl Env<'_> {
-    /// `0x2de878(a, b, flags, Ratchet, 0)`: the line query (world mesh only here).
-    pub fn line(&self, a: V3, b: V3, flags: u32) -> Option<CollOutput> { coll_line(self.coll, a, b, QueryFlags(flags)) }
+    /// `0x2de878(a, b, flags, Ratchet, 0)`: the line query against world and supplied placement meshes.
+    pub fn line(&self, a: V3, b: V3, flags: u32) -> Option<CollOutput> { coll_line_m(self.coll, self.mobys, a, b, QueryFlags(flags), self.hero_moby) }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -360,7 +362,7 @@ impl Hero {
         let r = self.cap_radius;
         for _ in 0..8 {
             let h = (self.cap_top - self.cap_bottom).max(0.05);
-            let mut o = coll_capsule(env.coll, self.pos, h, r, QueryFlags::exclude_surface(0) | QueryFlags::MOBY_SUBMASK);
+            let mut o = coll_capsule_m(env.coll, env.mobys, self.pos, h, r, QueryFlags::exclude_surface(0) | QueryFlags::MOBY_SUBMASK, env.hero_moby);
             if let Some(g) = coll_sphere_hero_groups(env.coll, self.pos, r) { o = Some(g); }
             let Some(o) = o else { break };
             if let Some(pc) = o.pushed_centre { self.pos = pc; }
