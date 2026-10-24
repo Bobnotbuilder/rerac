@@ -10,5 +10,6 @@ pub mod front_end;
 pub mod front_audio;
 pub mod gui;
 pub mod hero;
+pub mod hits;
 pub mod items;
 pub mod melee;

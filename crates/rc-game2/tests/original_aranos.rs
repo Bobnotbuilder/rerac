@@ -83,6 +83,46 @@ fn camera_input<'a>(hero: &'a Hero, coll: &'a rc_formats::collision::Collision, 
 }
 
 #[test]
+fn original_aranos_class_binding_and_wrench_sweep_windows() {
+    let Some(path)=std::env::var_os("RC2_ORIGINAL_ISO") else {eprintln!("NOT_TESTED: private original ISO unavailable");return;};
+    let iso=IsoImage::open(path).unwrap();let file=iso.read_file(iso.find("/G/LEVEL0.WAD").unwrap()).unwrap();
+    let w=LevelWad::parse(&file).unwrap();let overlay=w.lump(Lump::Overlay).unwrap().unwrap();
+    let registry=rac2::classes::AranosClassUpdates::parse(0,overlay).unwrap();
+    assert_eq!(registry.entries().len(),233);
+    assert_eq!(registry.source_update(0x47),0x38d318);
+    assert_eq!(registry.source_update(0x7fff),0);
+    assert!(rac2::classes::AranosClassUpdates::parse(1,overlay).is_err());
+    let table=rac2::melee::AranosMeleeTable::parse(0,overlay).unwrap();
+    let mut active_ticks=0;
+    for (i,row) in table.rows().iter().enumerate() {
+        assert!(row.hit_from<=row.hit_to);
+        let state=if i==3 {0x2a}else{0x13};
+        let group=if i==3 {0}else{6};
+        // Original comparisons include both endpoints and reject blending.
+        for frame in 0..=80 {
+            let active=rc_game2::items::wrench_sweep_window(state,group,false,frame as f32,row);
+            assert_eq!(active,frame>=row.hit_from && frame<=row.hit_to);
+            assert!(!rc_game2::items::wrench_sweep_window(state,group,true,frame as f32,row));
+            active_ticks+=active as usize;
+        }
+        assert!(!rc_game2::items::wrench_sweep_window(0,0,false,row.hit_from as f32,row));
+    }
+    let data=wad::decompress(w.lump(Lump::CoreData).unwrap().unwrap()).unwrap();
+    let core=level::parse_level_core_for(Game::Rac2,w.lump(Lump::CoreIndex).unwrap().unwrap(),data.len()).unwrap();
+    let world=rc_formats::collision::parse_collision(&core,&data).unwrap();
+    use rc_game::{collision_query::{coll_line,QueryFlags},ps2v::Pf};
+    let v=|z|[Pf::f(247.),Pf::f(198.),Pf::f(z),Pf::ONE];
+    let mut queries=0;
+    let hit=rc_game2::items::sweep_lines(v(55.),v(45.),v(55.),v(55.),5,|a,b| {
+        queries+=1;
+        coll_line(&world,[a[0].to_f32(),a[1].to_f32(),a[2].to_f32()],
+            [b[0].to_f32(),b[1].to_f32(),b[2].to_f32()],QueryFlags(2))
+    }).expect("original world floor must be hit by the interpolated line");
+    assert_eq!(queries,3);assert_eq!(hit.point[2],49.734375);
+    println!("ORIGINAL_GC_CLASS_BINDINGS_PASS entries=233 wrench_source=0x38d318 inclusive_sweep_ticks={active_ticks} native_sweep_world_queries={queries} floor_z={}; GC_MOBY_DAMAGE_AND_NATIVE_CLASS_LIFECYCLE_NOT_IMPLEMENTED",hit.point[2]);
+}
+
+#[test]
 fn original_oozla_legacy_gc_class_preserves_geometry_and_native_conversion_semantics() {
     let Some(path)=std::env::var_os("RC2_ORIGINAL_ISO") else {eprintln!("NOT_TESTED: private original ISO unavailable");return;};
     let iso=IsoImage::open(path).unwrap();let file=iso.read_file(iso.find("/G/LEVEL1.WAD").unwrap()).unwrap();
@@ -153,6 +193,11 @@ fn original_aranos_ground_combo_timing_and_native_pose_playback() {
     let boot=rac2::boot::BootElf::parse(&boot_bytes).unwrap();
     let definition=rac2::items::AranosWrenchDefinition::parse(0,&boot,overlay).unwrap();
     assert_eq!((definition.definition_index,definition.class),(10,0x47));
+    assert_eq!((definition.attachment_list,definition.ground_damage,definition.jump_damage),(0,1.,2.));
+    let (chain,_)=rc_formats::gadget::joint_list(core.block(&data,"moby_class/0000").unwrap(),&ratchet.header,definition.attachment_list).unwrap();
+    assert!(!chain.is_empty());
+    let host_rows=[[1f32.to_bits(),0,0,0],[0,1f32.to_bits(),0,0],[0,0,1f32.to_bits(),0]];
+    let host_position=[247.,194.,49.89];
     let blob=core.block(&data,&format!("moby_class/{:04}",definition.class)).unwrap();
     let wrench=moby::parse_moby_class_for(Game::Rac2,blob).unwrap();
     let wrench_class=ma::MobyAnimClass::new(&wrench,ma::parse_sequences(blob,&wrench).unwrap());
@@ -174,6 +219,14 @@ fn original_aranos_ground_combo_timing_and_native_pose_playback() {
             assert!(bones.iter().flatten().flatten().all(|x|x.is_finite()));pose_count+=1;
             hand.advance(&wrench_class);let hand_pose=hand.pose(&wrench_class);
             assert_eq!(hand_pose.len(),10);assert!(hand_pose.iter().flatten().flatten().all(|x|x.is_finite()));
+            let partial=anim.ctl(&class).eval_chains(&[chain.as_slice()])[0];
+            let attached=rc_game2::items::attach_wrench(&partial,&host_rows,host_position,ratchet.header.scale);
+            assert!(attached.position.iter().all(|x|x.is_finite()));
+            // Independent translation-only kernel: small rounding differences
+            // are expected because the original multi-list matrix rotates first.
+            let point=ma::bone_points(&[partial[3].map(f32::to_bits)],&host_rows,host_position,ratchet.header.scale)[0];
+            for k in 0..3 {assert!((attached.position[k]-f32::from_bits(point[k])).abs()<0.002);}
+            for k in 0..3 {let norm=(0..3).map(|j|f32::from_bits(attached.rows[j][k]).powi(2)).sum::<f32>();assert!((norm-1.).abs()<0.002);}
             if combo.recovery(v.frame,v.blending(),v.flags as u16,0.)==Recovery::Idle {recovered=true;break;}
         }
         assert!(recovered,"original combo step {step} never reached recovery");
@@ -194,7 +247,7 @@ fn original_aranos_ground_combo_timing_and_native_pose_playback() {
     assert_eq!(combo.enter(recent,100.).step,0,"recent third swing wraps");
     assert_eq!(combo.enter(recent,100.).step,1,"GC short return can chain through a different state");
     assert_eq!(combo.enter(EntryHistory{saved_timer:22,..recent},100.).step,0,"27 ticks closes short return");
-    println!("ORIGINAL_RC2_GROUND_COMBO_TIMING_CPU_PASS original_table=0x25d910 sequences=0x17..0x19 poses={pose_count}; ITEM_OWNERSHIP_WRENCH_HITS_DAMAGE_PHYSICS_GPU_NOT_IMPLEMENTED_OR_TESTED");
+    println!("ORIGINAL_RC2_GROUND_COMBO_TIMING_CPU_PASS original_table=0x25d910 sequences=0x17..0x19 poses={pose_count} original_hand_attachment_matrices={pose_count}; ITEM_OWNERSHIP_RECEIVER_DAMAGE_PHYSICS_GPU_NOT_IMPLEMENTED_OR_TESTED");
 }
 
 #[test]
