@@ -1,5 +1,10 @@
 # First current blocker — 25 October 2026
 
+Verified follow-up: existing GC Hero::idle_seq now implements original2a4e48(argument0), which teleport's2af848 also requires. Original mode==1 returns0 (RAC1 differs); hp==1 selects51hex; separate byte18b2b2 selects67hex; otherwise0. The byte is NOT aliased to the sign-extended native surface id at18b2b0. Surface-reaction writers and nonzero weapon arguments remain unported. Source-hash-pinned original-data fixture passes health1 -> actual state0 entry -> original sequence51 ->111joint pose -> next animation/physics/collision tick. Damage was not fabricated to set this fixture.
+
+Latest local code b993164bcba298b884e997c94a45e4cbb7fcd895 / publica4c188bf9ca2aa4e96143103adc9a363539bf180. GCunits35PASS and originalCPU10PASS. RAC1 original ISO checks rerun:19levels/2968 identical class outputs,29784 pvar-block comparisons/464 shared bytes; read-only parsing, not R1 gameplay execution. Native run40154498317 pending; queued intermediate40153555598 was replaced/cancelled before execution, not passed. Active prefix run40153085562 is retained separately. No current device/originalGPU/fulllevel claim; cursor24 remains blocked.
+
+
 **GC_ARANOS_CLASS_1330_SOURCE_2B9E68_HERO_TELEPORT_SERVICES_UNPORTED**
 
 The object24/class1330/source3846d0 state-zero initializer has **not** completed or advanced. The verified World-owned prefix executes2f51a0, conditional322730(18hex),368560 and resolves actual cuboid40. The next original call2b9e68 requires the real shared Hero/Pad/object/item/trail/joint/camera/audio/lighting integration, not position-only teleport or a camera-table adapter. The motion dependency2b2cd8 is now implemented/tested, but the enclosing chain is not.

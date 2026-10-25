@@ -1,5 +1,10 @@
 # RC2 mechanics function map — 25 October 2026
 
+Verified follow-up: existing GC Hero::idle_seq now implements original2a4e48(argument0), which teleport's2af848 also requires. Original mode==1 returns0 (RAC1 differs); hp==1 selects51hex; separate byte18b2b2 selects67hex; otherwise0. The byte is NOT aliased to the sign-extended native surface id at18b2b0. Surface-reaction writers and nonzero weapon arguments remain unported. Source-hash-pinned original-data fixture passes health1 -> actual state0 entry -> original sequence51 ->111joint pose -> next animation/physics/collision tick. Damage was not fabricated to set this fixture.
+
+Latest local code b993164bcba298b884e997c94a45e4cbb7fcd895 / publica4c188bf9ca2aa4e96143103adc9a363539bf180. GCunits35PASS and originalCPU10PASS. RAC1 original ISO checks rerun:19levels/2968 identical class outputs,29784 pvar-block comparisons/464 shared bytes; read-only parsing, not R1 gameplay execution. Native run40154498317 pending; queued intermediate40153555598 was replaced/cancelled before execution, not passed. Active prefix run40153085562 is retained separately. No current device/originalGPU/fulllevel claim; cursor24 remains blocked.
+
+
 ## Class1330 recovery continuation — current, 25 October 2026
 
 **INCOMPLETE: initializer cursor remains object24.** The immediate acceptance criterion of advancing past24 is NOT achieved. First required service now narrowed to **GC_ARANOS_CLASS_1330_SOURCE_2B9E68_HERO_TELEPORT_SERVICES_UNPORTED**. Local source `db2d9f12ff17c1476b70bb117d27c1b50d84355a` / published `2abbf8bdbc42e4f90eba33bb3ee46b3f61a8fea4`; start local7925c78 / publicd1d38d0. Native run40153555598 pending; prior prefix run40153085562 separate. No claim of original-game GPU or physical-device execution.
@@ -25,6 +30,7 @@ Next executable step: Bind original2b9e68 to the existing GC Hero/Pad/World owne
 |368560|State1330::service_368560, halfword152c26=1|IMPLEMENTED/CPU_TESTED; tiny AOT candidate tested separately|
 |311320 /32a748|existing Objects::create / World::connect_actor; distances255, visible1, owner position/Euler/light/ambient, matrix/grid then flags&fff8|IMPLEMENTED/ORIGINAL_DATA_CPU_TESTED; no class callback implied|
 |360cd0 /360d28|World::rebuild_actor_attachments / Actor1330Data; delete20 old slots, source1a7af8 ordered signed classes, mirror flags, local pvars+8→+20|IMPLEMENTED allocation/lifetime slice/ORIGINAL_DATA_CPU_TESTED; original actor pose services separate|
+|2a4e48(argument0), L/sub_002A4E48_0x2a4e48.cpp|Hero::idle_seq; reads mode18c0d4/hp18c2ec/byte18b2b2, returns0/51/67, no writes/RNG; callers2af8a0 and2c4800/4814/482c pass0|IMPLEMENTED/ORIGINAL_DATA_CPU_TESTED through state0/sequence51/111joint pose/physics/collision; surface writer and nonzero argument unported|
 |2b9e68|actual cuboid40 position/Euler→Hero/moby; matrix→motion reset→tracked cleanup→items/modifiers/state/animation/probe/actors/camera/lighting|ANALYSED_STATIC, full native chain UNPORTED|
 |2b2cd8→2b3ae0,2eee38,330228|Hero::reset_teleport_motion; zero disp, speed/target, vectorsf20/f10/f30/f40/f50/f80/ec0, eff_len/yaw_vel/fwd_speed; reset only PadState history metadata|IMPLEMENTED/COMPILED/ORIGINAL_DATA_CPU_TESTED; no full teleport claim|
 |384c40 /384d28|state4/5 attachment flags/collision clearing; other states joint0/optionaljoint1 pose, Euler/grid and facing|ANALYSED_STATIC, UNPORTED; mandatory even after state0 transition|

@@ -358,8 +358,8 @@
     "scope": "CLASS1330_ORIGINAL_RECOVERY_INCOMPLETE_RELEASE_WITHHELD",
     "starting_local": "7925c78ad289a009bbd40aac568dc3b441e5f85c",
     "starting_public": "d1d38d08c55d8d43732251a2c8120a4c265b6e0c",
-    "local_code": "db2d9f12ff17c1476b70bb117d27c1b50d84355a",
-    "public_code": "2abbf8bdbc42e4f90eba33bb3ee46b3f61a8fea4",
+    "local_code": "b993164bcba298b884e997c94a45e4cbb7fcd895",
+    "public_code": "a4c188bf9ca2aa4e96143103adc9a363539bf180",
     "prefix_local": "37576b247fd10a1fb49d0e515c1eab947b276474",
     "prefix_public": "a31506a76977dbdec2dcd54d3862a80e17ae8976",
     "first_development_blocker": "GC_ARANOS_CLASS_1330_SOURCE_2B9E68_HERO_TELEPORT_SERVICES_UNPORTED",
@@ -377,7 +377,8 @@
       "Correct cuboid40 selection through actual owned pvars+4; typed mandatory teleport request",
       "32a748 owner connection through existing native object/matrix/grid",
       "360cd0/360d28 actual World allocator/owned-pvar/lifetime slice using original signed selector tables",
-      "2b2cd8 exact motion write set through same GC Hero and shared PadState; actual original-animation/physics/collision next-tick test"
+      "2b2cd8 exact motion write set through same GC Hero and shared PadState; actual original-animation/physics/collision next-tick test",
+      "Original2a4e48 argument0 idle selector through existing Hero state/animation path: mode1 ->0, health1 ->51hex, independentbyte1492 ->67hex, else0; original low-health111joint animation and next physics/collision tick pass"
     ],
     "not_implemented": [
       "Complete2b9e68 HeroTeleport",
@@ -424,13 +425,17 @@
       "formats_pass": 179,
       "formats_ignored": 1,
       "RAC1_units_pass": 715,
-      "GC_units_pass": 34,
+      "GC_units_pass": 35,
       "original_RC2_CPU_pass": 10,
       "ios_contracts_pass": 59,
       "recovery_python_pass": 13,
       "nested_native_AOT_harness_pass": 6,
       "AOT_query_inputs": 256,
-      "AOT_halfword_inputs": 65536
+      "AOT_halfword_inputs": 65536,
+      "RAC1_original_levels": 19,
+      "RAC1_identical_class_outputs": 2968,
+      "RAC1_pvar_blocks": 29784,
+      "RAC1_shared_bytes": 464
     },
     "compatibility": {
       "upstream_reference": "89c87e98f9d8296187df2a6310c67b32144090d3",
@@ -442,16 +447,20 @@
         "update_addresses": 185,
         "shared39c870_placements": 61
       },
-      "AOT": "EXACT_SIGNATURE_LEAF_PILOT_NOT_APP_INTEGRATED_NOT_GENERAL_TRANSLATOR"
+      "AOT": "EXACT_SIGNATURE_LEAF_PILOT_NOT_APP_INTEGRATED_NOT_GENERAL_TRANSLATOR",
+      "AOT_hosted_native_ARM64": "PASS_40153085562_ARM64_MAC_HOST_HARNESS_NOT_IOS_APP_OR_ORIGINAL_PS2"
     },
     "native_validation": {
-      "current_source_run": 40153555598,
-      "status": "PENDING",
+      "current_source_run": 40154498317,
+      "status": "IN_PROGRESS",
       "prefix_run": 40153085562,
-      "prefix_status": "IN_PROGRESS",
+      "prefix_status": "PASS_ALL_THREE_JOBS",
       "original_GPU": "NOT_TESTED_CURRENT_SOURCE",
       "physical_iPhone": "NOT_TESTED_NO_CONNECTED_DEVICE",
-      "full_level": "NOT_TESTED_INCOMPLETE"
+      "full_level": "NOT_TESTED_INCOMPLETE",
+      "superseded_motion_run": 40153555598,
+      "superseded_motion_run_status": "CANCELLED_WHILE_PENDING_BY_NEWER_SOURCE_NOT_A_FAILED_TEST",
+      "prefix_source": "a31506a76977dbdec2dcd54d3862a80e17ae8976"
     },
     "Aranos_complete": false,
     "full_game_complete": false,
@@ -475,8 +484,36 @@
       "class1330-motion-regressions-game2-20261025.log",
       "class1330-motion-regressions-original-20261025.log",
       "class1330-ios-contracts-20261025.log",
-      "class1330-recovery-tools-20261025.log"
+      "class1330-recovery-tools-20261025.log",
+      "class1330-idle-regressions-game2-20261025.log",
+      "class1330-idle-regressions-original-20261025.log",
+      "class1330-full_game_rac1_iso_regression-20261025.log",
+      "class1330-full_game_rac1_pvar_iso_regression-20261025.log"
     ],
-    "source_validation_files_byte_identical": 732
+    "source_validation_files_byte_identical": 732,
+    "motion_local": "db2d9f12ff17c1476b70bb117d27c1b50d84355a",
+    "motion_public": "2abbf8bdbc42e4f90eba33bb3ee46b3f61a8fea4",
+    "source_reconciliation": {
+      "different_tracked_blobs": 0,
+      "remote_only_preserved": [
+        "docs/assets/rerac-logo.png",
+        "tools/ghidra/names/clusters.tsv"
+      ],
+      "local_blobs": 1260,
+      "public_blobs": 1262
+    },
+    "internal_prefix_package": {
+      "scope": "INTERNAL_WITHHELD_NOT_CURRENT_FINAL_SOURCE",
+      "source": "a31506a76977dbdec2dcd54d3862a80e17ae8976",
+      "run": 40153085562,
+      "ipa_artifact": 12583274279,
+      "symbols_artifact": 12583199757,
+      "evidence_artifact": 12583668361,
+      "ipa_sha256": "827f0e8a674b7cf871b07514a98adb7b2135691fb7a99e02d36a10b047f17181",
+      "executable_and_dsym_uuid": "18f200d5-1dfb-3c5d-be2a-9eb5a33eebd2",
+      "signed": false,
+      "architecture": "arm64",
+      "user_delivery": false
+    }
   }
 }
