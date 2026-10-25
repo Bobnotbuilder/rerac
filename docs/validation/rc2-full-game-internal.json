@@ -354,7 +354,7 @@
     "active_background_engineering": false
   },
   "rc2_class1330_recovery": {
-    "updated_utc": "2026-10-25T02:13:52.679180+00:00",
+    "updated_utc": "2026-10-25T02:55:40.346729+00:00",
     "scope": "CLASS1330_ORIGINAL_RECOVERY_INCOMPLETE_RELEASE_WITHHELD",
     "starting_local": "7925c78ad289a009bbd40aac568dc3b441e5f85c",
     "starting_public": "d1d38d08c55d8d43732251a2c8120a4c265b6e0c",
@@ -452,15 +452,20 @@
     },
     "native_validation": {
       "current_source_run": 40154498317,
-      "status": "IN_PROGRESS",
+      "status": "PASS_ALL_THREE_JOBS",
       "prefix_run": 40153085562,
       "prefix_status": "PASS_ALL_THREE_JOBS",
       "original_GPU": "NOT_TESTED_CURRENT_SOURCE",
       "physical_iPhone": "NOT_TESTED_NO_CONNECTED_DEVICE",
-      "full_level": "NOT_TESTED_INCOMPLETE",
+      "full_level": "INCOMPLETE_NOT_TESTED",
       "superseded_motion_run": 40153555598,
       "superseded_motion_run_status": "CANCELLED_WHILE_PENDING_BY_NEWER_SOURCE_NOT_A_FAILED_TEST",
-      "prefix_source": "a31506a76977dbdec2dcd54d3862a80e17ae8976"
+      "prefix_source": "a31506a76977dbdec2dcd54d3862a80e17ae8976",
+      "ARM64_compile": "PASS",
+      "macOS_Intel_compile": "PASS",
+      "headless_and_synthetic_Metal": "PASS",
+      "iOS_simulator": "PASS_SYNTHETIC_INPUT_AND_RENDER_ONLY",
+      "current_source": "a4c188bf9ca2aa4e96143103adc9a363539bf180"
     },
     "Aranos_complete": false,
     "full_game_complete": false,
@@ -475,8 +480,8 @@
     "other_engine_adoption_changed": false,
     "RAC1_runtime_or_saves_changed": false,
     "bundle": "org.rerac.game.iospoc",
-    "next_technical_objective": "Bind original2b9e68 to the existing GC Hero/Pad/World owners. Reuse the now implemented2b2cd8 reset; recover/apply324140 tracked-object teardown,2af848 item put-away,2a53b8 modifier reset,2c4560 state0 mode2,2d2760 animation,2b4a08 probe,3e0b28/403d98 optional actor effects,2da160 camera reset and313008 lighting/grid. Preserve original order, then execute311320(d54),32a748,table73,360d28 attachments,script gates and384c40/384d28 tail before advancing cursor24. Keep132d state1 query383fc0/queued3842f8 separate.",
-    "session_state": "IN_PROGRESS",
+    "next_technical_objective": "Bind original2b9e68 to the existing GC Hero/Pad/World owners. Reuse implemented2b2cd8 motion reset and2a4e48(argument0) idle selector; recover/apply324140 tracked-object teardown,2af848 item put-away,2a53b8 modifier reset,2c4560 state0 mode2,2d2760 animation,2b4a08 probe,3e0b28/403d98 optional actor effects,2da160 camera reset and313008 lighting/grid. Preserve original order, then execute311320(d54),32a748,table73,360d28 attachments,script gates and384c40/384d28 tail before advancing cursor24. Keep132d state1 query383fc0/queued3842f8 separate.",
+    "session_state": "CHECKPOINTED_INCOMPLETE",
     "background_work_promised": false,
     "logs": [
       "class1330-regressions-formats-20261025.log",
@@ -513,6 +518,30 @@
       "executable_and_dsym_uuid": "18f200d5-1dfb-3c5d-be2a-9eb5a33eebd2",
       "signed": false,
       "architecture": "arm64",
+      "user_delivery": false
+    },
+    "KNOWN_ADDITIONAL_MISSING_CAPABILITIES": [
+      "GC_DYNAMIC_ACTOR_GPU_SYNC: NativeWorld::drive only iterates instance_to_moby static placements; audit/adapt existing gameplay.rs::DynMobys/upload_dynamic and moby_render slot rendering; do not create a second renderer",
+      "Complete2b9e68/3846d0 init and384d28 posed attachments",
+      "132d state1 query383fc0/queued3842f8",
+      "Full hero/item/wrench spatial hit and real damage receivers",
+      "Combat/enemies/crates/bolts/pickups/interactions/dynamic collision",
+      "HUD/level audio/scripts/checkpoints/saves/death/respawn/completion/transition",
+      "Original-data GPU and complete iPhone/Backbone acceptance"
+    ],
+    "active_background_engineering": false,
+    "internal_package": {
+      "scope": "INTERNAL_EXPERIMENTAL_WITHHELD",
+      "source": "a4c188bf9ca2aa4e96143103adc9a363539bf180",
+      "run": 40154498317,
+      "ipa_artifact": 12583903312,
+      "symbols_artifact": 12583818638,
+      "evidence_artifact": 12584069881,
+      "ipa_sha256": "3d309a0dfce884eaaa4a124aec750fc494152853476435e8fa6ce833161304de",
+      "executable_and_dsym_uuid": "bc587eba-533d-3750-a932-117d7a0b6f0d",
+      "signed": false,
+      "architecture": "arm64",
+      "bundle": "org.rerac.game.iospoc",
       "user_delivery": false
     }
   }

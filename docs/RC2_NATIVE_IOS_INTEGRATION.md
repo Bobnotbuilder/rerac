@@ -1,5 +1,12 @@
 # Native iOS integration — 25 October 2026
 
+## Final native validation receipt — source a4c188bf9ca2aa4e96143103adc9a363539bf180
+
+Run40154498317 passed all three jobs: current-source native Intel/macOS compilation, iPhone ARM64 compilation/internal unsigned packaging/UUID-matched symbols, headless regressions, synthetic Metal texture/depth/order and iOS27 batched/unbatched startup/controller/display/AA/shadow/resize probes. Local original-data tests use the owned ISO; hosted original-data cases lack that private input and are NOT_TESTED. No current original-data GPU scene, physical iPhone/Backbone or start-to-finish gameplay/performance validation occurred.
+
+**Checkpointed INCOMPLETE.** Class1330 cursor24 remains blocked by full2b9e68 and later pose/script/tail services;132d state1 query/draw and dynamic actor GPU sync remain separate missing capabilities. No source callback is bypassed, no production RC2 Play, no user-facing IPA, no claim of background engineering after this checkpoint. Source implementation localb993164bcba298b884e997c94a45e4cbb7fcd895/publica4c188bf9ca2aa4e96143103adc9a363539bf180. Internal package/debug identity is retained in the structured validation receipt; it is withheld until complete-Aranos non-hardware gates pass.
+
+
 Verified follow-up: existing GC Hero::idle_seq now implements original2a4e48(argument0), which teleport's2af848 also requires. Original mode==1 returns0 (RAC1 differs); hp==1 selects51hex; separate byte18b2b2 selects67hex; otherwise0. The byte is NOT aliased to the sign-extended native surface id at18b2b0. Surface-reaction writers and nonzero weapon arguments remain unported. Source-hash-pinned original-data fixture passes health1 -> actual state0 entry -> original sequence51 ->111joint pose -> next animation/physics/collision tick. Damage was not fabricated to set this fixture.
 
 Latest local code b993164bcba298b884e997c94a45e4cbb7fcd895 / publica4c188bf9ca2aa4e96143103adc9a363539bf180. GCunits35PASS and originalCPU10PASS. RAC1 original ISO checks rerun:19levels/2968 identical class outputs,29784 pvar-block comparisons/464 shared bytes; read-only parsing, not R1 gameplay execution. Native run40154498317 pending; queued intermediate40153555598 was replaced/cancelled before execution, not passed. Active prefix run40153085562 is retained separately. No current device/originalGPU/fulllevel claim; cursor24 remains blocked.
@@ -53,3 +60,7 @@ Current run40144142983 ALL3JOBS PASS: Intel native compile, ARM64 unsigned app/p
 | Generated PS2Recomp C++ |Analysis material only|Not linked into app|Not executed|NOT_TESTED|
 
 Internal IPA SHA256 `07bd7d50ab8ddd7bb2cdfff0579bfbb0fb24f55dacee19123494620f2189d697`; ARM64 executable/dSYM UUID `9355aa34-3708-3106-a056-700f00a03e41`. Effective bundleorg.rerac.game.iospoc preserved. No user-facing package delivery: complete-Aranos release gates remain false.
+
+## Additional confirmed renderer integration gap
+
+GC NativeWorld::drive currently walks instance_to_moby (static placements) only. The source-supported D54/attachment allocations above have NOT been uploaded/rendered by this path. Existing RAC1 gameplay.rs::DynMobys/upload_dynamic and moby_render.rs dynamic slot/material/palette code are the reuse starting point (REUSE_WITH_ADAPTER), with GC draw/pose/lighting semantics requiring validation. Do not write a second renderer or claim dynamic GPU rendering from allocator tests. This is separate additional missing capability GC_DYNAMIC_ACTOR_GPU_SYNC, not a replacement for the earlier2b9e68 initializer blocker.

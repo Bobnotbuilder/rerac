@@ -1,5 +1,12 @@
 # RC2 executable overlays and recovery workflow
 
+## Final native validation receipt — source a4c188bf9ca2aa4e96143103adc9a363539bf180
+
+Run40154498317 passed all three jobs: current-source native Intel/macOS compilation, iPhone ARM64 compilation/internal unsigned packaging/UUID-matched symbols, headless regressions, synthetic Metal texture/depth/order and iOS27 batched/unbatched startup/controller/display/AA/shadow/resize probes. Local original-data tests use the owned ISO; hosted original-data cases lack that private input and are NOT_TESTED. No current original-data GPU scene, physical iPhone/Backbone or start-to-finish gameplay/performance validation occurred.
+
+**Checkpointed INCOMPLETE.** Class1330 cursor24 remains blocked by full2b9e68 and later pose/script/tail services;132d state1 query/draw and dynamic actor GPU sync remain separate missing capabilities. No source callback is bypassed, no production RC2 Play, no user-facing IPA, no claim of background engineering after this checkpoint. Source implementation localb993164bcba298b884e997c94a45e4cbb7fcd895/publica4c188bf9ca2aa4e96143103adc9a363539bf180. Internal package/debug identity is retained in the structured validation receipt; it is withheld until complete-Aranos non-hardware gates pass.
+
+
 Verified follow-up: existing GC Hero::idle_seq now implements original2a4e48(argument0), which teleport's2af848 also requires. Original mode==1 returns0 (RAC1 differs); hp==1 selects51hex; separate byte18b2b2 selects67hex; otherwise0. The byte is NOT aliased to the sign-extended native surface id at18b2b0. Surface-reaction writers and nonzero weapon arguments remain unported. Source-hash-pinned original-data fixture passes health1 -> actual state0 entry -> original sequence51 ->111joint pose -> next animation/physics/collision tick. Damage was not fabricated to set this fixture.
 
 Latest local code b993164bcba298b884e997c94a45e4cbb7fcd895 / publica4c188bf9ca2aa4e96143103adc9a363539bf180. GCunits35PASS and originalCPU10PASS. RAC1 original ISO checks rerun:19levels/2968 identical class outputs,29784 pvar-block comparisons/464 shared bytes; read-only parsing, not R1 gameplay execution. Native run40154498317 pending; queued intermediate40153555598 was replaced/cancelled before execution, not passed. Active prefix run40153085562 is retained separately. No current device/originalGPU/fulllevel claim; cursor24 remains blocked.

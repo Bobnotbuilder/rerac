@@ -74,3 +74,7 @@ python3 -m unittest discover -s tools/recovery/tests -p 'test_rc2_*.py' -v
 ```
 
 Latest run:13 Python recovery contracts PASS (existing4 overlay +5 AOT +4 candidate contracts); nested native harness6 PASS (4 existing State1330 tests, exhaustive differential, missing-mapping errors). Mutating any one of the two leaves' four instructions fails closed. Proprietary inputs/generated source and reports remain private. Fix classifications: `GAME_SPECIFIC` bounded RC2 recovery/emitter; `SHARED_TESTING` candidate/differential infrastructure candidate only. No Shared Core component/version/adoption changed, and no other engine is declared upgraded.
+
+## Additional confirmed renderer integration gap
+
+GC NativeWorld::drive currently walks instance_to_moby (static placements) only. The source-supported D54/attachment allocations above have NOT been uploaded/rendered by this path. Existing RAC1 gameplay.rs::DynMobys/upload_dynamic and moby_render.rs dynamic slot/material/palette code are the reuse starting point (REUSE_WITH_ADAPTER), with GC draw/pose/lighting semantics requiring validation. Do not write a second renderer or claim dynamic GPU rendering from allocator tests. This is separate additional missing capability GC_DYNAMIC_ACTOR_GPU_SYNC, not a replacement for the earlier2b9e68 initializer blocker.
