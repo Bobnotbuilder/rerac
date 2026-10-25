@@ -89,6 +89,87 @@ impl SamplePoint {
     }
 }
 
+/// Actual native host boundary; returning None means no transport call ran.
+/// Returned handles are fed through the original32fcc0 callback, including
+/// source-supported failures. This adapter never fabricates a successful voice.
+pub trait EnvironmentHost {
+    fn start_music(&mut self,request:&crate::level_music::StartRequest)->Result<Option<i32>>;
+    /// Store original fog globals, THEN execute2e4af0. Each step may suspend.
+    fn write_fog(&mut self,effect:Effect)->Result<bool>;
+    fn update_fog_2e4af0(&mut self)->Result<bool>;
+}
+
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub enum ApplyResult {Complete,Pending(u32)}
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+enum ApplyStep {Ambient,Light,Reverb,Music,MusicTransport,Fog,FogUpdate,Done}
+
+/// Continuation for313008 after its original nearest-point selection. Borrows
+/// the existing Moby, reverb request and GC music owner; no second audio engine,
+/// voice manager, RNG or invented global defaults. Store this with the original
+/// caller until Complete, including when a real native host is unavailable.
+pub struct Apply {
+    point:Option<SamplePoint>,
+    owner:(u32,u32),
+    next:ApplyStep,
+    pending_music:Option<crate::level_music::StartRequest>,
+}
+impl Apply {
+    pub fn begin(points:&[SamplePoint],moby:&Moby)->Self {
+        Self {point:nearest(points,moby.position[..3].try_into().unwrap()).map(|i|points[i]),
+            owner:(moby.index,moby.uid_hi),next:ApplyStep::Ambient,pending_music:None}
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn resume(&mut self,moby:&mut Moby,
+        mut reverb:Option<&mut rc_game::audio::reverb::ReverbRequest>,
+        mut music:Option<&mut crate::level_music::MusicPlayer>,
+        wad:&crate::level_music::MusicWad<'_>,disc_sector:u32,
+        host:&mut dyn EnvironmentHost)->Result<ApplyResult> {
+        if self.owner!=(moby.index,moby.uid_hi) {return invalid("GC environment continuation owner changed");}
+        let Some(point)=self.point else {return Ok(ApplyResult::Complete);};
+        loop {
+            self.next=match self.next {
+                ApplyStep::Ambient=>{moby.light=0;moby.ambient=[point.ambient[0],point.ambient[1],point.ambient[2],0];ApplyStep::Light},
+                ApplyStep::Light=>{moby.light=point.light;ApplyStep::Reverb},
+                ApplyStep::Reverb=>{
+                    if point.reverb_enable!=0 {
+                        let Some(request)=reverb.as_deref_mut() else {return Ok(ApplyResult::Pending(0x313184));};
+                        // GC directly overwrites1986c4..ca, dirty1986cb|=7.
+                        // R1set() has changed-value dirty semantics; reuse only
+                        // the existing request OWNER/fields, not that setter.
+                        request.depth=point.reverb_depth as i32;request.kind=point.reverb_type;
+                        request.delay=point.reverb_delay;request.feedback=point.reverb_feedback;request.dirty|=7;
+                    }
+                    ApplyStep::Music
+                },
+                ApplyStep::Music=>{
+                    let Some(player)=music.as_deref_mut() else {return Ok(ApplyResult::Pending(0x32eb88));};
+                    self.pending_music=player.request_start(wad,disc_sector,point.music_track as i32,1,0x400)?;
+                    if self.pending_music.is_some() {ApplyStep::MusicTransport}else{ApplyStep::Fog}
+                },
+                ApplyStep::MusicTransport=>{
+                    let Some(player)=music.as_deref_mut() else {return Ok(ApplyResult::Pending(0x32fcc0));};
+                    let Some(handle)=host.start_music(self.pending_music.as_ref().unwrap())? else {
+                        return Ok(ApplyResult::Pending(0x133350));
+                    };
+                    player.complete_start(handle);self.pending_music=None;ApplyStep::Fog
+                },
+                ApplyStep::Fog=>{
+                    if let Some(effect)=point.effects().into_iter().find(|e|matches!(e,Effect::Fog {..})) {
+                        if !host.write_fog(effect)? {return Ok(ApplyResult::Pending(0x313200));}
+                        ApplyStep::FogUpdate
+                    }else{ApplyStep::Done}
+                },
+                ApplyStep::FogUpdate=>{
+                    if !host.update_fog_2e4af0()? {return Ok(ApplyResult::Pending(0x2e4af0));}
+                    ApplyStep::Done
+                },
+                ApplyStep::Done=>return Ok(ApplyResult::Complete),
+            };
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,4 +203,40 @@ mod tests {
         let p=read(&g).unwrap();assert_eq!(p.len(),1);assert_eq!(p[0].position,[250.25,0.,0.]);assert_eq!(p[0].reverb_depth,-17);
         assert!(read(&g[..0xcf]).is_err());
     }
+    struct Host {events:Vec<u32>,allow_fog:bool}
+    impl EnvironmentHost for Host {
+        fn start_music(&mut self,_:&crate::level_music::StartRequest)->Result<Option<i32>> {panic!("missing original track cannot start transport")}
+        fn write_fog(&mut self,_:Effect)->Result<bool> {self.events.push(0x313200);Ok(true)}
+        fn update_fog_2e4af0(&mut self)->Result<bool> {self.events.push(0x2e4af0);Ok(self.allow_fog)}
+    }
+    fn empty_music_wad()->Vec<u8> {let mut b=vec![0;0x1018];b[..4].copy_from_slice(&0x1018u32.to_le_bytes());b}
+    #[test]
+    fn owned_environment_chain_preserves_pending_writes_and_never_skips_fog() {
+        use rc_game::audio::{music::Player,reverb::ReverbRequest};
+        let mut m=Moby::init_instance(7,1,None);let mut q=point();q.music_track=4;
+        let bytes=empty_music_wad();let wad=crate::level_music::MusicWad::parse(&bytes).unwrap();
+        let mut host=Host {events:vec![],allow_fog:false};let mut apply=Apply::begin(&[q],&m);
+        assert_eq!(apply.resume(&mut m,None,None,&wad,0,&mut host).unwrap(),ApplyResult::Pending(0x313184));
+        assert_eq!((m.light,m.ambient),(q.light,[6,7,8,0]));
+        let mut reverb=ReverbRequest {dirty:0x80,..Default::default()};
+        assert_eq!(apply.resume(&mut m,Some(&mut reverb),None,&wad,0,&mut host).unwrap(),ApplyResult::Pending(0x32eb88));
+        assert_eq!((reverb.depth,reverb.kind,reverb.delay,reverb.feedback,reverb.dirty),(-12,3,9,10,0x87));
+        m.light=99;reverb.depth=42; // Completed writes MUST NOT replay on retry.
+        let mut music=crate::level_music::MusicPlayer {player:Player::default(),source_14:27};let before=music;
+        assert_eq!(apply.resume(&mut m,Some(&mut reverb),Some(&mut music),&wad,0,&mut host).unwrap(),ApplyResult::Pending(0x2e4af0));
+        assert_eq!(music,before);assert_eq!((m.light,reverb.depth),(99,42));
+        assert_eq!(host.events,vec![0x313200,0x2e4af0]);host.allow_fog=true;
+        assert_eq!(apply.resume(&mut m,Some(&mut reverb),Some(&mut music),&wad,0,&mut host).unwrap(),ApplyResult::Complete);
+        assert_eq!(host.events,vec![0x313200,0x2e4af0,0x2e4af0]);
+        assert_eq!(apply.resume(&mut m,None,None,&wad,0,&mut host).unwrap(),ApplyResult::Complete);
+        assert_eq!(host.events.len(),3);
+    }
+    #[test]
+    fn environment_continuation_cannot_rebind_to_another_owner() {
+        let mut m=Moby::init_instance(7,1,None);let mut apply=Apply::begin(&[point()],&m);
+        let b=empty_music_wad();let wad=crate::level_music::MusicWad::parse(&b).unwrap();
+        let mut host=Host {events:vec![],allow_fog:false};m.index=8;
+        assert!(apply.resume(&mut m,None,None,&wad,0,&mut host).is_err());assert!(host.events.is_empty());
+    }
+
 }

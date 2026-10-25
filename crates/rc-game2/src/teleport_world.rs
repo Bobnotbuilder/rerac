@@ -18,7 +18,8 @@ pub struct TrackedObjects {
 /// defaults describe a native test fixture, not recovered original New Game.
 #[derive(Clone,Debug,Default,PartialEq,Eq)]
 pub struct TeleportStorage {
-    pub position_w:u32,
+    /// Unknown after a native XYZ-only collision result is copied by SQ.
+    pub position_w:Option<u32>,
     pub euler_w:u32,
     pub trails:[TrackedObjects;2],
     pub source_18a1c0:u32,
@@ -60,7 +61,7 @@ impl crate::hero::teleport_state::StateZeroServices for StateServices<'_> {
 }
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-pub enum TeleportStep {Pose,Motion,Trail0,Trail1,Flags,PutAway,Modifiers,State,Animation,GroupFlag,Probe,Actor0,Actor1,Camera,Lighting,Done}
+pub enum TeleportStep {Pose,Motion,Trail0,Trail1,Flags,PutAway,Modifiers,State,Animation,GroupFlag,Probe,Snap,Actor0,Actor1,Camera,Lighting,Done}
 #[derive(Clone,Copy,Debug,PartialEq)]
 pub struct TeleportProgress {pub request:TeleportRequest,pub hero:MobyId,pub next:TeleportStep}
 
@@ -110,7 +111,7 @@ impl World {
                 self.pending_1330=Some(Pending1330::TeleportService {request,source});Ok(TeleportStep::Probe)
             },
             GroundResult::Complete=>{
-                self.teleport_progress.as_mut().unwrap().next=TeleportStep::Actor0;
+                self.teleport_progress.as_mut().unwrap().next=TeleportStep::Snap;
                 self.resume_1330_teleport(hero_id,hero,pad,anim,class,layer_present,counter)
             },
         }
@@ -158,7 +159,7 @@ impl World {
                 TeleportStep::Trail0|TeleportStep::Trail1=>0x324140,TeleportStep::Flags=>0x2b9ef8,
                 TeleportStep::PutAway=>0x2af848,TeleportStep::Modifiers=>0x2a53b8,TeleportStep::State=>0x2c4560,
                 TeleportStep::Animation=>0x2d2760,TeleportStep::GroupFlag=>0x2b9f50,
-                TeleportStep::Probe=>0x2b4a08,TeleportStep::Actor0=>0x3e0b28,
+                TeleportStep::Probe=>0x2b4a08,TeleportStep::Snap=>0x2b9f7c,TeleportStep::Actor0=>0x3e0b28,
                 TeleportStep::Actor1=>0x403d98,TeleportStep::Camera=>0x2da160,
                 TeleportStep::Lighting=>0x313008,TeleportStep::Done=>0x2b9ffc,
             }});
@@ -167,7 +168,7 @@ impl World {
                     // Existing GC native-first Euler kernel (not bit-exact VU
                     // validation). +c0 is THREE rows, not a sphere/grid update.
                     hero.pos=request.position[..3].try_into().unwrap();
-                    hero.teleport.position_w=request.position[3].to_bits();
+                    hero.teleport.position_w=Some(request.position[3].to_bits());
                     self.objects.get_mut(hero_id).unwrap().position=request.position;
                     hero.rot=request.euler[..3].try_into().unwrap();
                     hero.teleport.euler_w=request.euler[3].to_bits();
@@ -227,6 +228,17 @@ impl World {
                 // entry point executes the recovered branch and retains any
                 // unsupported water/owner/gravity service as a blocker.
                 TeleportStep::Probe=>return Ok(next),
+                TeleportStep::Snap=>{
+                    //2b9f7c..2b9fac, after the complete supported probe and
+                    //before either optional actor service. The source copies
+                    //the global position only; it does not repeat the earlier
+                    //moby-position/grid write here. Preserve unknown queryW.
+                    use rc_game::hero::physics::{dist3,from_f32x3};
+                    if dist3(from_f32x3(hero.pos),from_f32x3(hero.ground_point))<rc_game::ps2v::Pf::ONE {
+                        hero.pos=hero.ground_point;hero.teleport.position_w=hero.original_ground.point_w;
+                    }
+                    TeleportStep::Actor0
+                },
                 TeleportStep::Actor0=>{
                     let Some(bindings)=self.teleport_globals.as_ref().and_then(|g|g.actors_3e0b28) else {return Ok(next);};
                     bindings.service_3e0b28(&mut self.objects,0,0)?;TeleportStep::Actor1

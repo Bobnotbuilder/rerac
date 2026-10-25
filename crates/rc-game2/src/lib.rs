@@ -8,6 +8,8 @@ pub mod actor_1330;
 pub mod init_1330;
 pub mod state_1330;
 pub mod camera;
+pub mod camera_teleport;
+pub mod crate_init;
 pub mod collision;
 pub mod controller_132d;
 pub mod effects;

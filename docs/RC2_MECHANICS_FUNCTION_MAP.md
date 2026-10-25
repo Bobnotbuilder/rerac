@@ -12,6 +12,16 @@ Current-source native run40174992233 is RUNNING, not validated yet. Prior source
 
 Fix classification GAME_SPECIFIC; no Shared Core promotion, other-engine adoption, save/data migration, bundle identity or renderer replacement. Exact private receipts: evidence/teleport-recovery-20261025.json and teleport-final-regressions-*-20261025.log; dependency batching442 owners/51 callback groups/86 shared services retained. Remaining work is engineering, not certified by component test counts.
 
+### New source-backed native bindings in this checkpoint
+
+| Original function / generated file | Relationships and owned effects | Validation / remaining dependencies |
+|---|---|---|
+|2b4a08 / sub_002B4A08_0x2b4a08.cpp|Caller2b9e68; segment2b48b0, native line2de878, surface2e23e0, footstep2e2410, boot normalizer1290e0, slope2d4248, angles2ef510/2b8f50. Existing Hero owns XYZ/counters; GroundStorage owns only absent source lanes/fields. Air/f16c halfwords wrap; primary queryflags2, eligible side queriesflags22; one continuation.|STATIC_SOURCE_RECOVERY → IMPLEMENTED → COMPILED_NATIVE_CPU → TESTED_ORIGINAL_ASSET_WORLD. Whole source range2b4a08..2b5358 SHA1ef9a8191d64daecb805b15b0edd0fc5df92d0800 pinned. No original PS2 differential, VU bit-parity, current GPU or device validation. Water31d7a0, moby3204e8, alternate gravity326820 etc remain explicit pending.|
+|3e0b28 / sub_003E0B28_0x3e0b28.cpp|Original firstactor GP+13fc; distinct resetowner GP+0b80 through3b9578. Direct state-byte write then resetowner pvars28 then actorpvars20; noRNG/allocations.|Executed after supported World ground branch with real allocated objects/pvars and explicit test bindings. ActualNewGame global bindings remain unknown.|
+|403d98 / sub_00403D98_0x403d98.cpp|Original firstactor GP+1c70; distinct resetowner GP+1d68 through404298. Direct state-byte then resetowner pvars28 then actorpvars60.|Same ordered World chain; missing bindings suspend rather than assume null. Camera2da160 follows both calls and remains pending.|
+
+The wrapper uses the actual live World grid/rigid resources and ignores the actual hero owner in collision. It never constructs a RAC1 Hero or runs the RAC1 title scheduler. Source hashes prove provenance, not runtime behavioural equivalence.
+
 ## Resumed teleport state integration — 25 October 2026
 
 Recovery checkpoint: local `30035c7`, published `7e67d3193af528eaaebd1b37ca1f0f05a909bee0`. The previous uncommitted tree was preserved, inspected, compiled and committed before further implementation. Its fresh CPU results were 53 RC2 units and 10 original-data tests; these did not certify iOS. Native run40172015336 failed all three jobs on an incorrect Option-to-Result `?` at rac2_level.rs:109. The loader now uses an explicit missing-resource error; the failure receipt is retained privately.

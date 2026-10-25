@@ -100,7 +100,9 @@ impl GroundProgress {
                     if s.source_0338!=0 {s.source_0338=s.source_0338.wrapping_add(1);}
                     let mut up=hero.cap_radius*if hero.group==2 {f32::from_bits(0x4039_999a)}else{f32::from_bits(0x400c_cccd)};
                     if hero.query_2adff8() {up=0.;}
-                    let position=[hero.pos[0],hero.pos[1],hero.pos[2],f32::from_bits(hero.teleport.position_w)];
+                    // The native collision API consumes XYZ only. Its scratch W is
+                    // not written back as a recovered original memory value.
+                    let position=[hero.pos[0],hero.pos[1],hero.pos[2],f32::from_bits(hero.teleport.position_w.unwrap_or(0))];
                     self.segment=probe::segment(position,up,-48.,true,input.frame);Step::Query
                 },
                 Step::Query=>{

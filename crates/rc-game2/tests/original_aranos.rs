@@ -411,7 +411,7 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     hero.teleport.trails[1]=TrackedObjects {slots:[Some(ghosts[2]),None,None,None,None,None,None,None,None,None],count:1,active:5};
     assert_eq!(world.resume_1330_teleport(hero_id,&mut hero,&mut pad,&mut anim,hero_class,None,0).unwrap(),TeleportStep::PutAway);
     assert_eq!(hero.pos,request.position[..3]);assert_eq!(world.objects.get(hero_id).unwrap().position,request.position);
-    assert_eq!(hero.rot,request.euler[..3]);assert_eq!(hero.teleport.position_w,request.position[3].to_bits());
+    assert_eq!(hero.rot,request.euler[..3]);assert_eq!(hero.teleport.position_w,Some(request.position[3].to_bits()));
     assert_eq!(hero.vel,[0.;3]);assert_eq!((pad.hist_count,pad.hist_index,pad.held),(0,0,0x4000));
     assert_eq!((hero.air_ticks,hero.teleport.source_18a1c0,hero.teleport.source_18a1c4,hero.teleport.byte_18c30f),(1,0,0xfc,0));
     for &id in &ghosts[..3] {assert_eq!((world.objects.get(id).unwrap().state,world.objects.get(id).unwrap().delete_tick),(0xfe,2));assert!(world.grid.cells_of(id as u16).is_empty());}
@@ -489,6 +489,12 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     assert_eq!(hero.original_ground.gravity_direction,[0.,0.,-1.,0.]);
     assert_eq!(hero.original_ground.point_w,None,"native XYZ query does not establish original W");
     assert_eq!(hero.ground_point,hit.point);assert_eq!(hero.surface,hit.surface_id());
+    let snap_distance=rc_game::hero::physics::dist3(rc_game::hero::physics::from_f32x3(request.position[..3].try_into().unwrap()),
+        rc_game::hero::physics::from_f32x3(hit.point));
+    if snap_distance<rc_game::ps2v::Pf::ONE {
+        assert_eq!(hero.pos,hit.point);assert_eq!(hero.teleport.position_w,None);
+    }else{assert_eq!(hero.pos,request.position[..3]);}
+    assert_eq!(world.objects.get(hero_id).unwrap().position,request.position,"source snap only updates global hero position");
     let probe_counts=(hero.air_ticks,hero.f16c,hero.grounded_ticks);
     world.teleport_globals.as_mut().unwrap().actors_3e0b28=Some(rc_game2::teleport_actors::ActorBindings {
         actor:Some(actor),reset_actor:Some(owner)});
@@ -530,7 +536,24 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     // light only. Requests are NOT executed music/fog or GPU validation.
     let points=rc_game2::env_sample::read(&gameplay).unwrap();
     let sample=rc_game2::env_sample::nearest(&points,hero.pos).expect("Aranos cuboid40 environment sample");
-    points[sample].apply_moby(world.objects.get_mut(hero_id).unwrap());
+    // Independent execution of313008's actual selected branch on the SAME
+    // World moby and existing native music-player representation. Camera is
+    // still pending above; this does not acknowledge or bypass that service.
+    struct UnboundEnvironmentHost;
+    impl rc_game2::env_sample::EnvironmentHost for UnboundEnvironmentHost {
+        fn start_music(&mut self,_:&rc_game2::level_music::StartRequest)->rc_formats::buf::Result<Option<i32>> {panic!("original sample4 must take missing-entry guard")}
+        fn write_fog(&mut self,_:rc_game2::env_sample::Effect)->rc_formats::buf::Result<bool> {panic!("sample4 has no fog branch")}
+        fn update_fog_2e4af0(&mut self)->rc_formats::buf::Result<bool> {panic!("sample4 has no fog branch")}
+    }
+    let music_file=iso.find("/G/AUDIO0.WAD").unwrap();let music_bytes=iso.read_file(music_file).unwrap();
+    let music_wad=rc_game2::level_music::MusicWad::parse(&music_bytes).unwrap();
+    let mut music=rc_game2::level_music::MusicPlayer {player:rc_game::audio::music::Player::default(),source_14:37};
+    let before_music=music;
+    let mut environment=rc_game2::env_sample::Apply::begin(&points,world.objects.get(hero_id).unwrap());
+    assert_eq!(environment.resume(world.objects.get_mut(hero_id).unwrap(),None,Some(&mut music),
+        &music_wad,music_file.lba,&mut UnboundEnvironmentHost).unwrap(),rc_game2::env_sample::ApplyResult::Complete);
+    assert_eq!(music,before_music,"the original missing-track guard must not mutate music state");
+
     assert_eq!(world.objects.get(hero_id).unwrap().light,points[sample].light);
     assert_eq!(world.objects.get(hero_id).unwrap().ambient[..3],points[sample].ambient);
     assert!(points[sample].effects().iter().any(|e|matches!(e,rc_game2::env_sample::Effect::Music {mode:1,volume:0x400,..})));
