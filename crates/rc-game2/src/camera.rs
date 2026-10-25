@@ -135,10 +135,44 @@ pub struct MotionGlobals {
     pub smoothed_hero_w: Option<f32>,
 }
 
-/// A represented native step cannot acknowledge the entire guest service:
-/// full-vector copies retain W lanes absent from the current V3 owners.
+/// Coverage of the native motion effects. The original helpers mask XYZ and
+/// reduce XYZ only; copied guest W lanes do not feed these observable results.
+/// Callers must still establish actual input/bank provenance before advancing
+/// their original reset; this value alone is not a world execution receipt.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MotionResetCoverage { XyzAndScalarsOnly }
+
+/// Live original defaults read by424908. No Default: an original reset must
+/// receive the current owners' values, not the upstream constructor's choices.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct InitDefaults {
+    pub horizontal_spring: f32, //GP+2450
+    pub vertical_spring: f32,   //GP+2454
+    pub look_blend_length: i16, //GP+24c4
+    pub pull_max: f32,          //GP+24c0
+    pub sphere_step: f32,       //GP+2484
+    pub sphere_count: f32,      //GP+2488
+    pub sphere_scale: f32,      //GP+248c
+    pub yaw_rate: f32,          //1a8904
+    pub end_flags: u32,         //1b17d4
+    pub line_flags: u32,        //1b17cc, read by snap424548
+}
+
+/// Actual native owners of the source wrapper's externally visible writes.
+/// The record and global values must come from the caller's existing bank;
+/// scratch copies are insufficient evidence of a real world reset.
+pub struct InitOwners<'a> {
+    pub hero_moby: usize,
+    pub record_byte_7d: u8,
+    pub record_half_7e: &'a mut i16,
+    pub word_gp_2530: &'a mut u32,
+    pub word_gp_2534: &'a mut u32,
+}
+
+/// Normal byte7d=0 branch executed through existing native target/collision/
+/// snap helpers. This records native coverage, not original-data/device proof.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InitResetCoverage { NativeTypeZero }
 
 impl CamInput<'_> {
     /// `0x2de878(a, b, flags, Ratchet, 0)`: the hit point.
@@ -158,6 +192,10 @@ pub struct FollowCamera {
     pub rows: [V3; 3],
     pub pos: V3,
     saved_fwd: V3,
+    /// Original record+64 and D+120 use the existing native hero identity,
+    /// never a second hero allocation or a guest address cast to host pointer.
+    prev_pos: V3,
+    hero_owner: Option<usize>,
     /// D+0x00: the desired position (pivot + offset).
     desired: V3,
     /// D+0x10 (u16): the leash on; D+0x20 / +0x44: the row blend's timer / 1 over its length.
@@ -330,8 +368,9 @@ impl FollowCamera {
     /// `original_gravity` is the live vector18a0e0, NOT Hero's scalar/selector
     /// gravity field. No guessed mapping or normal-NewGame provenance.
     ///
-    /// Does not satisfy camera_teleport::Call::Motion: original full-vector W
-    /// lanes still need a proven representation at their downstream owners.
+    /// Original vector helpers mask/reduce XYZ: unused copied W lanes do not
+    /// gate native motion execution. Actual gravity/history/bank provenance
+    /// remains the caller's responsibility; this is not a full2da160 reset.
     pub fn reset_motion_represented(&mut self, inp: &CamInput, original_gravity: V3) -> MotionResetCoverage {
         self.pre_motion_with_gravity(inp, norm(original_gravity, -1.0));
         MotionResetCoverage::XyzAndScalarsOnly
@@ -343,13 +382,43 @@ impl FollowCamera {
             vertical_length:self.vertical_speed,smoothed_hero_w:self.hero_s_w}
     }
 
+    ///424908 normal reset branch on this existing camera. Validates owner and
+    /// branch before writes; byte7d=2's transition helper4247a0 is unsupported.
+    /// Full bank selection, backup/publication and projection remain separate.
+    pub fn reset_init_represented(&mut self, inp: &CamInput, defaults: InitDefaults,
+        original_gravity: V3, owners: InitOwners<'_>) -> rc_formats::buf::Result<InitResetCoverage> {
+        if owners.record_byte_7d != 0 {
+            return rc_formats::buf::invalid("GC camera init requires supported original byte7d=0 reset branch");
+        }
+        if inp.hero_moby != Some(owners.hero_moby) {
+            return rc_formats::buf::invalid("GC camera init hero owner differs from existing collision/pose owner");
+        }
+        *owners.word_gp_2530=0;*owners.word_gp_2534=0;
+        self.hero_owner=Some(owners.hero_moby);
+        self.init_native(inp, defaults, original_gravity);
+        self.prev_pos=self.pos; //4246b8..6cc, within snap424548(1)
+        *owners.record_half_7e=0; //424cb0
+        Ok(InitResetCoverage::NativeTypeZero)
+    }
+
+    pub fn initialized_hero_owner(&self) -> Option<usize> { self.hero_owner }
+    pub fn previous_position(&self) -> V3 { self.prev_pos }
+
     /// `0x424908` (not switched in from another camera's pose).
     fn init(&mut self, inp: &CamInput) {
+        // Existing upstream construction/update policy remains unchanged.
+        // A real source reset uses reset_init_represented with live defaults.
+        self.init_native(inp, InitDefaults {horizontal_spring:0.015,vertical_spring:0.0125,
+            look_blend_length:90,pull_max:6.0,sphere_step:0.1,sphere_count:8.0,
+            sphere_scale:1.0,yaw_rate:YAW_RATES[0],end_flags:self.end_flags,line_flags:self.line_flags},[0.0,0.0,-1.0]);
+    }
+
+    fn init_native(&mut self, inp: &CamInput, defaults: InitDefaults, original_gravity: V3) {
         let h = inp.hero;
         self.target = h.pos;
         self.look_h = 1.5;
-        (self.mode, self.look_from_s, self.look_blend_len) = (0, 0, 90);
-        (self.kh, self.kv, self.dh, self.dv) = (0.015, 0.0125, 0.2, 0.2);
+        (self.mode, self.look_from_s, self.look_blend_len) = (0, 0, defaults.look_blend_length);
+        (self.kh, self.kv, self.dh, self.dv) = (defaults.horizontal_spring, defaults.vertical_spring, 0.2, 0.2);
         self.look_h_rate = 0.005;
         (self.mode_t, self.look_blend, self.look_h_ovr, self.look_h_tgt, self.look_h_vel) = (0, 0, 0, 0.0, 0.0);
         (self.vgap, self.vgap_t) = (0.0, 0);
@@ -363,18 +432,21 @@ impl FollowCamera {
         (self.bias_k, self.bias_d, self.bias, self.bias_v) = (0.005, 0.2, 0.0, 0.0);
         (self.pivot_h_v, self.look_h_v, self.pitch_neg) = (0.0, 0.0, 0);
         (self.yaw_in, self.yaw_in_v, self.pitch_n, self.pitch_n_v) = (0.0, 0.0, 0.0, 0.0);
-        self.yaw_rate = YAW_RATES[0];
+        self.yaw_rate = defaults.yaw_rate;
         (self.script, self.script_yaw, self.plat_yaw, self.script_pitch) = (0, 0.0, 0.0, 0.0);
-        (self.toward_t, self.toward_lock, self.pull, self.pull_max) = (0, 0, self.dist, 6.0);
+        (self.toward_t, self.toward_lock, self.pull, self.pull_max) = (0, 0, self.dist, defaults.pull_max);
         (self.red, self.fast_rec, self.end_class, self.blocked, self.no_chain) = (0.0, 0, 0, 0, 0);
         self.rec_t = 2000;
-        (self.sph_scale, self.sph_count, self.sph_step) = (1.0, 8.0, 0.1);
+        (self.sph_scale, self.sph_count, self.sph_step) = (defaults.sphere_scale, defaults.sphere_count, defaults.sphere_step);
+        self.end_flags = defaults.end_flags;
+        self.line_flags = defaults.line_flags;
         self.target_reset(inp);
         self.snap(inp);
         self.off = sub(self.pos, self.pivot);
         self.placed = self.off;
         self.desired = self.pos;
-        let hz = [self.off[0], self.off[1], 0.0];
+        //424c34..60 projects against the live original gravity vector.
+        let hz = sub(self.off, scale(original_gravity, dot(self.off, original_gravity)));
         self.red = self.dist - len(hz);
         if self.red < -0.1 { self.fast_rec = 1; }
         self.pivot_h_s = self.pivot_h;
@@ -1132,6 +1204,51 @@ fn seg_dist(p: V3, a: V3, b: V3) -> (f32, V3) {
 #[cfg(test)]
 mod reset_tests {
     use super::*;
+    fn live_defaults() -> InitDefaults {
+        InitDefaults {horizontal_spring:0.025,vertical_spring:0.02,
+            look_blend_length:17,pull_max:9.,sphere_step:0.15,sphere_count:12.,
+            sphere_scale:2.,yaw_rate:0.03,end_flags:0x36,line_flags:0x12}
+    }
+    #[test]
+    fn represented_init_uses_live_defaults_and_actual_owner_writes() {
+        let mut h=Hero::new();h.pos=[10.,20.,30.];
+        h.rows=[[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]];
+        let input=CamInput {hero:&h,coll:None,mobys:None,hero_moby:Some(42),rstick:[0.;2],yaw_normal:true,pitch_normal:true};
+        let mut c=FollowCamera::new(&input);c.yaw_hist=[1.,2.,3.,4.,5.];
+        let (mut half,mut a,mut b)=(9,123,456);
+        let coverage=c.reset_init_represented(&input,live_defaults(),[0.,0.,-1.],InitOwners {
+            hero_moby:42,record_byte_7d:0,record_half_7e:&mut half,word_gp_2530:&mut a,word_gp_2534:&mut b}).unwrap();
+        assert_eq!(coverage,InitResetCoverage::NativeTypeZero);
+        assert_eq!((a,b,half),(0,0,0));assert_eq!(c.initialized_hero_owner(),Some(42));
+        assert_eq!(c.previous_position(),c.pos);assert_eq!(c.yaw_hist,[1.,2.,3.,4.,5.],"init must not repeat motion pre-step");
+        assert_eq!((c.kh,c.kv,c.look_blend_len,c.pull_max),(0.025,0.02,17,9.));
+        assert_eq!((c.sph_step,c.sph_count,c.sph_scale,c.yaw_rate,c.end_flags),(0.15,12.,2.,0.03,0x36));
+        assert_eq!(c.line_flags,0x12);
+        assert_eq!((c.dist,c.pivot_h,c.look_h),(4.64,2.,1.5));
+        assert_eq!(c.target,h.pos);assert!(c.rows.iter().flatten().all(|v|v.is_finite()));
+    }
+    #[test]
+    fn represented_init_rejects_transition_or_wrong_owner_before_mutation() {
+        let h=Hero::new();let input=CamInput {hero:&h,coll:None,mobys:None,hero_moby:Some(42),rstick:[0.;2],yaw_normal:true,pitch_normal:true};
+        let mut c=FollowCamera::new(&input);c.dist=77.;
+        let (mut half,mut a,mut b)=(9,123,456);
+        for (hero_moby,record_byte_7d) in [(42,2),(43,0)] {
+            assert!(c.reset_init_represented(&input,live_defaults(),[0.,0.,-1.],InitOwners {
+                hero_moby,record_byte_7d,record_half_7e:&mut half,word_gp_2530:&mut a,word_gp_2534:&mut b}).is_err());
+            assert_eq!((a,b,half),(123,456,9));assert_eq!(c.dist,77.);assert_eq!(c.hero_owner,None);
+        }
+    }
+    #[test]
+    fn represented_init_projects_reduction_against_original_gravity_axis() {
+        let mut h=Hero::new();h.pos=[0.;3];h.rows=[[1.,0.,0.],[0.,0.,-1.],[0.,1.,0.]];
+        let input=CamInput {hero:&h,coll:None,mobys:None,hero_moby:Some(42),rstick:[0.;2],yaw_normal:true,pitch_normal:true};
+        let mut c=FollowCamera::default();c.up_s=[0.,1.,0.];c.up2=[0.,1.,0.];
+        let (mut half,mut a,mut b)=(9,123,456);
+        c.reset_init_represented(&input,live_defaults(),[0.,-1.,0.],InitOwners {
+            hero_moby:42,record_byte_7d:0,record_half_7e:&mut half,word_gp_2530:&mut a,word_gp_2534:&mut b}).unwrap();
+        assert_eq!(c.pos,[-4.64,2.,0.]);assert!(c.red.abs()<1e-5);
+        assert_eq!(c.fast_rec,0,"vertical pivot must not become horizontal distance on a different gravity axis");
+    }
     #[test]
     fn represented_motion_uses_explicit_gravity_and_retains_original_globals() {
         let mut h=Hero::new();h.pos=[4.,3.,2.];h.rot[2]=0.75;

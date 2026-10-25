@@ -389,6 +389,8 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
         (0x2c4560,0x48d0,"883096221b3af3f45d95cf5ab164c4c32bd1b58b"),
         (0x2b48b0,0x158,"d9ef2d41e7d89f5c4c1601871a8baf308d4d9b25"),
         (0x2b4a08,0x950,"ef9a8191d64daecb805b15b0edd0fc5df92d0800"),
+        (0x2d9760,0x2f8,"c5862fefd0118af9c1f34f2ae763888ec203404d"),
+        (0x424908,0x3d0,"381500f0d52b00a32a7aceaaaf4d1f6f5a0bd4f1"),
         (0x302e14,0x128,"96a44da37fa49be41f710c859ff95d56d4f07fb7"),
         (0x31c9d8,0xe8,"d2d49e320c2c698a41061314d1ce9d4c9252559b"),
         (0x31cac0,0x168,"2a8521d966e163d151eee087f2060e43895a3104"),
@@ -404,6 +406,11 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     let hero_id=world.objects.records().iter().position(|m|m.o_class==0 && m.state<0x80).unwrap();
     let hero_class=&animations[classes.iter().position(|c|c.o_class==0).unwrap()];
     let mut hero=Hero::spawn([1.,2.,3.],0.);let mut pad=PadState::default();let mut anim=RatchetAnim::new(hero_class);
+    // One existing native camera, explicitly constructed as fixture history
+    // BEFORE teleport. new() below is not used to execute an original reset.
+    let mut camera_fixture={let scene=rigid.scene(&world);FollowCamera::new(&CamInput {
+        hero:&hero,coll:Some(&coll),mobys:Some(&scene),hero_moby:Some(hero_id),
+        rstick:[0.;2],yaw_normal:true,pitch_normal:true})};
     hero.vel=[9.;3];hero.speed=3.;hero.teleport.source_18a1c0=123;
     hero.teleport.source_18a1c4=0xff;hero.teleport.byte_18c30f=7;
     hero.putaway.byte_22b8=1;hero.putaway.byte_22ba=1;hero.putaway.word_24b0=anim.state.seq_b as i32;
@@ -523,6 +530,49 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     assert_eq!(camera_cursor,after_controller);assert_eq!(world.rng,expected_rng);
     assert_eq!((hero.air_ticks,hero.f16c,hero.grounded_ticks),probe_counts);
     assert!(matches!(world.pending_1330,Some(rc_game2::init_1330::Pending1330::TeleportService {source:0x2da160,..})));
+    // Execute represented type0 motion/init on that SAME camera and actual
+    // World collision/hero owner. External live defaults/flags are EXPLICIT
+    // fixtures; this does not acknowledge bank/backup/projection or New Game.
+    {
+        use rc_game2::{camera::InitDefaults,camera_teleport::{Metadata,DataBinding,Runtime,Types},teleport_world::CameraInitGlobals};
+        // Original placement classes/types and owned pvars; external bank,
+        // history and live defaults are explicit fixtures, NOT2da248/NewGame.
+        let types=Types::from_aranos_overlay(overlay).unwrap();
+        let placements=rc_formats::cameras::parse_cameras(&gameplay).unwrap();assert_eq!(placements.len(),9);
+        let mut records=[Metadata {class_86:0,type_8c:0,active_8e:0,byte_7d:0,half_7e:0,data_70:DataBinding::Original(0)};48];
+        for (slot,p) in placements.iter().enumerate() {
+            let owner=world.preceding_owners.iter().find(|o|o.section=="cameras"&&o.record==slot).unwrap();
+            assert_eq!(owner.pvar_index,p.pvar_index);assert!(owner.pvars.len()>=0x20);
+            records[slot].class_86=p.class as i16;records[slot].type_8c=types.type_index(p.class as i16).unwrap();
+        }
+        assert_eq!((records[3].class_86,records[3].type_8c),(0,0));
+        records[3].active_8e=1;records[3].byte_7d=2;records[3].half_7e=17;records[3].data_70=DataBinding::Follow;
+        let (mut current,mut half,mut word)=(Some(3usize),31i16,23u32);
+        let mut runtime=Runtime {records:&mut records,current:&mut current,half_1b8e90:&mut half,word_1b9004:&mut word};
+        let (mut a,mut b)=(37,41);let mut globals=CameraInitGlobals {defaults:None,word_gp_2530:&mut a,word_gp_2534:&mut b};
+        let before_camera_rng=world.rng;
+        assert_eq!(world.resume_1330_camera_with_native(hero_id,&hero,&mut camera_fixture,&mut runtime,&types,&mut globals,&coll,&rigid).unwrap(),TeleportStep::Camera);
+        assert!(matches!(world.pending_1330,Some(rc_game2::init_1330::Pending1330::TeleportService {source:0x424908,..})));
+        let motion=camera_fixture.motion_globals();
+        assert_eq!(motion.delta,[hero.pos[0]-1.,hero.pos[1]-2.,hero.pos[2]-3.]);
+        assert_eq!((*runtime.word_1b9004,*runtime.half_1b8e90),(0,0));
+        assert_eq!((*globals.word_gp_2530,*globals.word_gp_2534),(37,41),"unbound init must not execute writes");
+        world.resume_1330_camera_with_native(hero_id,&hero,&mut camera_fixture,&mut runtime,&types,&mut globals,&coll,&rigid).unwrap();
+        assert_eq!(camera_fixture.motion_globals(),motion,"pending init cannot replay motion/history");
+        globals.defaults=Some(InitDefaults {horizontal_spring:0.015,vertical_spring:0.0125,look_blend_length:90,pull_max:6.,
+            sphere_step:0.1,sphere_count:8.,sphere_scale:1.,yaw_rate:f32::from_bits(0x3d1d466f),end_flags:0x14,line_flags:0xb4});
+        assert_eq!(world.resume_1330_camera_with_native(hero_id,&hero,&mut camera_fixture,&mut runtime,&types,&mut globals,&coll,&rigid).unwrap(),TeleportStep::Camera);
+        assert!(matches!(world.pending_1330,Some(rc_game2::init_1330::Pending1330::TeleportService {source:0x2d7d80,..})));
+        assert_eq!((*globals.word_gp_2530,*globals.word_gp_2534,runtime.records[3].half_7e),(0,0,0));
+        assert_eq!(camera_fixture.initialized_hero_owner(),Some(hero_id));
+        assert_eq!(camera_fixture.motion_globals(),motion);assert_eq!(camera_fixture.previous_position(),camera_fixture.pos);
+        assert!(camera_fixture.rows.iter().flatten().all(|x|x.is_finite()));assert!(camera_fixture.pos.iter().all(|x|x.is_finite()));
+        *globals.word_gp_2530=99;runtime.records[3].half_7e=91;
+        world.resume_1330_camera_with_native(hero_id,&hero,&mut camera_fixture,&mut runtime,&types,&mut globals,&coll,&rigid).unwrap();
+        assert_eq!((*globals.word_gp_2530,runtime.records[3].half_7e),(99,91),"pending backup cannot replay completed init writes");
+        assert_eq!(camera_fixture.motion_globals(),motion);assert_eq!(world.rng,before_camera_rng);
+        println!("ORIGINAL_GC_TYPE0_CAMERA_NATIVE_OWNER_CHAIN_CPU_PASS actual_world_collision=true same_camera_hero=true original_nine_classes_types_and_pvar_owners=true explicit_bank_live_defaults_fixture=true motion_then_init_no_replay=true pending=2d7d80; FULL_BANK_STARTUP_BACKUP_PUBLICATION_PROJECTION_NEWGAME_NOT_VALIDATED");
+    }
     // Later recovered services are independently exercised on real owners;
     // their success does not bypass the earlier State service above.
     let bindings=rc_game2::teleport_actors::ActorBindings {actor:Some(actor),reset_actor:Some(owner)};
@@ -556,11 +606,16 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     assert_eq!(environment.resume(world.objects.get_mut(hero_id).unwrap(),None,Some(&mut music),
         &music_wad,music_file.lba,&mut UnboundEnvironmentHost).unwrap(),rc_game2::env_sample::ApplyResult::Complete);
     assert_eq!(music,before_music,"the original missing-track guard must not mutate music state");
+    // Every possible original music handle takes a no-effect branch for this
+    // actual absent entry. No synthetic player/global value is required.
+    let mut without_player=rc_game2::env_sample::Apply::begin(&points,world.objects.get(hero_id).unwrap());
+    assert_eq!(without_player.resume(world.objects.get_mut(hero_id).unwrap(),None,None,
+        &music_wad,music_file.lba,&mut UnboundEnvironmentHost).unwrap(),rc_game2::env_sample::ApplyResult::Complete);
 
     assert_eq!(world.objects.get(hero_id).unwrap().light,points[sample].light);
     assert_eq!(world.objects.get(hero_id).unwrap().ambient[..3],points[sample].ambient);
     assert!(points[sample].effects().iter().any(|e|matches!(e,rc_game2::env_sample::Effect::Music {mode:1,volume:0x400,..})));
-    println!("ORIGINAL_GC_TELEPORT_PREFIX_CHAIN_CPU_PASS same_world_hero_pad_animation=true owned_trails_deleted=3 original_modifiers=40 retry_preserves_order=true dry_world_probe=true optional_actor_calls=true pending=2da160 cursor=24 state0_rng_draws=1 sample_count={} sample={} effects={:?}; SYNTHETIC_RUNTIME_INPUTS_NOT_NEW_GAME FULL_TELEPORT_WORLD_GAMEPLAY_GPU_NOT_COMPLETE",points.len(),sample,points[sample].effects());
+    println!("ORIGINAL_GC_TELEPORT_PREFIX_CHAIN_CPU_PASS same_world_hero_pad_animation=true owned_trails_deleted=3 original_modifiers=40 retry_preserves_order=true dry_world_probe=true optional_actor_calls=true pending=2d7d80_explicit_camera_bank_fixture cursor=24 state0_rng_draws=1 sample_count={} sample={} effects={:?}; SYNTHETIC_RUNTIME_INPUTS_NOT_NEW_GAME FULL_TELEPORT_WORLD_GAMEPLAY_GPU_NOT_COMPLETE",points.len(),sample,points[sample].effects());
     // Independent upcoming-owner validation. The actual global initializer
     // remains blocked at24; this does not execute the missing1330 tail or
     // claim that the original full initialization sequence has advanced.

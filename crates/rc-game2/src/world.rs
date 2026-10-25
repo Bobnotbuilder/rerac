@@ -29,6 +29,7 @@ pub struct World {
     pub(crate) teleport_state_progress:Option<crate::hero::teleport_state::StateZeroProgress>,
     pub teleport_modifiers:Option<crate::teleport_modifiers::ModifierTable>,
     pub(crate) teleport_progress:Option<crate::teleport_world::TeleportProgress>,
+    pub(crate) teleport_camera_progress:Option<crate::camera_teleport::Reset>,
     cuboids:Vec<rc_formats::volumes::Shape>,
     prefix_1330_owners:Vec<MobyId>,
     /// Native ids in the original twenty-entry 0x220d50 attachment list.
@@ -171,6 +172,7 @@ impl World {
         Ok(Self {objects,instance_to_moby,moby_to_instance,pvars,pvar_indices,groups,
             group_iterator:crate::group_iter::GroupIterator::from_gameplay(gameplay)?,
             gc:vec![GcState::default();count],preceding_owners,grid,effects:None,controller_data:None,controller_132d:None,
+            teleport_camera_progress:None,
             state_1330:None,pending_1330:None,teleport_progress:None,teleport_modifiers:None,teleport_globals:None,teleport_state_progress:None,teleport_ground_progress:None,cuboids,prefix_1330_owners:Vec::new(),
             actor_attachments:[None;20],dynamic_local_fields:Vec::new(),
             rng,hits:Default::default(),crate_initializers:Default::default(),crate_stacks:Default::default(),crate_grouped:Default::default(),pending_crate:None,init_list,init_cursor:0,initialized:false})
@@ -486,7 +488,7 @@ mod tests {
             moby_to_instance:(0..n).collect(),pvars:PvarPlan {blocks:Vec::new(),pointer_fields:Vec::new(),moby_fields:Vec::new(),shared_data:Vec::new(),shared_fields:Vec::new()},
             pvar_indices:vec![-1;n],groups:vec![Vec::new();2],group_iterator:crate::group_iter::GroupIterator::new(Some(2)),gc:vec![GcState::default();n],preceding_owners:Vec::new(),
             grid:rc_game::collision_query::MobyGrid::new(),effects:None,controller_data:None,controller_132d:None,
-            state_1330:None,pending_1330:None,teleport_progress:None,teleport_modifiers:None,teleport_globals:None,teleport_state_progress:None,teleport_ground_progress:None,cuboids:Vec::new(),prefix_1330_owners:Vec::new(),
+            state_1330:None,pending_1330:None,teleport_progress:None,teleport_camera_progress:None,teleport_modifiers:None,teleport_globals:None,teleport_state_progress:None,teleport_ground_progress:None,cuboids:Vec::new(),prefix_1330_owners:Vec::new(),
             actor_attachments:[None;20],dynamic_local_fields:Vec::new(),
             rng:rc_game::rng::Rng::new(),hits:Default::default(),crate_initializers:Default::default(),crate_stacks:Default::default(),crate_grouped:Default::default(),pending_crate:None,init_list:Vec::new(),init_cursor:0,initialized:false}
     }

@@ -30,16 +30,24 @@ pub struct Runtime<'a> {
 /// Original2d8120's init callbacks, read from the actual Aranos type table.
 /// The final sentinel record is retained; no invented callback fallback.
 #[derive(Clone,Debug)]
-pub struct Types {init:[u32;9]}
+pub struct Types {init:[u32;9],classes:[i32;9]}
 impl Types {
     pub fn from_aranos_overlay(overlay:&[u8])->Result<Self> {
         let sections=font::parse_overlay_sections(overlay)?;
         let bytes=font::read_overlay(&sections,0x2a3a00,9*0x14).ok_or_else(||rc_formats::FormatError::Invalid("GC original camera type table absent".into()))?;
         let init=std::array::from_fn(|i|u32::from_le_bytes(bytes[i*0x14+8..i*0x14+12].try_into().unwrap()));
+        let classes=std::array::from_fn(|i|i32::from_le_bytes(bytes[i*0x14..i*0x14+4].try_into().unwrap()));
         // Recover only the source table identity tested by this adapter, never
         // accept arbitrary code/table as an executable native implementation.
         if init[0]!=0x424908 {return invalid("GC camera type0 init source differs from Aranos contract");}
-        Ok(Self {init})
+        if !classes.contains(&-1) {return invalid("GC original camera table sentinel absent");}
+        Ok(Self {init,classes})
+    }
+    ///2da110: first matching class OR sentinel index. The original returns
+    /// the sentinel's index for an unknown class, not an invented type0.
+    pub fn type_index(&self,class:i16)->Result<i16> {
+        self.classes.iter().position(|&c|c==class as i32 || c==-1).map(|i|i as i16)
+            .ok_or_else(||rc_formats::FormatError::Invalid("GC camera type lookup lacks sentinel".into()))
     }
     fn init(&self,index:i16)->Result<u32> {
         self.init.get(usize::try_from(index).unwrap_or(usize::MAX)).copied()
@@ -259,7 +267,7 @@ mod tests {
         let mut records=[metadata();48];records[4].class_86=0;records[9].class_86=0;
         let(mut current,mut half,mut word)=(Some(2),17,0xabcd);
         let mut runtime=Runtime {records:&mut records,current:&mut current,half_1b8e90:&mut half,word_1b9004:&mut word};
-        let types=Types {init:[0x424908;9]};let mut reset=Reset::begin(&mut runtime).unwrap();
+        let types=Types {init:[0x424908;9],classes:[0,4,5,6,7,19,23,27,-1]};let mut reset=Reset::begin(&mut runtime).unwrap();
         assert_eq!(runtime.records[2].active_8e,0);assert_eq!(runtime.records[2].half_7e,0);
         let motion=reset.next(&mut runtime,&types).unwrap().unwrap();assert_eq!(motion,Call::Motion {source:0x2d9760});
         assert_eq!(*runtime.current,Some(4));assert_eq!(*runtime.half_1b8e90,0);assert_eq!(*runtime.word_1b9004,0xabcd);
@@ -279,7 +287,7 @@ mod tests {
     fn missing_or_invalid_original_bindings_fail_closed() {
         let mut records=[metadata();48];let(mut current,mut half,mut word)=(None,17,99);
         let mut runtime=Runtime {records:&mut records,current:&mut current,half_1b8e90:&mut half,word_1b9004:&mut word};
-        let mut reset=Reset::begin(&mut runtime).unwrap();assert!(reset.next(&mut runtime,&Types {init:[0;9]}).is_err());
+        let mut reset=Reset::begin(&mut runtime).unwrap();assert!(reset.next(&mut runtime,&Types {init:[0;9],classes:[0;9]}).is_err());
         assert_eq!((*runtime.current,*runtime.half_1b8e90,*runtime.word_1b9004),(None,17,99));
         *runtime.current=Some(48);assert!(Reset::begin(&mut runtime).is_err());
     }

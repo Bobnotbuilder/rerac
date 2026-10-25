@@ -73,7 +73,72 @@ pub struct GroundGlobals {
     pub source_gp_minus_6000:i32,
 }
 
+/// Borrow live camera globals from their existing owner. None defaults retain
+/// a mandatory424908 stop; no New Game or overlay-entry values are inferred.
+pub struct CameraInitGlobals<'a> {
+    pub defaults:Option<crate::camera::InitDefaults>,
+    pub word_gp_2530:&'a mut u32,
+    pub word_gp_2534:&'a mut u32,
+}
+
 impl World {
+    /// Continue2da160 on the SAME native camera/history and actual World
+    /// collision/hero. Caller must bind already initialized original bank and
+    /// live globals; an explicit test bank does not establish real New Game.
+    /// Only executed motion/init calls are acknowledged. Backup/publication/
+    /// projection remain required, and global initializer cursor is untouched.
+    #[allow(clippy::too_many_arguments)]
+    pub fn resume_1330_camera_with_native(&mut self,hero_id:MobyId,hero:&Hero,
+        camera:&mut crate::camera::FollowCamera,runtime:&mut crate::camera_teleport::Runtime<'_>,
+        types:&crate::camera_teleport::Types,globals:&mut CameraInitGlobals<'_>,
+        collision:&rc_formats::collision::Collision,rigid:&crate::collision::LiveRigidCollision)->Result<TeleportStep> {
+        use crate::{camera::{CamInput,InitOwners},camera_teleport::{Call,DataBinding,Reset}};
+        let progress=self.teleport_progress.ok_or_else(||rc_formats::FormatError::Invalid("GC camera reset has no original teleport owner".into()))?;
+        if progress.hero!=hero_id || progress.next!=TeleportStep::Camera || !progress.request.reset_camera {
+            return invalid("GC camera reset differs from required ordered teleport stage");
+        }
+        let owner=self.objects.get(hero_id).ok_or_else(||rc_formats::FormatError::Invalid("GC camera hero owner absent".into()))?;
+        for axis in 0..3 {if owner.rows[axis][..3]!=hero.rows[axis] {return invalid("GC camera hero pose differs from actual World owner");}}
+        let mut reset=match self.teleport_camera_progress.take() {Some(reset)=>reset,None=>Reset::begin(runtime)?};
+        // Put the continuation back even on a binding error, so already
+        // completed effects cannot replay on a corrected retry.
+        let result=(||->Result<Option<u32>> {
+            while let Some(call)=reset.next(runtime,types)? {
+                let selected=runtime.current.ok_or_else(||rc_formats::FormatError::Invalid("GC selected camera owner absent".into()))?;
+                let record=runtime.records[selected];
+                if record.class_86!=0 || record.active_8e!=1 || record.data_70!=DataBinding::Follow {
+                    return invalid("GC selected camera binding differs from active follow owner");
+                }
+                let scene=rigid.scene(self);let input=CamInput {hero,coll:Some(collision),mobys:Some(&scene),hero_moby:Some(hero_id),
+                    rstick:[0.;2],yaw_normal:true,pitch_normal:true}; // these options are not read by either reset helper
+                let gravity=hero.original_ground.gravity_direction[..3].try_into().unwrap();
+                match call {
+                    Call::Motion {source:0x2d9760}=>{
+                        // Original helpers mask/reduceXYZ. Unread copied W
+                        // metadata does not require a guest-memory emulator.
+                        camera.reset_motion_represented(&input,gravity);
+                    },
+                    Call::Init {source:0x424908,record}=>{
+                        if record!=selected {return invalid("GC pending camera init owner changed");}
+                        let Some(defaults)=globals.defaults else {return Ok(Some(0x424908));};
+                        let record=&mut runtime.records[record];
+                        camera.reset_init_represented(&input,defaults,gravity,InitOwners {hero_moby:hero_id,
+                            record_byte_7d:record.byte_7d,record_half_7e:&mut record.half_7e,
+                            word_gp_2530:globals.word_gp_2530,word_gp_2534:globals.word_gp_2534})?;
+                    },
+                    _=>return Ok(Some(call.source())), // mandatory unbound service, never an acknowledgement
+                }
+                reset.complete(runtime,call)?;
+            }
+            Ok(None)
+        })();
+        self.teleport_camera_progress=Some(reset);
+        match result? {
+            Some(source)=>{self.pending_1330=Some(Pending1330::TeleportService {request:progress.request,source});Ok(TeleportStep::Camera)},
+            None=>{self.teleport_progress.as_mut().unwrap().next=TeleportStep::Lighting;
+                self.pending_1330=Some(Pending1330::TeleportService {request:progress.request,source:0x313008});Ok(TeleportStep::Lighting)},
+        }
+    }
     /// Existing ordered teleport plus actual collision services. The legacy
     /// entry point still stops at Probe when no original collision is bound.
     /// This does not complete class1330 or bypass its remaining camera/tail.

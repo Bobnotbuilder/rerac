@@ -143,8 +143,20 @@ impl Apply {
                     ApplyStep::Music
                 },
                 ApplyStep::Music=>{
-                    let Some(player)=music.as_deref_mut() else {return Ok(ApplyResult::Pending(0x32eb88));};
-                    self.pending_music=player.request_start(wad,disc_sector,point.music_track as i32,1,0x400)?;
+                    if let Some(player)=music.as_deref_mut() {
+                        self.pending_music=player.request_start(wad,disc_sector,point.music_track as i32,1,0x400)?;
+                    }else{
+                        //32eb88 has no writes before its track/handle/sector
+                        // guards. A negative track or a valid absent entry has
+                        // no effects for ANY handle, so no invented player is
+                        // needed. Unknown/out-of-range/nonzero entries still
+                        // require the real player, preserving the early handle
+                        // guard rather than speculatively reading channel data.
+                        let track=point.music_track as i32;
+                        let no_effect=track<0 || wad.entry(track as usize).is_ok_and(|e|e.sector==0);
+                        if !no_effect {return Ok(ApplyResult::Pending(0x32eb88));}
+                        self.pending_music=None;
+                    }
                     if self.pending_music.is_some() {ApplyStep::MusicTransport}else{ApplyStep::Fog}
                 },
                 ApplyStep::MusicTransport=>{
@@ -219,17 +231,29 @@ mod tests {
         assert_eq!(apply.resume(&mut m,None,None,&wad,0,&mut host).unwrap(),ApplyResult::Pending(0x313184));
         assert_eq!((m.light,m.ambient),(q.light,[6,7,8,0]));
         let mut reverb=ReverbRequest {dirty:0x80,..Default::default()};
-        assert_eq!(apply.resume(&mut m,Some(&mut reverb),None,&wad,0,&mut host).unwrap(),ApplyResult::Pending(0x32eb88));
+        assert_eq!(apply.resume(&mut m,Some(&mut reverb),None,&wad,0,&mut host).unwrap(),ApplyResult::Pending(0x2e4af0));
         assert_eq!((reverb.depth,reverb.kind,reverb.delay,reverb.feedback,reverb.dirty),(-12,3,9,10,0x87));
         m.light=99;reverb.depth=42; // Completed writes MUST NOT replay on retry.
         let mut music=crate::level_music::MusicPlayer {player:Player::default(),source_14:27};let before=music;
         assert_eq!(apply.resume(&mut m,Some(&mut reverb),Some(&mut music),&wad,0,&mut host).unwrap(),ApplyResult::Pending(0x2e4af0));
         assert_eq!(music,before);assert_eq!((m.light,reverb.depth),(99,42));
-        assert_eq!(host.events,vec![0x313200,0x2e4af0]);host.allow_fog=true;
+        assert_eq!(host.events,vec![0x313200,0x2e4af0,0x2e4af0]);host.allow_fog=true;
         assert_eq!(apply.resume(&mut m,Some(&mut reverb),Some(&mut music),&wad,0,&mut host).unwrap(),ApplyResult::Complete);
-        assert_eq!(host.events,vec![0x313200,0x2e4af0,0x2e4af0]);
+        assert_eq!(host.events,vec![0x313200,0x2e4af0,0x2e4af0,0x2e4af0]);
         assert_eq!(apply.resume(&mut m,None,None,&wad,0,&mut host).unwrap(),ApplyResult::Complete);
-        assert_eq!(host.events.len(),3);
+        assert_eq!(host.events.len(),4);
+    }
+    #[test]
+    fn absent_music_guard_needs_no_guessed_player_but_present_track_still_blocks() {
+        let mut point=point();point.music_track=4;point.reverb_enable=0;point.fog_far=point.fog_near;
+        let mut m=Moby::init_instance(7,1,None);let mut host=Host {events:vec![],allow_fog:false};
+        let mut bytes=empty_music_wad();let wad=crate::level_music::MusicWad::parse(&bytes).unwrap();
+        let mut apply=Apply::begin(&[point],&m);
+        assert_eq!(apply.resume(&mut m,None,None,&wad,0,&mut host).unwrap(),ApplyResult::Complete);
+        bytes[8+4*8..12+4*8].copy_from_slice(&1u32.to_le_bytes());
+        let wad=crate::level_music::MusicWad::parse(&bytes).unwrap();let mut apply=Apply::begin(&[point],&m);
+        assert_eq!(apply.resume(&mut m,None,None,&wad,0,&mut host).unwrap(),ApplyResult::Pending(0x32eb88));
+        assert!(host.events.is_empty());
     }
     #[test]
     fn environment_continuation_cannot_rebind_to_another_owner() {
