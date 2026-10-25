@@ -1,8 +1,8 @@
 //! GC stereo music start32eb88 and callback32fcc0, using the existing native
 //! Player/Streams/VoiceManager/SPU. The RAC1 EE Music::tick must NOT drive this:
 //! GC adjacent table entries are left/right channels, not start/body tracks.
-//! Only the initial request/callback is ported; state8 requires32ec80's separate
-//! stereo body queue. Native hard-panned SPU transport is experimental: original
+//! Start/body requests and callbacks are ported; the complete GC EE tick is not.
+//! Native hard-panned SPU transport is experimental: original
 //! IOP gain/stream timing and complete GC EE update still need reference proof.
 use rc_formats::{buf::{invalid,Buf,Result}};
 use rc_game::audio::{music::{MusicTrack,Player,PlayerId,Streams,StreamCallback,StreamCommand},
@@ -57,6 +57,13 @@ pub struct StartRequest {
     pub track:i16,pub flags:u16,pub volume:i16,
     pub sectors:[u32;2],pub channels:[Arc<MusicTrack>;2],
 }
+#[derive(Clone,Debug)]
+pub struct BodyRequest {
+    pub stream:StartRequest,pub handle:i32,
+    /// Original32ed00..10 passes RIGHT body as a0 and LEFT as a1, unlike
+    ///32eb88. Preserve that source order; original IOP routing is unverified.
+    pub source_sector_args:[u32;2],
+}
 impl MusicPlayer {
     /// Original32eb88 order/gates and owned player writes. A returned request
     /// is pending, not a successful IOP call. Native transport must execute and
@@ -73,11 +80,11 @@ impl MusicPlayer {
         self.player.flags=flags as u16;self.player.vol=volume as i16;self.player.stinger=0;
         Ok(Some(StartRequest {track:track as i16,flags:flags as u16,volume:volume as i16,sectors,channels}))
     }
-    /// Fail closed before the unported GC EE body-queue step. Other states
+    /// Fail closed while the GC stereo body request is required/pending. Other states
     /// passing this narrow guard are not a claim of a complete EE music tick.
     pub fn require_body_queue_adapter(&self)->Result<()> {
         if matches!(self.player.state&0x7fff,8|9) {
-            return invalid("GC_MUSIC_SOURCE_32EC80_STEREO_BODY_QUEUE_UNPORTED");
+            return invalid("GC_MUSIC_SOURCE_32EC80_STEREO_BODY_QUEUE_REQUIRED_OR_PENDING");
         }
         Ok(())
     }
@@ -87,6 +94,28 @@ impl MusicPlayer {
         self.player.handle=handle;
         if handle==0 {self.player.state=0;} else if self.player.state==1 {self.player.state=8;}
     }
+    /// Original32ec80: the guard reads start RIGHT entry(track+1), then queues
+    /// BODY left/right(track+2,+3). Do not substitute RAC1's mono track+1.
+    /// State comparison is exact9, not masked: paused8009 is not that guard.
+    pub fn request_body(&mut self,wad:&MusicWad<'_>,disc_sector:u32,track:i32,flags:i32,volume:i32)->Result<Option<BodyRequest>> {
+        if self.player.state==9 || matches!(self.player.handle,0|-1) {return Ok(None);}
+        let index=|n:i32|usize::try_from(track.wrapping_add(n)).map_err(|_|rc_formats::FormatError::Invalid("GC music body index outside bound table".into()));
+        if wad.entry(index(1)?)?.sector==0 {return Ok(None);}
+        let left=index(2)?;let right=index(3)?;
+        let channels=wad.stereo(left)?.ok_or_else(||rc_formats::FormatError::Invalid("GC required stereo body resource absent".into()))?;
+        let sectors=[disc_sector.wrapping_add(wad.entry(left)?.sector),disc_sector.wrapping_add(wad.entry(right)?.sector)];
+        self.player.remaining=48000;self.player.track=track as i16;self.player.state=9;
+        self.source_14=10;self.player.vol=volume as i16;self.player.flags=flags as u16;self.player.stinger=0;
+        Ok(Some(BodyRequest {stream:StartRequest {track:track as i16,flags:flags as u16,volume:volume as i16,sectors,channels},handle:self.player.handle,source_sector_args:[sectors[1],sectors[0]]}))
+    }
+    ///32fc68: only a NEGATIVE reply replaces the handle. Zero clears state;
+    /// positive promotes only exactstate9 to4. Global1a63d4 is borrowed, never
+    /// invented here. It changes only when the actual stinger halfword is nonzero.
+    pub fn complete_body(&mut self,reply:i32,phase_1a63d4:&mut i16) {
+        if reply<0 {self.player.handle=reply;}
+        if reply==0 {self.player.state=0;}
+        else if self.player.state==9 {self.player.state=4;if self.player.stinger!=0 {*phase_1a63d4=1;}}
+    }
 }
 
 /// Two actual native stream handles share the source's one stereo request.
@@ -94,6 +123,29 @@ impl MusicPlayer {
 #[derive(Debug)]
 pub struct StereoStream {pub handles:[i32;2]}
 impl StereoStream {
+    /// Explicit diagnostic transport, not recovered original IOP routing/timing/gain.
+    /// Keeps the native left/right identities. Source reverses a0/a1 for this
+    /// request; its original IOP interpretation still requires evidence.
+    /// Queue on the two existing voices; never create replacement stream owners.
+    pub fn queue_body_experimental(&self,request:&BodyRequest,streams:&mut Streams,vm:&mut VoiceManager,spu:&mut Spu)->Result<i32> {
+        if request.handle!=self.handles[0] || self.handles.iter().any(|h|*h<=0) {return invalid("GC body request differs from actual stereo owner");}
+        let mut tracks:[Option<Arc<MusicTrack>>;15]=Default::default();
+        for channel in 0..2 {tracks[channel]=Some(Arc::clone(&request.stream.channels[channel]));}
+        // A partial native stereo queue must not masquerade as successful.
+        // Check both owners before mutating either voice's part queue.
+        for handle in self.handles {
+            let reply=streams.execute(&StreamCommand::Query {player:PlayerId::Main,handle,cb:StreamCallback::Alive},&tracks,vm,spu)
+                .ok_or_else(||rc_formats::FormatError::Invalid("GC stream owner query has no reply".into()))?;
+            if reply.value==0 {return Ok(0);}
+        }
+        for channel in 0..2 {
+            let command=StreamCommand::Play {player:PlayerId::Main,track:channel,vol:request.stream.volume as i32,
+                group:1,queue:self.handles[channel],flags:((request.stream.flags as u32)&1)<<2,cb:StreamCallback::Body};
+            let reply=streams.execute(&command,&tracks,vm,spu).ok_or_else(||rc_formats::FormatError::Invalid("GC body queue has no reply".into()))?;
+            if reply.value!=self.handles[channel] {return invalid("GC stereo body queue lost existing stream owner");}
+        }
+        Ok(self.handles[0])
+    }
     pub fn start(request:&StartRequest,streams:&mut Streams,vm:&mut VoiceManager,spu:&mut Spu)->Result<Self> {
         let mut tracks:[Option<Arc<MusicTrack>>;15]=Default::default();
         tracks[0]=Some(Arc::clone(&request.channels[0]));tracks[1]=Some(Arc::clone(&request.channels[1]));
@@ -158,5 +210,28 @@ mod tests {
         assert!(m.request_start(&w,1234,-1,1,1024).unwrap().is_none());assert_eq!(m,before);
         assert!(m.request_start(&w,1234,0,1,1024).unwrap().is_none());assert_eq!(m,before);
         assert!(w.stereo(511).is_err());
+    }
+    #[test]
+    fn body_callback_preserves_handle_except_negative_and_borrows_phase() {
+        let mut m=MusicPlayer {player:Player {handle:42,state:9,stinger:1,..Player::default()},source_14:19};
+        let mut phase=27;m.complete_body(77,&mut phase);
+        assert_eq!((m.player.handle,m.player.state,phase,m.source_14),(42,4,1,19));
+        m.player.state=9;m.player.stinger=0;phase=27;m.complete_body(-2,&mut phase);
+        assert_eq!((m.player.handle,m.player.state,phase),(-2,4,27));
+        m.player.state=0x8009;m.complete_body(42,&mut phase);
+        assert_eq!((m.player.handle,m.player.state,phase),(-2,0x8009,27));
+        m.complete_body(0,&mut phase);assert_eq!((m.player.handle,m.player.state),(-2,0));
+    }
+    #[test]
+    fn body_source_guards_are_exact_and_do_not_invent_missing_resources() {
+        let mut b=vec![0;0x1018];b[..4].copy_from_slice(&0x1018u32.to_le_bytes());
+        let mut m=MusicPlayer {player:Player {handle:42,state:8,..Player::default()},source_14:29};
+        let before=m;assert!(m.request_body(&MusicWad::parse(&b).unwrap(),0,0,1,1024).unwrap().is_none());assert_eq!(m,before);
+        b[16..20].copy_from_slice(&1u32.to_le_bytes()); // guard's start-right row present
+        let w=MusicWad::parse(&b).unwrap();m.player.state=9;
+        let before=m;assert!(m.request_body(&w,0,0,1,1024).unwrap().is_none());assert_eq!(m,before);
+        m.player.state=0x8009;let before=m;
+        assert!(m.request_body(&w,0,0,1,1024).is_err(),"paused9 does not satisfy exact signed-halfword9 guard");assert_eq!(m,before);
+        for h in [0,-1] {m.player.handle=h;let before=m;assert!(m.request_body(&w,0,0,1,1024).unwrap().is_none());assert_eq!(m,before);}
     }
 }

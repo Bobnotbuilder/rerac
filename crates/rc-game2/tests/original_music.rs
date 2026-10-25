@@ -14,7 +14,9 @@ fn original_aranos_teleport_track4_takes_original_missing_entry_guard() {
     let level=iso.read_file(iso.find("/G/LEVEL0.WAD").unwrap()).unwrap();let w=LevelWad::parse(&level).unwrap();
     let sections=rc_formats::font::parse_overlay_sections(w.lump(Lump::Overlay).unwrap().unwrap()).unwrap();
     for (pc,len,hash) in [(0x32eb88,0xf8,"963328ce37c95828be2ddc9d621734a71520b36b"),
-        (0x32fcc0,0x3c,"0fb34f3986a34fe0697f9cd4659676111f29e277")] {
+        (0x32fcc0,0x3c,"0fb34f3986a34fe0697f9cd4659676111f29e277"),
+        (0x32ec80,0x118,"bcc36b6a93caed09c36866630cfccbd7d1e29983"),
+        (0x32fc68,0x58,"7b0bf6641e666b9a226e17d4845ec2c61d188d12")] {
         assert_eq!(rc_formats::sha1::hex(&rc_formats::sha1::sha1(rc_formats::font::read_overlay(&sections,pc,len).unwrap())),hash);
     }
     let gameplay=wad::decompress(w.part_bytes(Part::Gameplay).unwrap().unwrap()).unwrap();
@@ -61,7 +63,33 @@ fn original_aranos_available_stereo_music_reuses_native_streams_and_spu() {
         for c in 0..2 {if p[c]!=0{nonzero[c]+=1;}peaks[c]=peaks[c].max((p[c]as i32).abs());}
     }
     assert!(nonzero[0]>0&&nonzero[1]>0&&different>0);
+    // Original EE body request/callback connected to the existing real native
+    // stream owners. Explicitly experimental IOP routing: source a0/a1 order
+    // reverses for body requests; original IOP interpretation is not proven.
+    let body=player.request_body(&wad,entry.lba,0,1,0x400).unwrap().unwrap();
+    assert_eq!(body.stream.channels[0].name,"rc2_l00_main_bl");
+    assert_eq!(body.stream.channels[1].name,"rc2_l00_main_br");
+    assert_eq!(body.stream.sectors,[entry.lba.wrapping_add(0x16f),entry.lba.wrapping_add(0x5b2)]);
+    assert_eq!(body.source_sector_args,[body.stream.sectors[1],body.stream.sectors[0]]);
+    assert_eq!((player.player.state,player.player.handle,player.source_14),(9,pair.handles[0],10));
+    let queued=pair.queue_body_experimental(&body,&mut streams,&mut vm,&mut spu).unwrap();
+    let mut phase=17;player.complete_body(queued,&mut phase);
+    assert_eq!((player.player.state,player.player.handle,phase),(4,pair.handles[0],17));
+    assert!(player.require_body_queue_adapter().is_ok());
+    assert_eq!(vm.voices.iter().filter(|v|matches!(v.owner,VoiceUse::Stream {..})).count(),2);
+    // Cross the actual intro/body boundary, rather than merely accepting a
+    // queue callback. The same two voices must remain active in the long body.
+    let intro_frames=(request.channels[0].body.len()/16*28) as u64;
+    let output_intro_frames=(intro_frames*48000+44099)/44100;
+    for _ in 96000..output_intro_frames+2048 {spu.mix();}
+    let mut body_nonzero=[0usize;2];
+    for _ in 0..4096 {let pcm=spu.mix();for c in 0..2 {body_nonzero[c]+=usize::from(pcm[c]!=0);}}
+    assert!(body_nonzero.iter().all(|&n|n>0));
+    for handle in pair.handles {
+        let reply=streams.execute(&rc_game::audio::music::StreamCommand::Query {player:rc_game::audio::music::PlayerId::Main,handle,cb:rc_game::audio::music::StreamCallback::Remaining},&Default::default(),&mut vm,&mut spu).unwrap();
+        assert!(reply.value as u64>output_intro_frames,"actual long body continues on original voice");
+    }
     pair.stop(&mut streams,&mut vm,&mut spu);
     assert_eq!(vm.voices.iter().filter(|v|matches!(v.owner,VoiceUse::Stream {..})).count(),0);
-    println!("ORIGINAL_GC_STEREO_NATIVE_PCM_PASS track=0 input_rate=44100 output_rate=48000 frames=96000 nonzero={nonzero:?} distinct_stereo={different} peaks={peaks:?} actual_stream_voices=2; EXPERIMENTAL_IOP_TRANSPORT_GAIN_TIMING_UNVERIFIED BODY_QUEUE_UNPORTED NO_AUDIO_DEVICE_OR_IPHONE_TEST");
+    println!("ORIGINAL_GC_STEREO_NATIVE_PCM_PASS track=0 input_rate=44100 output_rate=48000 intro_frames={output_intro_frames} first96000_nonzero={nonzero:?} distinct_stereo={different} peaks={peaks:?} body_nonzero={body_nonzero:?} actual_stream_voices=2 body_state=4 source_arg_order_preserved=true; EXPERIMENTAL_IOP_ROUTING_GAIN_TIMING_UNVERIFIED NO_FULL_GC_TICK_AUDIO_DEVICE_OR_IPHONE_TEST");
 }
