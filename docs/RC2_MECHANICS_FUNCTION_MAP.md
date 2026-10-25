@@ -1,3 +1,21 @@
+## Music and connected World camera recovery — 26 October 2026
+
+Current runtime local `abde12836919236ff1601b23640f8d3bbe3381fa` / public `629e909e664bdf6fc8da065a44f416b9fc3202f9`. Started from preserved8e8dd52/public2f1f3d46 and both interrupted music files. **Aranos remains INCOMPLETE: initializer cursor24/class1330/state0 has not advanced.** No reset/clean/discard or user IPA.
+
+| Guest source | Native effects and evidence | Remaining limits |
+| --- | --- | --- |
+|32ec80 / sub_0032EC80_0x32ec80.cpp|Exact body guards, rows+2/+3, original a0/a1 order, pendingstate9, signed fields; existing2native stream owners cross intro/body.|IOP routing/gain/timing experimental; full EE driver/in-app/device missing.|
+|32fc68 / sub_0032FC68_0x32fc68.cpp|Negative-only handle replacement; zero clearsstate; exact9→4; conditional borrowed phase1a63d4.|Original-data native returned handles, not guest IOP execution.|
+|2d9760,424908 / corresponding generated address files|Existing FollowCamera, actual gravity, explicit live defaults/flags, World hero pose validation, owned GP/record effects in resumable Reset.|Bank/history/defaults are explicit fixtures; real2da248/NewGame still required.|
+|2d7d80,2da1dc / corresponding generated address files|Native immutable represented-state backup/metadataBackup; liveD0caches update; borrowed CameraView.posXYZ and previous/heroXYZ publication.|No whole snapshot restore of incidental globals; raw W parity unclaimed;2d79b8/2e5640 pending.|
+|403ec0,404330,3e0b88,3b9610 / corresponding generated address files|Complete pure pointer-reset leaves invoked37f988..37f9a0 before30534c initialization. Source-validated profile executes once on actual global owner.|Does not implement all37f858; future publisher/destructor callbacks must bind real IDs.|
+
+First CPU-fixture blocker with explicit camera bindings: **GC_ARANOS_CLASS_1330_SOURCE_2D79B8_NATIVE_PROJECTION_CONTEXT_AND_UNIFORM_BINDINGS_UNPORTED**, required2e5640. Next: bind actual source render context/display/persistent options to existing GameProjection/LevelFog/Tfrag LOD/culling/uniform owners; preserve real bank2da248 startup/history provenance. Engine opt-in still needs bank/default bindings at2da160. Then execute ordered313008 host effects,1330 real joint poses/scripts/common tail before advancing24.
+
+Keep separate:132d state-one query383fc0/queued3842f8; authentic New Game/save/RNG; crate36 group23's required word39d3d0(member69/class1f5/mission2/guest1a73e8); dynamic GPU synchronization; full hero/item/wrench/hit/damage/enemy/crate-destruction/bolt/pickup/interaction loops; HUD/music/effects/cinematics/scripts/checkpoint/save/death/respawn and legitimate Aranos→Oozla completion. FIRST_FATAL_BLOCKER remains null/NOT_EXECUTED on current device gameplay. Extracted27slots are not27playable levels.
+
+GAME_SPECIFIC / REUSE_WITH_ADAPTER. No Shared Core promotion, other-engine adoption, R1 save/data migration, app-identity or renderer replacement. Existing Rust/Bevy/Metal/CoreAudio/GameController, private assets, user saves and rollback source/builds preserved. No full teleport/NewGame/Aranos/campaign or autonomous-background-engineering claim.
+
 ## Current camera/crate recovery checkpoint — 25 October 2026
 
 Runtime source local `8575fa238907857200b35d000afc99c04dd38ee9` / public `3969ce23e1f30d852e64550be3b54a20729b3e80`; original-data batch regression local `f65cc4afb49aeb723ae62f7910f64f7ccf584bef`. Continued from preserved `3c9d1d97c7705c902019a94aa973f5638c165676` without resetting or discarding files. **Aranos remains INCOMPLETE; global initializer cursor24/class1330/state0 has not advanced.** This entry supersedes older current-status entries below only for the scope stated here.

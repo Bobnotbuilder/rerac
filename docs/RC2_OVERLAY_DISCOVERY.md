@@ -1,3 +1,9 @@
+## Music and connected World camera recovery — 26 October 2026
+
+Current runtime local `abde12836919236ff1601b23640f8d3bbe3381fa` / public `629e909e664bdf6fc8da065a44f416b9fc3202f9`. Started from preserved8e8dd52/public2f1f3d46 and both interrupted music files. **Aranos remains INCOMPLETE: initializer cursor24/class1330/state0 has not advanced.** No reset/clean/discard or user IPA.
+
+Existing private Aranos overlay/generation provenance reused; no assets re-extracted or generated C++ linked into runtime. Four loader leaf hashes and camera/music source ranges are checked against the owned ISO; static discovery still does not establish game execution or whole overlay coverage. See current execution handoff/regressions for actual scope.
+
 ## Current camera/crate recovery checkpoint — 25 October 2026
 
 Runtime source local `8575fa238907857200b35d000afc99c04dd38ee9` / public `3969ce23e1f30d852e64550be3b54a20729b3e80`; original-data batch regression local `f65cc4afb49aeb723ae62f7910f64f7ccf584bef`. Continued from preserved `3c9d1d97c7705c902019a94aa973f5638c165676` without resetting or discarding files. **Aranos remains INCOMPLETE; global initializer cursor24/class1330/state0 has not advanced.** This entry supersedes older current-status entries below only for the scope stated here.
