@@ -75,6 +75,31 @@ fn original_aranos_character_pose_movement_jump_and_camera() {
     }
     let delta=((hero.pos[0]-before[0]).powi(2)+(hero.pos[1]-before[1]).powi(2)).sqrt();
     assert!(delta>0.01,"original movement path did not move");
+    // Complete recovered motion service on the SAME active Hero/PadState,
+    // then the existing animation -> physics -> original collision chain.
+    // This does NOT execute or complete the surrounding HeroTeleport routine.
+    let sections=rc_formats::font::parse_overlay_sections(w.lump(Lump::Overlay).unwrap().unwrap()).unwrap();
+    for (pc,len,hash) in [(0x2b2cd8,0x80,"bf978c36ac4c7eca717f18ba2dd7e7ed1bb41df4"),
+        (0x2b3ae0,0x14,"f95a5f2827795884dc9ce9ab33fbceee6e2baeb9"),
+        (0x2eee38,8,"5aab30a101c018936bc39b8119ac3362354360b2"),
+        (0x330228,0x14,"358cf4d2b25a8ebe5258f72fbc270c75d300e7ff")] {
+        assert_eq!(rc_formats::sha1::hex(&rc_formats::sha1::sha1(rc_formats::font::read_overlay(&sections,pc,len).unwrap())),hash);
+    }
+    let pos_before=hero.pos;let rot_before=hero.rot;let held_before=pad.held;
+    let sequence_before=anim.state.seq_a;let samples_before=pad.hist_len;
+    assert!(hero.speed>0. && pad.hist_count>0);
+    hero.reset_teleport_motion(&mut pad);
+    assert_eq!((hero.pos,hero.rot,pad.held,anim.state.seq_a),(pos_before,rot_before,held_before,sequence_before));
+    assert_eq!((pad.hist_count,pad.hist_index),(0,0));assert_eq!(pad.hist_len,samples_before);
+    for v in [hero.vel,hero.disp,hero.eff,hero.eff_v,hero.momentum] {assert_eq!(v.map(f32::to_bits),[0;3]);}
+    assert_eq!(hero.motion_reset,Default::default());
+    pad.update(Some(&PadInput::neutral().stick(0.,-1.).bytes()),false);
+    assert_eq!(pad.hist_count,1);
+    let env=Env{mobys:None,hero_moby:None,coll:&collision,pad:&pad,cam_yaw:camera.yaw(),cam_rows:camera.rows,mirror:false};
+    assert_eq!(hero_update(&mut hero,&env,&mut anim.ctl(&class)),HeroTick::Ran);
+    assert!(hero.speed>0. && hero.pos.iter().all(|x|x.is_finite()));
+    assert_eq!(ma::evaluate(&class,&anim.state).len(),111);
+    println!("ORIGINAL_GC_MOTION_RESET_CPU_PASS source=2b2cd8 original_source_hashes=true same_hero_pad=true input_and_animation_preserved=true next_hero_animation_physics_collision_tick=true; FULL_TELEPORT_AND_CLASS1330_REMAIN_UNPORTED");
     println!("ORIGINAL_RC2_CPU_PASS joints=111 textures=4 pose_frames={pose_frames} jump_rise={} grounded_ticks={grounded} movement_distance={delta} spawn={:?} final={:?} camera={:?}; GPU_NOT_TESTED DEVICE_NOT_TESTED LEVEL_COMPLETION_NOT_TESTED",max_z-launch_z,spawn.position,hero.pos,camera.pos);
 }
 

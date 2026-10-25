@@ -24,6 +24,7 @@ pub mod jump;
 pub mod physics;
 pub mod registry;
 pub mod states;
+pub mod teleport;
 pub mod walk;
 
 use physics::{euler_rows, Env, V3};
@@ -125,6 +126,8 @@ pub struct Hero {
     pub eff_h: V3,
     /// `0x189f80`: carried momentum.
     pub momentum: V3,
+    /// Original reset-owned blocks/W lanes not represented by the V3 fields.
+    pub motion_reset:teleport::MotionResetStorage,
     /// `0x189f90` / `0x189f94` / `0x189f98` / `0x189f9c`: |eff|, |eff.xy|, forward speed, slope ratio.
     pub eff_len: f32,
     pub eff_len_xy: f32,
@@ -240,7 +243,7 @@ impl Hero {
     pub fn new() -> Hero {
         Hero {
             rows: euler_rows([0.0; 3]), pos: [0.0; 3], rot: [0.0; 3], vel: [0.0; 3], disp: [0.0; 3], eff: [0.0; 3], eff_v: [0.0; 3],
-            eff_h: [0.0; 3], momentum: [0.0; 3], eff_len: 0.0, eff_len_xy: 0.0, fwd_speed: 0.0, slope_ratio: 0.0,
+            eff_h: [0.0; 3], momentum: [0.0; 3], motion_reset:Default::default(), eff_len: 0.0, eff_len_xy: 0.0, fwd_speed: 0.0, slope_ratio: 0.0,
             stick_dir: [1.0, 0.0, 0.0], target_yaw: 0.0, yaw_vel: 0.0, yaw_residual: 0.0, target_speed: 0.0, speed: 0.0,
             timer: 0, group_timer: 0, substate_timer: 0, seq_timer: 0, hp: 8, land_lag: 0, stop_decel: 0.0,
             fall_g: 0.006_111_111_5, fall_dec: 0.001_944_444_5, run_keep: 0, walk_gate: 0, on_moby: false, cap_top: 0.8, cap_bottom: 0.7, cap_radius: 0.45, cap_radius_vel: 0.0,
