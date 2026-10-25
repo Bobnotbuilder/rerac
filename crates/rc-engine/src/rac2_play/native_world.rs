@@ -38,15 +38,20 @@ impl NativeWorld {
         let defs=lv.particles.textures.as_ref().context("GC native world requires original particle definitions")?.defs.clone();
         world.effects=Some(rc_game2::effects::Effects::new(defs));
         world.controller_data=Some(contract.controller_data.clone());
+        // The existing opt-in is explicitly a SYNTHETIC save/runtime fixture.
+        // These are not inferred New Game globals. No production default is
+        // supplied and no original callback is skipped to unblock gameplay.
+        world.state_1330=Some(rc_game2::state_1330::State1330 {byte_1a7a12:0,byte_1a7be8:0,
+            words_139948:[0;29],halfword_152c26:0});
         let bindings=classes.iter().zip(animations).map(|(c,a)|(c.binding(),a)).collect();drop(classes);
         eprintln!("RC2_INTERNAL_WORLD_SAVE_FIXTURE: spawned={} rejected={} provenance=SYNTHETIC_SAVE_AND_RNG_INPUTS original_data=true not_original_New_Game_not_release",world.moby_to_instance.len(),world.instance_to_moby.iter().filter(|i|i.is_none()).count());
         Ok(Self {world,bindings,empty,blocked:false,ready:false})
     }
 
     fn report(&mut self,error:TickError) {
-        eprintln!("RC2_NATIVE_WORLD_BLOCKED: {error:?}; no complete gameplay tick");
+        eprintln!("RC2_NATIVE_WORLD_BLOCKED: {error:?}; service={:?}; no complete gameplay tick",self.world.pending_1330);
         #[cfg(target_os="ios")]
-        crate::ios::diagnostic("RC2_NATIVE_WORLD_BLOCKED",&format!("{error:?}; INTERNAL_SAVE_FIXTURE_NOT_RELEASE"));
+        crate::ios::diagnostic("RC2_NATIVE_WORLD_BLOCKED",&format!("{error:?}; service={:?}; INTERNAL_SAVE_FIXTURE_NOT_RELEASE",self.world.pending_1330));
         self.blocked=true;
     }
 

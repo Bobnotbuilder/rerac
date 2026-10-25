@@ -4,6 +4,9 @@
 //! out. The systems that are the same code in both games (the pad record, the collision queries, Ratchet's animation
 //! player) are `rc-game`'s, used as they are.
 
+pub mod actor_1330;
+pub mod init_1330;
+pub mod state_1330;
 pub mod camera;
 pub mod collision;
 pub mod controller_132d;

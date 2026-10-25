@@ -20,6 +20,15 @@ pub struct World {
     pub effects:Option<crate::effects::Effects>,
     pub controller_data:Option<crate::controller_132d::AranosControllerData>,
     pub controller_132d:Option<crate::controller_132d::Controller132d>,
+    /// Explicit runtime inputs; absence does not mean original New Game zeros.
+    pub state_1330:Option<crate::state_1330::State1330>,
+    pub pending_1330:Option<crate::init_1330::Pending1330>,
+    cuboids:Vec<rc_formats::volumes::Shape>,
+    prefix_1330_owners:Vec<MobyId>,
+    /// Native ids in the original twenty-entry 0x220d50 attachment list.
+    /// The actual records and pvar bytes remain exclusively in Objects.
+    pub actor_attachments:[Option<MobyId>;20],
+    dynamic_local_fields:Vec<(MobyId,usize)>,
     /// One stream for all GC classes/effects, never a separately seeded RNG
     /// per subsystem. The caller supplies its loader-boundary state.
     pub rng:rc_game::rng::Rng,
@@ -62,6 +71,7 @@ impl World {
     pub fn load(gameplay:&[u8],classes:&mut [LoadedClass<'_>],state:&mut SpawnState,
         rng:rc_game::rng::Rng,
         mut ground:impl FnMut([f32;3])->Result<f32>)->Result<Self> {
+        let cuboids=crate::init_1330::cuboids(gameplay)?;
         let instances=gameplay::moby_instances(gameplay)?;
         let section=gameplay::section(gameplay,"moby_instances")?.ok_or_else(||rc_formats::FormatError::Invalid("GC static section absent".into()))?;
         let spare=Buf(section).i32(4)?;
@@ -144,10 +154,17 @@ impl World {
         pvar_indices.push(-1);
         Ok(Self {objects:Objects::new(records,dynamic_capacity),instance_to_moby,moby_to_instance,pvars,pvar_indices,groups,
             gc:vec![GcState::default();count],preceding_owners,grid,effects:None,controller_data:None,controller_132d:None,
+            state_1330:None,pending_1330:None,cuboids,prefix_1330_owners:Vec::new(),
+            actor_attachments:[None;20],dynamic_local_fields:Vec::new(),
             rng,hits:Default::default(),init_list,init_cursor:0,initialized:false})
     }
 
     pub fn local_pvar_bytes(&self,id:MobyId,field:usize,len:usize)->Result<&[u8]> {
+        if self.dynamic_local_fields.contains(&(id,field)) {
+            let m=self.objects.get(id).ok_or_else(||rc_formats::FormatError::Invalid("GC dynamic pvar owner absent".into()))?;
+            let offset=usize::try_from(Buf(&m.pvars).i32(field)?).map_err(|_|rc_formats::FormatError::Invalid("GC dynamic local pointer negative".into()))?;
+            return Ok(Buf(&m.pvars).sub(offset,len,"GC dynamic local pointer range")?.bytes());
+        }
         let Some(&index)=self.pvar_indices.get(id).filter(|&&i|i>=0) else {return invalid("GC moby has no static pvar source");};
         let Some(m)=self.objects.get(id) else {return invalid("GC pvar owner absent");};
         self.pvars.local_bytes_in(index as usize,field,&m.pvars,len)
@@ -165,6 +182,75 @@ impl World {
         let m=self.objects.get_mut(id).expect("live GC state owner");let gc=&mut self.gc[id];
         gc.previous_94=m.state;m.state=state;gc.timer_96=0;gc.flags_be&=!1;
         if let Some(substate)=substate {gc.substate_95=substate;gc.flags_be&=!2;}
+    }
+
+    /// GC0x32a748: use the existing owner record, shared matrix kernel and
+    /// spatial grid. No class callback or RAC1 title-specific actor code runs.
+    pub fn connect_actor(&mut self,id:MobyId,owner:Option<MobyId>,classes:&[LoadedClass<'_>])->Result<()> {
+        let Some(actor)=self.objects.get(id).filter(|m|m.state<0x80) else {return invalid("GC actor connection requires live actor");};
+        let class=classes.iter().find(|c|c.class==actor.o_class)
+            .ok_or_else(||rc_formats::FormatError::Invalid("GC actor class resource absent".into()))?;
+        let from=if let Some(parent)=owner {
+            let Some(m)=self.objects.get(parent).filter(|m|m.state<0x80) else {return invalid("GC actor connection requires live owner");};
+            Some((m.position,m.rotation,m.light,m.ambient))
+        } else {None};
+        let m=self.objects.get_mut(id).unwrap();
+        m.update_dist=255;m.draw_dist=255;m.visible=1;
+        if let Some((position,rotation,light,ambient))=from {
+            m.parent=owner;m.position=position;m.rotation=rotation;m.light=light;m.ambient=ambient;
+            // Source calls313dc0 before clearing the three low mode bits.
+            scheduler::rebuild_matrix(m,Some(class.animation));self.grid.register(m);
+        }
+        m.mode&=0xfff8;Ok(())
+    }
+
+    /// Complete allocation/lifetime slice360cd0/360d28 using the SAME native
+    /// allocator and owned pvars. It does not run384d28 pose evaluation or
+    /// claim callback3846d0 has finished. source_word is explicit1a7af8 input.
+    pub fn rebuild_actor_attachments(&mut self,actor:MobyId,data:&crate::actor_1330::Actor1330Data,
+        source_word:u32,classes:&[LoadedClass<'_>],counter:u32)->Result<Vec<MobyId>> {
+        let Some(owner)=self.objects.get(actor).filter(|m|m.state<0x80 && m.pvars.len()>=0x24) else {
+            return invalid("GC attachment owner requires live allocated pvars");
+        };
+        let _=owner;
+        let plan=data.attachment_plan(source_word);
+        if self.objects.available_slots(counter)<plan.len() {return invalid("GC attachment allocation capacity unavailable");}
+        let slots=plan.iter().map(|p|classes.iter().position(|c|c.class==p.class)
+            .ok_or_else(||rc_formats::FormatError::Invalid(format!("GC attachment class {:#x} resource absent",p.class))))
+            .collect::<Result<Vec<_>>>()?;
+        // Preflight before deletion; a missing class must not destroy live state.
+        for id in self.actor_attachments.iter().flatten() {
+            if self.objects.get(*id).is_none() || *id==actor {return invalid("GC attachment list ownership invalid");}
+        }
+        for entry in &mut self.actor_attachments {
+            if let Some(id)=entry.take() {
+                let grid=&mut self.grid;
+                self.objects.delete(id,counter,|m|grid.remove(m))?;
+            }
+        }
+        self.objects.get_mut(actor).unwrap().update_dist=255;
+        let mut ids=Vec::with_capacity(plan.len());
+        for (index,(allocation,slot)) in plan.iter().zip(slots).enumerate() {
+            let id=self.objects.create(&classes[slot],counter).expect("GC allocation preflight");
+            self.gc[id]=GcState::default();
+            self.dynamic_local_fields.retain(|&(owner,_)|owner!=id);
+            let m=self.objects.get_mut(id).unwrap();
+            if allocation.flag_8000 {m.mode|=0x8000;}
+            self.actor_attachments[index]=Some(id);ids.push(id);
+        }
+        // Exactly the null-terminated list; no parent link or joint pose is
+        // invented by360d28. Its +8 pointer is LOCAL to each unique pvar owner.
+        for &id in &ids {
+            let m=self.objects.get_mut(id).unwrap();
+            if m.b73!=0 {m.b73=8;}
+            m.mode|=0x124;m.draw_dist=0x1ff;
+            m.pvars[8..12].copy_from_slice(&0x20i32.to_le_bytes());
+            self.dynamic_local_fields.push((id,8));
+        }
+        let m=self.objects.get_mut(actor).unwrap();m.mode|=0x20;
+        m.pvars[8..12].copy_from_slice(&0x20i32.to_le_bytes());
+        if !self.dynamic_local_fields.contains(&(actor,8)) {self.dynamic_local_fields.push((actor,8));}
+        Ok(ids)
     }
 
     /// Hit delivery into the ACTUAL owner's GC hit slot, not a detached test
@@ -186,6 +272,26 @@ impl World {
     pub fn native_update(&mut self,id:MobyId,source:u32,counter:u32)->bool {
         if !self.objects.get(id).is_some_and(|m|m.update_fn==Some(source)) {return false;}
         match source {
+            0x3846d0=>{
+                let m=self.objects.get(id).unwrap();
+                if m.state!=0 {return false;}
+                let Ok(request)=crate::init_1330::teleport_request(id,&m.pvars,&self.cuboids) else {
+                    self.pending_1330=Some(crate::init_1330::Pending1330::InvalidOwnedData);return false;
+                };
+                if !self.prefix_1330_owners.contains(&id) {
+                    let Some(state)=self.state_1330.as_mut() else {
+                        self.pending_1330=Some(crate::init_1330::Pending1330::RuntimeState);return false;
+                    };
+                    state.initialize_prefix();
+                    self.prefix_1330_owners.push(id);
+                }
+                // Original +4 selects a CUBOID transform. HeroTeleport cannot
+                // be replaced by a camera command or a position-only write:
+                // its motion/item/trail/joint/camera/audio services are required.
+                self.pending_1330=Some(request.map_or(crate::init_1330::Pending1330::ActorAndRemainingServices,
+                    crate::init_1330::Pending1330::Teleport));
+                false
+            },
             0x383eb8=>{
                 let m=self.objects.get(id).expect("GC class132d owner");
                 match m.state {
@@ -268,9 +374,9 @@ impl World {
         let m=self.objects.get(id).ok_or(TickError::InvalidClass(-1))?;
         if m.state>=0x80 {return Ok(());}
         let class=classes.iter().find(|c|c.class==m.o_class).ok_or(TickError::InvalidClass(m.o_class))?;
-        // Callback availability is explicit. Returning false means no update
-        // was executed and animation must not advance. A successful port owns
-        // its source identity and is responsible for the complete callback.
+        // Callback availability is explicit. False retains the object cursor
+        // and animation. A source-bound resumable prefix may retain its own
+        // completed effects, but cannot claim a complete class callback.
         let before=m.anim;
         if m.mode&mode::NO_ANIM==0 {rc_formats::moby_anim::advance(&mut self.objects.get_mut(id).unwrap().anim,class.animation);}
         if let Some(source)=self.objects.get(id).unwrap().update_fn {
@@ -346,6 +452,8 @@ mod tests {
             moby_to_instance:(0..n).collect(),pvars:PvarPlan {blocks:Vec::new(),pointer_fields:Vec::new(),shared_data:Vec::new(),shared_fields:Vec::new()},
             pvar_indices:vec![-1;n],groups:vec![Vec::new();2],gc:vec![GcState::default();n],preceding_owners:Vec::new(),
             grid:rc_game::collision_query::MobyGrid::new(),effects:None,controller_data:None,controller_132d:None,
+            state_1330:None,pending_1330:None,cuboids:Vec::new(),prefix_1330_owners:Vec::new(),
+            actor_attachments:[None;20],dynamic_local_fields:Vec::new(),
             rng:rc_game::rng::Rng::new(),hits:Default::default(),init_list:Vec::new(),init_cursor:0,initialized:false}
     }
     fn object(id:u32,slot:u8)->Moby {

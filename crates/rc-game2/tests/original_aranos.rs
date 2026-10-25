@@ -225,6 +225,35 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     assert!(!world.native_update(next_missing.moby,next_missing.source,0),"required state1 query/draw remains unported");
     assert_eq!(world.rng.state,after_init_seed,"blocked query/draw must not replay initialization");
     println!("ORIGINAL_GC_CONTROLLER_INIT_CPU_PASS owner={} owned_descriptor=true shared_rng_before={controller_seed:08x} after={:08x} next_init={after_controller:?}; STATE1_QUERY_DRAW_NOT_IMPLEMENTED",next_missing.moby,world.rng.state);
+    // Resume the SAME object24 cursor through the recovered services. These
+    // explicit runtime globals are a branch fixture, not original New Game.
+    let owner=24;let before_pvars=world.objects.get(owner).unwrap().pvars.clone();
+    assert_eq!(rc_formats::buf::Buf(&before_pvars).i32(4).unwrap(),40);
+    assert_eq!(rc_formats::buf::Buf(&before_pvars).i32(0x14).unwrap(),73);
+    assert_eq!(world.pending_1330,Some(rc_game2::init_1330::Pending1330::RuntimeState));
+    let mut state1330=rc_game2::state_1330::State1330 {byte_1a7a12:1,byte_1a7be8:0,
+        words_139948:[0;29],halfword_152c26:0xbeef};
+    state1330.words_139948[2]=7; // Hole-sensitive source scan, not RAC1 flag count.
+    world.state_1330=Some(state1330);
+    assert_eq!(world.initialize(&loaded,|w,id,source|w.native_update(id,source,0)).unwrap_err(),after_controller);
+    let Some(rc_game2::init_1330::Pending1330::Teleport(request))=world.pending_1330 else {panic!("mandatory original teleport was not retained")};
+    let cuboids=rc_game2::init_1330::cuboids(&gameplay).unwrap();let shape=cuboids[40];
+    assert_eq!(request.owner,owner);assert_eq!(request.cuboid,40);
+    assert_eq!(request.position.map(f32::to_bits),shape.matrix[3].map(f32::to_bits));
+    assert_eq!(request.euler.map(f32::to_bits),[shape.euler[0],shape.euler[1],shape.euler[2],shape.unused_7c].map(f32::to_bits));
+    assert_eq!((request.state,request.reset_camera),(0,true));
+    let state1330=world.state_1330.as_mut().unwrap();
+    assert_eq!(state1330.halfword_152c26,1);assert_eq!(state1330.byte_1a7be8,1);
+    assert_eq!(state1330.words_139948[3],0x18);
+    state1330.halfword_152c26=0xbeef;
+    let globals=state1330.clone();
+    assert_eq!(world.initialize(&loaded,|w,id,source|w.native_update(id,source,0)).unwrap_err(),after_controller);
+    assert_eq!(world.state_1330.as_ref().unwrap(),&globals,"retry must not replay completed prefix writes");
+    assert_eq!(world.objects.get(owner).unwrap().pvars,before_pvars);
+    assert_eq!(world.objects.get(owner).unwrap().state,0);
+    assert_eq!(world.rng.state,after_init_seed);
+    assert_eq!(world.tick(0,[0.;4],&loaded,|_,_,_|false),Err(rc_game2::world::TickError::NotInitialized));
+    println!("ORIGINAL_GC_1330_PREFIX_CPU_PASS actual_owner=24 cuboid=40 source=0x2b9e68 request={request:?}; INITIALIZER_CURSOR_REMAINS24 TELEPORT_CHAIN_UNPORTED");
     let receiver=missing.moby;assert_eq!(world.objects.get(receiver).unwrap().state,1);
     let e=world.effects.as_ref().unwrap();assert!(e.pool.count>0);
     let sprite=e.pool.live().find(|(_,r)|rc_game::particles::rec::u32(r,0x20)==receiver as u32+1).unwrap().0;
@@ -261,6 +290,46 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     println!("ORIGINAL_GC_LIVE_RIGID_CHAIN_PASS placement164_runtime={floor} floor={} moved={} removed_to_world={}; TEST_DISPLACEMENT_ONLY_NOT_ORIGINAL_MOVING_PLATFORM_BEHAVIOUR",raised.point[2],moved.point[2],removed.point[2]);
     println!("ORIGINAL_GC_LIVE_RECEIVER_CHAIN_PASS owner={receiver} sprite={sprite} type=89 explicit_hit_to_state2=true next_init={next_missing:?}; WRENCH_SPATIAL_HIT_AND_DESTRUCTION_UNIMPLEMENTED");
     println!("ORIGINAL_GC_NATIVE_WORLD_BOUNDARY spawned={count} rejected={} preceding_owners={} first_native_callback={missing:?}; EXPLICIT_SAVE_FIXTURE_NOT_NEW_GAME_CAPTURE LIVE_CLASS_GAMEPLAY_BLOCKED GPU_NOT_TESTED",placements.len()-count,world.preceding_owners.len());
+    // Independently exercise the complete recovered allocation/ownership slice
+    // with authentic loaded classes in THIS World. This is not an out-of-order
+    // initializer bypass: no callback is reported supported or cursor advanced.
+    let actor_data=rc_game2::actor_1330::Actor1330Data::parse(0,overlay).unwrap();
+    assert!(rc_game2::actor_1330::Actor1330Data::parse(1,overlay).is_err());
+    let actor_class=loaded.iter().find(|c|c.class()==0xd54).unwrap();
+    let actor=world.objects.create(actor_class,0).unwrap();
+    let from=world.objects.get(owner).unwrap().clone();
+    world.connect_actor(actor,Some(owner),&loaded).unwrap();
+    let connected=world.objects.get(actor).unwrap();
+    assert_eq!(connected.parent,Some(owner));assert_eq!(connected.position,from.position);
+    assert_eq!(connected.rotation,from.rotation);assert_eq!(connected.light,from.light);
+    assert_eq!(connected.ambient,from.ambient);assert_eq!(connected.mode&7,0);
+    assert_eq!((connected.update_dist,connected.draw_dist,connected.visible),(255,255,1));
+    let word=0; // Explicit 1a7af8 fixture; not a recovered equipment/save value.
+    let plan=actor_data.attachment_plan(word);
+    let before_slots=world.objects.available_slots(0);
+    let before_actor=world.objects.get(actor).unwrap().pvars.clone();
+    assert!(world.rebuild_actor_attachments(actor,&actor_data,word,&[],0).is_err());
+    assert_eq!(world.objects.available_slots(0),before_slots);
+    assert_eq!(world.objects.get(actor).unwrap().pvars,before_actor);
+    assert!(world.actor_attachments.iter().all(Option::is_none));
+    let attachments=world.rebuild_actor_attachments(actor,&actor_data,word,&loaded,0).unwrap();
+    assert_eq!(attachments.len(),plan.len());assert_eq!(attachments.len(),9);
+    for (&id,allocation) in attachments.iter().zip(&plan) {
+        let m=world.objects.get(id).unwrap();assert_eq!(m.o_class,allocation.class);
+        assert_eq!(m.mode&0x8000!=0,allocation.flag_8000);assert_eq!(m.mode&0x124,0x124);
+        assert_eq!(m.draw_dist,0x1ff);assert_eq!(m.pvars.len(),0x80);
+        assert_eq!(rc_formats::buf::Buf(&m.pvars).i32(8).unwrap(),0x20);
+        assert_eq!(world.local_pvar_bytes(id,8,0x60).unwrap().as_ptr(),m.pvars[0x20..].as_ptr());
+        assert!(world.local_pvar_bytes(id,8,0x61).is_err());
+        assert!(m.parent.is_none(),"360d28 does not create an invented parent link");
+    }
+    let second=world.rebuild_actor_attachments(actor,&actor_data,word,&loaded,0).unwrap();
+    assert!(second.iter().all(|id|!attachments.contains(id)),"deleted slots cannot be reused before counter+2");
+    for id in &attachments {let m=world.objects.get(*id).unwrap();assert_eq!((m.state,m.delete_tick),(0xfe,2));assert!(world.grid.cells_of(*id as u16).is_empty());}
+    assert_eq!(world.actor_attachments[second.len()],None);
+    assert_eq!(world.rng.state,after_init_seed,"allocation/connection consumes no RNG");
+    assert_eq!(world.initialize(&loaded,|w,id,source|w.native_update(id,source,0)).unwrap_err(),after_controller);
+    println!("ORIGINAL_GC_1330_ACTOR_ALLOCATION_CPU_PASS same_world=true owner={owner} actor={actor} attachment_classes={:?} delete_then_allocate=true actual_pvar_aliases=true; POSE_TELEPORT_FULL_CALLBACK_UNPORTED",plan.iter().map(|x|x.class).collect::<Vec<_>>());
 }
 
 #[test]

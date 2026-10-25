@@ -103,4 +103,11 @@ impl Objects {
     }
 
     pub fn free_slots(&self)->i32 {self.table.free_slots}
+
+    /// Read-only preflight of exactly the slots CreateMoby can take now.
+    /// A soon-to-be-deleted attachment is not reusable until counter+2.
+    pub fn available_slots(&self,counter:u32)->usize {
+        self.table.mobys[self.table.first_dynamic..].iter()
+            .filter(|m|m.state>=0xfe && m.delete_tick<=counter as u64).count()
+    }
 }
