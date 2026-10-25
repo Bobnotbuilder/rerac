@@ -388,6 +388,7 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     for (pc,len,hash) in [(0x2b9e68,0x19c,"9c3da7ddfaf7e84a720e3f3045b1b8d28c0bdbcc"),
         (0x2c4560,0x48d0,"883096221b3af3f45d95cf5ab164c4c32bd1b58b"),
         (0x2b48b0,0x158,"d9ef2d41e7d89f5c4c1601871a8baf308d4d9b25"),
+        (0x2b4a08,0x950,"ef9a8191d64daecb805b15b0edd0fc5df92d0800"),
         (0x31ff00,0x100,"7fec8f06f6efaf38fd117436fcf0efbf581ee078"),
         (0x324140,0x80,"db03f977f180f26c1c2fb18e1fa9bd45cd38f72b"),
         (0x2a53b8,0xc8,"be628d4bf91e7f8679801ad8ccdec1989903f435"),
