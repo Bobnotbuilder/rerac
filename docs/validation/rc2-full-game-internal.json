@@ -11,7 +11,7 @@
   "all_non_hardware_Aranos_gates_pass": false,
   "physical_full_Aranos": "NOT_TESTED",
   "FIRST_FATAL_BLOCKER": null,
-  "first_development_blocker": "GC_ARANOS_CLASS_1330_SOURCE_3846D0_INITIALIZATION_SERVICES_UNPORTED",
+  "first_development_blocker": "GC_ARANOS_CLASS_1330_SOURCE_2B9E68_HERO_TELEPORT_SERVICES_UNPORTED",
   "tests": {
     "formats": {
       "passed": 179,
@@ -352,5 +352,131 @@
     },
     "session_state": "CHECKPOINTED_INCOMPLETE",
     "active_background_engineering": false
+  },
+  "rc2_class1330_recovery": {
+    "updated_utc": "2026-10-25T02:13:52.679180+00:00",
+    "scope": "CLASS1330_ORIGINAL_RECOVERY_INCOMPLETE_RELEASE_WITHHELD",
+    "starting_local": "7925c78ad289a009bbd40aac568dc3b441e5f85c",
+    "starting_public": "d1d38d08c55d8d43732251a2c8120a4c265b6e0c",
+    "local_code": "db2d9f12ff17c1476b70bb117d27c1b50d84355a",
+    "public_code": "2abbf8bdbc42e4f90eba33bb3ee46b3f61a8fea4",
+    "prefix_local": "37576b247fd10a1fb49d0e515c1eab947b276474",
+    "prefix_public": "a31506a76977dbdec2dcd54d3862a80e17ae8976",
+    "first_development_blocker": "GC_ARANOS_CLASS_1330_SOURCE_2B9E68_HERO_TELEPORT_SERVICES_UNPORTED",
+    "FIRST_FATAL_BLOCKER": null,
+    "CPU_FIXTURE_FIRST_BLOCKER": {
+      "moby": 24,
+      "class": "0x1330",
+      "source": "0x3846d0",
+      "state": 0,
+      "service": "0x2b9e68",
+      "cursor_advanced_past24": false
+    },
+    "implemented": [
+      "World-owned2f51a0/322730(18)/368560 resumable prefix with explicit runtime inputs",
+      "Correct cuboid40 selection through actual owned pvars+4; typed mandatory teleport request",
+      "32a748 owner connection through existing native object/matrix/grid",
+      "360cd0/360d28 actual World allocator/owned-pvar/lifetime slice using original signed selector tables",
+      "2b2cd8 exact motion write set through same GC Hero and shared PadState; actual original-animation/physics/collision next-tick test"
+    ],
+    "not_implemented": [
+      "Complete2b9e68 HeroTeleport",
+      "Complete3846d0 state0 and common tail",
+      "132d state1 query/draw",
+      "Complete native world and gameplay tick"
+    ],
+    "original_data": {
+      "spawned": 467,
+      "rejected": 5,
+      "preceding_owners": 28,
+      "class1330_owner": 24,
+      "cuboid": 40,
+      "table_index": 73,
+      "position": [
+        247.0,
+        193.16782,
+        49.89,
+        0.01
+      ],
+      "euler": [
+        0.0,
+        0.0,
+        1.5707964,
+        0.0
+      ],
+      "attachment_source_word_fixture": 0,
+      "attachment_classes": [
+        "0x10d4",
+        "0x10d4",
+        "0x10d7",
+        "0x10da",
+        "0x10da",
+        "0x10de",
+        "0x10de",
+        "0x10e5",
+        "0x10e5"
+      ],
+      "state_context": "EXPLICIT_SYNTHETIC_SAVE_RUNTIME_RNG_NOT_ORIGINAL_NEW_GAME",
+      "rng_after132d": "d795a3b6",
+      "new_services_rng_draws": 0
+    },
+    "tests": {
+      "formats_pass": 179,
+      "formats_ignored": 1,
+      "RAC1_units_pass": 715,
+      "GC_units_pass": 34,
+      "original_RC2_CPU_pass": 10,
+      "ios_contracts_pass": 59,
+      "recovery_python_pass": 13,
+      "nested_native_AOT_harness_pass": 6,
+      "AOT_query_inputs": 256,
+      "AOT_halfword_inputs": 65536
+    },
+    "compatibility": {
+      "upstream_reference": "89c87e98f9d8296187df2a6310c67b32144090d3",
+      "crossgame_candidate": "GC368560 -> RAC1boot216b08, different state binding; UNKNOWN_REQUIRES_EVIDENCE",
+      "callback_groups": {
+        "placements": 472,
+        "placement_classes": 76,
+        "registry_entries": 233,
+        "update_addresses": 185,
+        "shared39c870_placements": 61
+      },
+      "AOT": "EXACT_SIGNATURE_LEAF_PILOT_NOT_APP_INTEGRATED_NOT_GENERAL_TRANSLATOR"
+    },
+    "native_validation": {
+      "current_source_run": 40153555598,
+      "status": "PENDING",
+      "prefix_run": 40153085562,
+      "prefix_status": "IN_PROGRESS",
+      "original_GPU": "NOT_TESTED_CURRENT_SOURCE",
+      "physical_iPhone": "NOT_TESTED_NO_CONNECTED_DEVICE",
+      "full_level": "NOT_TESTED_INCOMPLETE"
+    },
+    "Aranos_complete": false,
+    "full_game_complete": false,
+    "production_RC2_Play": false,
+    "user_facing_IPA": false,
+    "release_policy": "NO_USER_IPA_BEFORE_COMPLETE_ARANOS_NON_HARDWARE_GATES",
+    "classifications": [
+      "GAME_SPECIFIC",
+      "SHARED_TESTING"
+    ],
+    "Shared_Core_promoted": false,
+    "other_engine_adoption_changed": false,
+    "RAC1_runtime_or_saves_changed": false,
+    "bundle": "org.rerac.game.iospoc",
+    "next_technical_objective": "Bind original2b9e68 to the existing GC Hero/Pad/World owners. Reuse the now implemented2b2cd8 reset; recover/apply324140 tracked-object teardown,2af848 item put-away,2a53b8 modifier reset,2c4560 state0 mode2,2d2760 animation,2b4a08 probe,3e0b28/403d98 optional actor effects,2da160 camera reset and313008 lighting/grid. Preserve original order, then execute311320(d54),32a748,table73,360d28 attachments,script gates and384c40/384d28 tail before advancing cursor24. Keep132d state1 query383fc0/queued3842f8 separate.",
+    "session_state": "IN_PROGRESS",
+    "background_work_promised": false,
+    "logs": [
+      "class1330-regressions-formats-20261025.log",
+      "class1330-regressions-rac1-20261025.log",
+      "class1330-motion-regressions-game2-20261025.log",
+      "class1330-motion-regressions-original-20261025.log",
+      "class1330-ios-contracts-20261025.log",
+      "class1330-recovery-tools-20261025.log"
+    ],
+    "source_validation_files_byte_identical": 732
   }
 }
