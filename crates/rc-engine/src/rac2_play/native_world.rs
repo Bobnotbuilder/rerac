@@ -78,7 +78,11 @@ impl NativeWorld {
                 Some(rc_game2::init_1330::Pending1330::Teleport(_)) |
                 Some(rc_game2::init_1330::Pending1330::TeleportService {..})) {
                 if let Some(hero_id)=hero_id {
-                    if let Err(error)=w.resume_1330_teleport(hero_id,hero,pad,anim,hero_class,None,0) {
+                    if let Err(error)=w.resume_1330_teleport_with_collision(hero_id,hero,pad,anim,hero_class,None,0,
+                        lv.collision.as_ref().expect("GC fixture collision"),
+                        &lv.rc2_world_contract.as_ref().expect("GC fixture contract").rigid,
+                        rc_game2::teleport_world::GroundGlobals {
+                            source_1b8ff0:0,source_1a79f8:0,source_gp_minus_6000:0}) {
                         eprintln!("RC2_TELEPORT_BINDING_BLOCKED: {error}");
                     }
                 }

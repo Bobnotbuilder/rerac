@@ -64,7 +64,57 @@ pub enum TeleportStep {Pose,Motion,Trail0,Trail1,Flags,PutAway,Modifiers,State,A
 #[derive(Clone,Copy,Debug,PartialEq)]
 pub struct TeleportProgress {pub request:TeleportRequest,pub hero:MobyId,pub next:TeleportStep}
 
+/// Explicit caller-bound original globals; no inferred New Game defaults.
+#[derive(Clone,Copy,Debug)]
+pub struct GroundGlobals {
+    pub source_1b8ff0:i32,
+    pub source_1a79f8:i32,
+    pub source_gp_minus_6000:i32,
+}
+
 impl World {
+    /// Existing ordered teleport plus actual collision services. The legacy
+    /// entry point still stops at Probe when no original collision is bound.
+    /// This does not complete class1330 or bypass its remaining camera/tail.
+    #[allow(clippy::too_many_arguments)]
+    pub fn resume_1330_teleport_with_collision(&mut self,hero_id:MobyId,hero:&mut Hero,pad:&mut PadState,
+        anim:&mut RatchetAnim,class:&MobyAnimClass,layer_present:Option<bool>,counter:u32,
+        collision:&rc_formats::collision::Collision,rigid:&crate::collision::LiveRigidCollision,
+        globals:GroundGlobals)->Result<TeleportStep> {
+        let next=self.resume_1330_teleport(hero_id,hero,pad,anim,class,layer_present,counter)?;
+        if next!=TeleportStep::Probe {return Ok(next);}
+        use crate::hero::ground_original::{GroundServices,GroundResult,Inputs};
+        struct Queries<'a> {
+            world:&'a World,rigid:&'a crate::collision::LiveRigidCollision,
+            mesh:&'a rc_formats::collision::Collision,hero:MobyId,
+        }
+        impl GroundServices for Queries<'_> {
+            fn line(&mut self,a:[f32;3],b:[f32;3],flags:u32)->Result<Option<rc_game::collision_query::CollOutput>> {
+                Ok(rc_game::collision_query::coll_line_m(self.mesh,Some(&self.rigid.scene(self.world)),a,b,
+                    rc_game::collision_query::QueryFlags(flags),Some(self.hero)))
+            }
+            fn point_w(&mut self)->Option<u32> {None} // Native query exposes XYZ only.
+        }
+        let owner=self.objects.get(hero_id).unwrap();
+        let input=Inputs {frame:crate::hero::probe::Frame {
+            source_1b8ff0:globals.source_1b8ff0,source_18a0e0:hero.original_ground.gravity_direction,
+            moby_up:owner.rows[2]},source_1a79f8:globals.source_1a79f8,
+            source_gp_minus_6000:globals.source_gp_minus_6000,moby_euler:owner.rotation};
+        let mut progress=self.teleport_ground_progress.take().unwrap_or_default();
+        let mut storage=std::mem::take(&mut hero.original_ground);
+        let result=progress.resume(hero,&mut storage,input,&mut Queries {world:self,rigid,mesh:collision,hero:hero_id});
+        hero.original_ground=storage;self.teleport_ground_progress=Some(progress);
+        match result? {
+            GroundResult::Pending {source,..}=>{
+                let request=self.teleport_progress.as_ref().unwrap().request;
+                self.pending_1330=Some(Pending1330::TeleportService {request,source});Ok(TeleportStep::Probe)
+            },
+            GroundResult::Complete=>{
+                self.teleport_progress.as_mut().unwrap().next=TeleportStep::Actor0;
+                self.resume_1330_teleport(hero_id,hero,pad,anim,class,layer_present,counter)
+            },
+        }
+    }
     /// Complete324140, preserving count, inactive slots and deletion order.
     /// Bad native bindings fail before mutation; no new owner or RNG stream.
     pub fn end_tracked_objects(&mut self,record:&mut TrackedObjects,counter:u32)->Result<()> {
@@ -173,9 +223,9 @@ impl World {
                     let Some(word)=self.teleport_globals.as_mut().and_then(|g|g.word_1b9000.as_mut()) else {return Ok(next);};
                     *word=(hero.group==0x11) as i32;TeleportStep::Probe
                 },
-                // Existing ground_probe is partial: liquid, owner/carry and
-                // side-tilt effects remain mandatory. Do not call it a complete
-                // original2b4a08 or advance to later services on that basis.
+                // A caller without bound collision stops here. The collision
+                // entry point executes the recovered branch and retains any
+                // unsupported water/owner/gravity service as a blocker.
                 TeleportStep::Probe=>return Ok(next),
                 TeleportStep::Actor0=>{
                     let Some(bindings)=self.teleport_globals.as_ref().and_then(|g|g.actors_3e0b28) else {return Ok(next);};

@@ -478,6 +478,41 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
         rc_game2::hero::probe::Frame {source_1b8ff0:0,source_18a0e0:[0.,0.,-1.,0.],moby_up:rows[2]});
     let hit=coll_line_m(&coll,Some(&rigid.scene(&world)),high[..3].try_into().unwrap(),low[..3].try_into().unwrap(),QueryFlags(2),Some(hero_id)).unwrap();
     println!("ORIGINAL_GC_PROBE_SEGMENT_CPU_PASS source=2b48b0 shared_clip=31ff00 start={high:?} end={low:?} hit_moby={:?} surface={} raw_sound_class={}; EXPLICIT_GRAVITY_GLOBAL_FIXTURE FULL_GROUND_PROBE_NOT_COMPLETE",hit.moby,hit.surface_id(),rc_game2::hero::probe::sound_class(hit.kind));
+    // Execute the entire recovered dry/world branch against original collision
+    // and the same live World owner, not a canned CollOutput. These globals
+    // remain explicit runtime fixtures, not a captured original New Game.
+    let query_globals=rc_game2::teleport_world::GroundGlobals {
+        source_1b8ff0:0,source_1a79f8:0,source_gp_minus_6000:0};
+    assert_eq!(world.resume_1330_teleport_with_collision(hero_id,&mut hero,&mut pad,&mut anim,
+        hero_class,Some(false),0,&coll,&rigid,query_globals).unwrap(),TeleportStep::Actor0);
+    assert_eq!(hero.original_ground.gravity_direction,[0.,0.,-1.,0.]);
+    assert_eq!(hero.original_ground.point_w,None,"native XYZ query does not establish original W");
+    assert_eq!(hero.ground_point,hit.point);assert_eq!(hero.surface,hit.surface_id());
+    let probe_counts=(hero.air_ticks,hero.f16c,hero.grounded_ticks);
+    world.teleport_globals.as_mut().unwrap().actors_3e0b28=Some(rc_game2::teleport_actors::ActorBindings {
+        actor:Some(actor),reset_actor:Some(owner)});
+    assert_eq!(world.resume_1330_teleport_with_collision(hero_id,&mut hero,&mut pad,&mut anim,
+        hero_class,Some(false),0,&coll,&rigid,query_globals).unwrap(),TeleportStep::Actor1);
+    assert_eq!(world.objects.get(actor).unwrap().state,7);
+    assert_eq!(rc_formats::buf::Buf(&world.objects.get(owner).unwrap().pvars).i32(0x28).unwrap(),1);
+    world.teleport_globals.as_mut().unwrap().actors_403d98=Some(rc_game2::teleport_actors::ActorBindings {
+        actor:Some(ghosts[3]),reset_actor:Some(actor)});
+    assert_eq!(world.resume_1330_teleport_with_collision(hero_id,&mut hero,&mut pad,&mut anim,
+        hero_class,Some(false),0,&coll,&rigid,query_globals).unwrap(),TeleportStep::Camera);
+    assert_eq!(world.objects.get(ghosts[3]).unwrap().state,7);
+    assert_eq!(world.rng,expected_rng);
+    assert_eq!((hero.air_ticks,hero.f16c,hero.grounded_ticks),probe_counts);
+    let camera_cursor=world.initialize(&loaded,|w,id,source| {
+        let complete=w.native_update(id,source,0);
+        if !complete && source==0x3846d0 {
+            assert_eq!(w.resume_1330_teleport_with_collision(hero_id,&mut hero,&mut pad,&mut anim,
+                hero_class,Some(false),0,&coll,&rigid,query_globals).unwrap(),TeleportStep::Camera);
+        }
+        complete
+    }).unwrap_err();
+    assert_eq!(camera_cursor,after_controller);assert_eq!(world.rng,expected_rng);
+    assert_eq!((hero.air_ticks,hero.f16c,hero.grounded_ticks),probe_counts);
+    assert!(matches!(world.pending_1330,Some(rc_game2::init_1330::Pending1330::TeleportService {source:0x2da160,..})));
     // Later recovered services are independently exercised on real owners;
     // their success does not bypass the earlier State service above.
     let bindings=rc_game2::teleport_actors::ActorBindings {actor:Some(actor),reset_actor:Some(owner)};
@@ -498,7 +533,7 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     assert_eq!(world.objects.get(hero_id).unwrap().light,points[sample].light);
     assert_eq!(world.objects.get(hero_id).unwrap().ambient[..3],points[sample].ambient);
     assert!(points[sample].effects().iter().any(|e|matches!(e,rc_game2::env_sample::Effect::Music {mode:1,volume:0x400,..})));
-    println!("ORIGINAL_GC_TELEPORT_PREFIX_CHAIN_CPU_PASS same_world_hero_pad_animation=true owned_trails_deleted=3 original_modifiers=40 retry_preserves_order=true pending=2b4a08 cursor=24 state0_rng_draws=1 sample_count={} sample={} effects={:?}; SYNTHETIC_RUNTIME_INPUTS_NOT_NEW_GAME FULL_TELEPORT_WORLD_GAMEPLAY_GPU_NOT_COMPLETE",points.len(),sample,points[sample].effects());
+    println!("ORIGINAL_GC_TELEPORT_PREFIX_CHAIN_CPU_PASS same_world_hero_pad_animation=true owned_trails_deleted=3 original_modifiers=40 retry_preserves_order=true dry_world_probe=true optional_actor_calls=true pending=2da160 cursor=24 state0_rng_draws=1 sample_count={} sample={} effects={:?}; SYNTHETIC_RUNTIME_INPUTS_NOT_NEW_GAME FULL_TELEPORT_WORLD_GAMEPLAY_GPU_NOT_COMPLETE",points.len(),sample,points[sample].effects());
 }
 
 #[test]
