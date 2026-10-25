@@ -26,8 +26,41 @@ pub struct TeleportStorage {
     pub byte_18c30f:u8,
 }
 
+/// Borrowed-runtime globals with one native owner. Missing values are not
+/// inferred zeros/null pointers; only explicit fixtures may supply such inputs.
+#[derive(Clone,Debug)]
+pub struct TeleportGlobals {
+    pub source_1b8b80:Option<[[u8;16];8]>,
+    pub word_1b9000:Option<i32>,
+    pub actors_3e0b28:Option<crate::teleport_actors::ActorBindings>,
+    pub actors_403d98:Option<crate::teleport_actors::ActorBindings>,
+}
+struct StateServices<'a> {world:&'a mut World,hero:MobyId,counter:u32}
+impl crate::hero::teleport_state::StateZeroServices for StateServices<'_> {
+    fn clear_moby_source_9c(&mut self)->Result<()> {
+        self.world.gc[self.hero].source_9c=0;Ok(())
+    }
+    fn end_hero_trail(&mut self,record:&mut TrackedObjects)->Result<()> {
+        self.world.end_tracked_objects(record,self.counter)
+    }
+    fn clear_global_1b8b80(&mut self)->Result<bool> {
+        let Some(records)=self.world.teleport_globals.as_mut().and_then(|g|g.source_1b8b80.as_mut()) else {return Ok(false);};
+        crate::hero::teleport_state::clear_source_1b8b80(records);Ok(true)
+    }
+    fn clear_camera_1b9000(&mut self)->Result<bool> {
+        let Some(word)=self.world.teleport_globals.as_mut().and_then(|g|g.word_1b9000.as_mut()) else {return Ok(false);};
+        *word=0;Ok(true)
+    }
+    fn stop_group_audio(&mut self,_hero:&mut Hero)->Result<bool> {
+        // Requires actual nine handle/voice ownership and3602f0 transport.
+        // No opaque voice id is reinterpreted as a native AudioSystem handle.
+        Ok(false)
+    }
+    fn rng(&mut self)->&mut rc_game::rng::Rng {&mut self.world.rng}
+}
+
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-pub enum TeleportStep {Pose,Motion,Trail0,Trail1,Flags,PutAway,Modifiers,State}
+pub enum TeleportStep {Pose,Motion,Trail0,Trail1,Flags,PutAway,Modifiers,State,Animation,GroupFlag,Probe,Actor0,Actor1,Camera,Lighting,Done}
 #[derive(Clone,Copy,Debug,PartialEq)]
 pub struct TeleportProgress {pub request:TeleportRequest,pub hero:MobyId,pub next:TeleportStep}
 
@@ -74,6 +107,10 @@ impl World {
                 TeleportStep::Pose=>0x2ef6d8,TeleportStep::Motion=>0x2b2cd8,
                 TeleportStep::Trail0|TeleportStep::Trail1=>0x324140,TeleportStep::Flags=>0x2b9ef8,
                 TeleportStep::PutAway=>0x2af848,TeleportStep::Modifiers=>0x2a53b8,TeleportStep::State=>0x2c4560,
+                TeleportStep::Animation=>0x2d2760,TeleportStep::GroupFlag=>0x2b9f50,
+                TeleportStep::Probe=>0x2b4a08,TeleportStep::Actor0=>0x3e0b28,
+                TeleportStep::Actor1=>0x403d98,TeleportStep::Camera=>0x2da160,
+                TeleportStep::Lighting=>0x313008,TeleportStep::Done=>0x2b9ffc,
             }});
             let following=match next {
                 TeleportStep::Pose=>{
@@ -108,7 +145,48 @@ impl World {
                     let Some(table)=self.teleport_modifiers.as_mut() else {return Ok(next);};
                     table.reset(&mut self.objects)?;TeleportStep::State
                 },
-                TeleportStep::State=>return Ok(next),
+                TeleportStep::State=>{
+                    if request.state!=-1 {
+                        if request.state!=0 {return Ok(next);}
+                        let mut progress=self.teleport_state_progress.take().unwrap_or_default();
+                        let result=progress.resume(hero,&mut anim.ctl(class),
+                            &mut StateServices {world:self,hero:hero_id,counter},layer_present);
+                        self.teleport_state_progress=Some(progress);
+                        self.objects.get_mut(hero_id).unwrap().anim=anim.state;
+                        match result? {
+                            crate::hero::teleport_state::StateZeroResult::Pending(source)=>{
+                                self.pending_1330=Some(Pending1330::TeleportService {request,source});return Ok(next);
+                            },
+                            crate::hero::teleport_state::StateZeroResult::Rejected |
+                            crate::hero::teleport_state::StateZeroResult::Complete=>{},
+                        }
+                    }
+                    TeleportStep::Animation
+                },
+                TeleportStep::Animation=>{
+                    let m=self.objects.get(hero_id).unwrap();let (seq,frame)=(m.anim.seq_b,m.anim.frame_b);
+                    let sound=crate::hero::teleport::reset_teleport_animation(anim,class,seq,frame)?;
+                    let m=self.objects.get_mut(hero_id).unwrap();m.anim=anim.state;m.b7c=sound;
+                    TeleportStep::GroupFlag
+                },
+                TeleportStep::GroupFlag=>{
+                    let Some(word)=self.teleport_globals.as_mut().and_then(|g|g.word_1b9000.as_mut()) else {return Ok(next);};
+                    *word=(hero.group==0x11) as i32;TeleportStep::Probe
+                },
+                // Existing ground_probe is partial: liquid, owner/carry and
+                // side-tilt effects remain mandatory. Do not call it a complete
+                // original2b4a08 or advance to later services on that basis.
+                TeleportStep::Probe=>return Ok(next),
+                TeleportStep::Actor0=>{
+                    let Some(bindings)=self.teleport_globals.as_ref().and_then(|g|g.actors_3e0b28) else {return Ok(next);};
+                    bindings.service_3e0b28(&mut self.objects,0,0)?;TeleportStep::Actor1
+                },
+                TeleportStep::Actor1=>{
+                    let Some(bindings)=self.teleport_globals.as_ref().and_then(|g|g.actors_403d98) else {return Ok(next);};
+                    bindings.service_403d98(&mut self.objects,0,0)?;
+                    if request.reset_camera {TeleportStep::Camera}else{TeleportStep::Lighting}
+                },
+                TeleportStep::Camera|TeleportStep::Lighting|TeleportStep::Done=>return Ok(next),
             };
             self.teleport_progress.as_mut().unwrap().next=following;
         }

@@ -18,6 +18,7 @@ pub mod hero;
 pub mod hits;
 pub mod items;
 pub mod melee;
+pub mod level_music;
 pub mod objects;
 pub mod pvars;
 pub mod spawn;

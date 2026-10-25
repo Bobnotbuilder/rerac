@@ -22,6 +22,7 @@ pub mod air;
 pub mod ground;
 pub mod jump;
 pub mod physics;
+pub mod probe;
 pub mod registry;
 pub mod states;
 pub mod teleport;

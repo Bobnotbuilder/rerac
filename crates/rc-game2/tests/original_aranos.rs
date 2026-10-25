@@ -386,6 +386,9 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     use rc_game2::{teleport_world::{TrackedObjects,TeleportStep},teleport_modifiers::{ModifierTable,ModifierBindings,node_key}};
     let sections=rc_formats::font::parse_overlay_sections(overlay).unwrap();
     for (pc,len,hash) in [(0x2b9e68,0x19c,"9c3da7ddfaf7e84a720e3f3045b1b8d28c0bdbcc"),
+        (0x2c4560,0x48d0,"883096221b3af3f45d95cf5ab164c4c32bd1b58b"),
+        (0x2b48b0,0x158,"d9ef2d41e7d89f5c4c1601871a8baf308d4d9b25"),
+        (0x31ff00,0x100,"7fec8f06f6efaf38fd117436fcf0efbf581ee078"),
         (0x324140,0x80,"db03f977f180f26c1c2fb18e1fa9bd45cd38f72b"),
         (0x2a53b8,0xc8,"be628d4bf91e7f8679801ad8ccdec1989903f435"),
         (0x2a4fe8,0x60,"297dcf36bea51409c328e506152f3b28b34d453f"),
@@ -436,8 +439,45 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     assert_eq!(hero.vel,[4.;3]);assert_eq!(pad.hist_count,9);
     assert!(world.objects.get(hero_id).unwrap().joint_mod_keys.is_empty());
     assert_eq!(world.teleport_modifiers.as_ref().unwrap().records[0][..0x50],[0;0x50]);
-    assert!(matches!(world.pending_1330,Some(rc_game2::init_1330::Pending1330::TeleportService {source:0x2c4560,..})));
+    assert!(matches!(world.pending_1330,Some(rc_game2::init_1330::Pending1330::TeleportService {source:0x2d6d08,..})));
     assert_eq!(world.tick(1,[0.;4],&loaded,|_,_,_|panic!("world cannot tick")),Err(rc_game2::world::TickError::NotInitialized));
+    // Continue mode2 state0 on the SAME Hero/World after binding explicit
+    // missing globals. Its source-one RNG draw survives a later pending service.
+    world.teleport_globals=Some(rc_game2::teleport_world::TeleportGlobals {
+        source_1b8b80:Some([[0xab;16];8]),word_1b9000:None,
+        actors_3e0b28:None,actors_403d98:None});
+    let mut expected_rng=world.rng;let expected_idle_ticks=expected_rng.rand_range(50,100);
+    assert_eq!(world.resume_1330_teleport(hero_id,&mut hero,&mut pad,&mut anim,hero_class,Some(false),0).unwrap(),TeleportStep::State);
+    assert_eq!(world.rng,expected_rng);assert_eq!(hero.state_zero.word_11a0,expected_idle_ticks);
+    assert!(world.teleport_globals.as_ref().unwrap().source_1b8b80.as_ref().unwrap().iter().all(|r|r[0]==0 && r[1..]==[0xab;15]));
+    assert!(matches!(world.pending_1330,Some(rc_game2::init_1330::Pending1330::TeleportService {source:0x2c8d94,..})));
+    assert_eq!(world.resume_1330_teleport(hero_id,&mut hero,&mut pad,&mut anim,hero_class,Some(false),0).unwrap(),TeleportStep::State);
+    assert_eq!(world.rng,expected_rng,"pending global binding must not replay state entry");
+    world.teleport_globals.as_mut().unwrap().word_1b9000=Some(123);
+    assert_eq!(world.resume_1330_teleport(hero_id,&mut hero,&mut pad,&mut anim,hero_class,Some(false),0).unwrap(),TeleportStep::Probe);
+    assert_eq!(world.rng,expected_rng);assert_eq!(world.teleport_globals.as_ref().unwrap().word_1b9000,Some(0));
+    assert_eq!((hero.state,hero.group,hero.timer,hero.substate_timer,hero.seq_timer),(0,0,0,0,0));
+    assert_eq!(ma::evaluate(hero_class,&anim.state).len(),111);
+    assert_eq!(world.objects.get(hero_id).unwrap().anim,anim.state);
+    assert_eq!((anim.state.frame_a,anim.state.frame_b,anim.state.t),(0,1,0.));
+    assert!(matches!(world.pending_1330,Some(rc_game2::init_1330::Pending1330::TeleportService {source:0x2b4a08,..})));
+    let cursor=world.initialize(&loaded,|w,id,source| {
+        let complete=w.native_update(id,source,0);
+        if !complete && source==0x3846d0 {
+            assert_eq!(w.resume_1330_teleport(hero_id,&mut hero,&mut pad,&mut anim,hero_class,Some(false),0).unwrap(),TeleportStep::Probe);
+        }
+        complete
+    }).unwrap_err();
+    assert_eq!(cursor,after_controller);assert_eq!(world.rng,expected_rng);
+    assert_eq!(world.objects.get(owner).unwrap().state,0,"full callback required before cursor advance");
+    // Complete original2b48b0 using actual hero owner's basis and the
+    // unchanged RAC1 pure clip/vector kernels. This is the mandatory query
+    // segment, not the complete subsequent liquid/owner/pose update.
+    let rows=world.objects.get(hero_id).unwrap().rows;
+    let (high,low)=rc_game2::hero::probe::segment(request.position,hero.cap_radius*2.2,-48.,true,
+        rc_game2::hero::probe::Frame {source_1b8ff0:0,source_18a0e0:[0.,0.,-1.,0.],moby_up:rows[2]});
+    let hit=coll_line_m(&coll,Some(&rigid.scene(&world)),high[..3].try_into().unwrap(),low[..3].try_into().unwrap(),QueryFlags(2),Some(hero_id)).unwrap();
+    println!("ORIGINAL_GC_PROBE_SEGMENT_CPU_PASS source=2b48b0 shared_clip=31ff00 start={high:?} end={low:?} hit_moby={:?} surface={} raw_sound_class={}; EXPLICIT_GRAVITY_GLOBAL_FIXTURE FULL_GROUND_PROBE_NOT_COMPLETE",hit.moby,hit.surface_id(),rc_game2::hero::probe::sound_class(hit.kind));
     // Later recovered services are independently exercised on real owners;
     // their success does not bypass the earlier State service above.
     let bindings=rc_game2::teleport_actors::ActorBindings {actor:Some(actor),reset_actor:Some(owner)};
@@ -458,7 +498,7 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     assert_eq!(world.objects.get(hero_id).unwrap().light,points[sample].light);
     assert_eq!(world.objects.get(hero_id).unwrap().ambient[..3],points[sample].ambient);
     assert!(points[sample].effects().iter().any(|e|matches!(e,rc_game2::env_sample::Effect::Music {mode:1,volume:0x400,..})));
-    println!("ORIGINAL_GC_TELEPORT_PREFIX_CHAIN_CPU_PASS same_world_hero_pad_animation=true owned_trails_deleted=3 original_modifiers=40 retry_preserves_order=true pending=2c4560 cursor=24 rng_unchanged=true sample_count={} sample={} effects={:?}; SYNTHETIC_RUNTIME_INPUTS_NOT_NEW_GAME FULL_TELEPORT_WORLD_GAMEPLAY_GPU_NOT_COMPLETE",points.len(),sample,points[sample].effects());
+    println!("ORIGINAL_GC_TELEPORT_PREFIX_CHAIN_CPU_PASS same_world_hero_pad_animation=true owned_trails_deleted=3 original_modifiers=40 retry_preserves_order=true pending=2b4a08 cursor=24 state0_rng_draws=1 sample_count={} sample={} effects={:?}; SYNTHETIC_RUNTIME_INPUTS_NOT_NEW_GAME FULL_TELEPORT_WORLD_GAMEPLAY_GPU_NOT_COMPLETE",points.len(),sample,points[sample].effects());
 }
 
 #[test]

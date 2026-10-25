@@ -7,7 +7,7 @@ use rc_formats::buf::{invalid,Buf,Result};
 use rc_game::moby_runtime::MobyId;
 pub const COUNT:usize=40;
 pub const STRIDE:usize=0xb0;
-/// Namespace outside native object ids (World capacity is at most65532),
+/// Namespace outside native object ids (World ids do not reach0xffff),
 /// distinct from existing scene head/noggin/arm keys. Never a guest pointer.
 pub fn node_key(index:usize)->u32 {assert!(index<COUNT);0xffff_1000+index as u32}
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]

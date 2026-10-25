@@ -34,6 +34,8 @@ pub mod swim;
 
 mod air;
 mod common;
+/// Existing pure segment clipping, also used by GC2b48b0/31ff00.
+pub use common::clip_to_world;
 mod ground;
 mod jump;
 mod walk;

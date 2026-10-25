@@ -51,6 +51,9 @@ impl NativeWorld {
         world.teleport_modifiers=Some(rc_game2::teleport_modifiers::ModifierTable::read(
             &contract.initial_modifier_records,rc_game2::teleport_modifiers::ModifierBindings {
                 hero:Some(hero),source_18b134:None,source_18b040:None})?);
+        world.teleport_globals=Some(rc_game2::teleport_world::TeleportGlobals {
+            source_1b8b80:Some([[0;16];8]),word_1b9000:Some(0),
+            actors_3e0b28:None,actors_403d98:None});
         let bindings=classes.iter().zip(animations).map(|(c,a)|(c.binding(),a)).collect();drop(classes);
         eprintln!("RC2_INTERNAL_WORLD_SAVE_FIXTURE: spawned={} rejected={} provenance=SYNTHETIC_SAVE_AND_RNG_INPUTS original_data=true not_original_New_Game_not_release",world.moby_to_instance.len(),world.instance_to_moby.iter().filter(|i|i.is_none()).count());
         Ok(Self {world,bindings,empty,blocked:false,ready:false})

@@ -146,7 +146,7 @@ pub(super) fn quadratic(a: Pf, b: Pf, c: Pf) -> (i32, Pf) {
 }
 
 /// `0x2720f8(start, end)`: pull `end` back along the segment so no coordinate is below 0 (clipped at 0.1).
-pub(super) fn clip_to_world(start: V4, end: &mut V4) {
+pub fn clip_to_world(start: V4, end: &mut V4) {
     for k in 0..3 {
         if end[k] < Pf::ZERO {
             let d = vsub(*end, start);

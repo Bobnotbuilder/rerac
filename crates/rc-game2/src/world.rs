@@ -23,6 +23,8 @@ pub struct World {
     /// Explicit runtime inputs; absence does not mean original New Game zeros.
     pub state_1330:Option<crate::state_1330::State1330>,
     pub pending_1330:Option<crate::init_1330::Pending1330>,
+    pub teleport_globals:Option<crate::teleport_world::TeleportGlobals>,
+    pub(crate) teleport_state_progress:Option<crate::hero::teleport_state::StateZeroProgress>,
     pub teleport_modifiers:Option<crate::teleport_modifiers::ModifierTable>,
     pub(crate) teleport_progress:Option<crate::teleport_world::TeleportProgress>,
     cuboids:Vec<rc_formats::volumes::Shape>,
@@ -45,7 +47,7 @@ pub struct PrecedingOwner {pub section:&'static str,pub record:usize,pub pvar_in
 /// GC's state bookkeeping has no matching raw RAC1 moby fields. Keep it
 /// beside the shared semantic record rather than reinterpreting its layout.
 #[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
-pub struct GcState {pub previous_94:u8,pub substate_95:u8,pub timer_96:u16,pub flags_be:u8}
+pub struct GcState {pub source_9c:u32,pub previous_94:u8,pub substate_95:u8,pub timer_96:u16,pub flags_be:u8}
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub struct MissingUpdate {pub moby:MobyId,pub class:i16,pub source:u32,pub state:u8,pub initializing:bool}
@@ -156,7 +158,7 @@ impl World {
         pvar_indices.push(-1);
         Ok(Self {objects:Objects::new(records,dynamic_capacity),instance_to_moby,moby_to_instance,pvars,pvar_indices,groups,
             gc:vec![GcState::default();count],preceding_owners,grid,effects:None,controller_data:None,controller_132d:None,
-            state_1330:None,pending_1330:None,teleport_progress:None,teleport_modifiers:None,cuboids,prefix_1330_owners:Vec::new(),
+            state_1330:None,pending_1330:None,teleport_progress:None,teleport_modifiers:None,teleport_globals:None,teleport_state_progress:None,cuboids,prefix_1330_owners:Vec::new(),
             actor_attachments:[None;20],dynamic_local_fields:Vec::new(),
             rng,hits:Default::default(),init_list,init_cursor:0,initialized:false})
     }
@@ -462,7 +464,7 @@ mod tests {
             moby_to_instance:(0..n).collect(),pvars:PvarPlan {blocks:Vec::new(),pointer_fields:Vec::new(),shared_data:Vec::new(),shared_fields:Vec::new()},
             pvar_indices:vec![-1;n],groups:vec![Vec::new();2],gc:vec![GcState::default();n],preceding_owners:Vec::new(),
             grid:rc_game::collision_query::MobyGrid::new(),effects:None,controller_data:None,controller_132d:None,
-            state_1330:None,pending_1330:None,teleport_progress:None,teleport_modifiers:None,cuboids:Vec::new(),prefix_1330_owners:Vec::new(),
+            state_1330:None,pending_1330:None,teleport_progress:None,teleport_modifiers:None,teleport_globals:None,teleport_state_progress:None,cuboids:Vec::new(),prefix_1330_owners:Vec::new(),
             actor_attachments:[None;20],dynamic_local_fields:Vec::new(),
             rng:rc_game::rng::Rng::new(),hits:Default::default(),init_list:Vec::new(),init_cursor:0,initialized:false}
     }
@@ -481,10 +483,10 @@ mod tests {
     #[test]
     fn gc_state_helper_keeps_substate_on_minus_one_and_preserves_other_flags() {
         let mut w=fixture(vec![object(0,1)]);w.objects.get_mut(0).unwrap().state=7;
-        w.gc[0]=GcState {previous_94:3,substate_95:9,timer_96:27,flags_be:255};
+        w.gc[0]=GcState {source_9c:0,previous_94:3,substate_95:9,timer_96:27,flags_be:255};
         w.set_state(0,2,None);assert_eq!(w.objects.get(0).unwrap().state,2);
-        assert_eq!(w.gc[0],GcState {previous_94:7,substate_95:9,timer_96:0,flags_be:254});
-        w.set_state(0,4,Some(6));assert_eq!(w.gc[0],GcState {previous_94:2,substate_95:6,timer_96:0,flags_be:252});
+        assert_eq!(w.gc[0],GcState {source_9c:0,previous_94:7,substate_95:9,timer_96:0,flags_be:254});
+        w.set_state(0,4,Some(6));assert_eq!(w.gc[0],GcState {source_9c:0,previous_94:2,substate_95:6,timer_96:0,flags_be:252});
     }
     #[test]
     fn native_world_never_ticks_before_all_initializers_finish() {

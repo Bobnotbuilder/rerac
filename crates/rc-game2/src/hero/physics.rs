@@ -386,25 +386,26 @@ impl Hero {
         }
     }
 
-    /// `0x2b4a08`: the ground probe. A line (flags 2) from 2.2 (walk group 2: 2.9) above the feet to 48 below finds
+    /// `0x2b4a08`: the ground probe. A line (flags 2) from radius*2.2 (walk group2: radius*2.9) above the feet to 48 below finds
     /// the ground point `0x18a0f0`, its z `0x18a138`, the height above it `0x18a13c` (32 without; negative when the
     /// ground is above), the normal `0x18a0c0` and slope `0x18a140`; under 0.02 with a slope ≤ 50° the air ticks
     /// `0x18a16e` reset. Water and liquid surfaces (0, 0xd, 3, 0xb), the moby under the feet and the side probes for
     /// the model's tilt are not ported.
     pub fn ground_probe(&mut self, env: &Env) {
-        self.air_ticks = self.air_ticks.saturating_add(1);
-        self.f16c = self.f16c.saturating_add(1);
+        self.air_ticks = self.air_ticks.wrapping_add(1);
+        self.f16c = self.f16c.wrapping_add(1);
         self.slope = 0.0;
         self.ground_z = 0.0;
         self.ground_point = [0.0; 3];
         self.height = 32.0;
         self.ground_normal = [0.0, 0.0, 1.0];
-        let up = if self.group == 2 { 2.9 } else { 2.2 };
+        let up = self.cap_radius * if self.group == 2 { 2.9 } else { 2.2 };
         let a = add(self.pos, [0.0, 0.0, up]);
-        let b = add(self.pos, [0.0, 0.0, -48.0]);
+        let mut b = add(self.pos, [0.0, 0.0, -48.0]);
+        if b[2] < 0.0 {b[2]=0.0;}
         if let Some(o) = env.line(a, b, 2) {
             self.surface = o.surface_id();
-            if 0 <= o.kind {
+            if 0 < o.kind {
                 self.ground_point = o.point;
                 self.ground_z = o.point[2];
                 self.height = dist(self.pos, self.ground_point);
@@ -418,7 +419,7 @@ impl Hero {
             }
         }
         if self.air_ticks == 0 {
-            self.grounded_ticks += 1;
+            self.grounded_ticks = self.grounded_ticks.wrapping_add(1);
             self.last_ground_point = self.ground_point;
         } else {
             self.grounded_ticks = 0;
