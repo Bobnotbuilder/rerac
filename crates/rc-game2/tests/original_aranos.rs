@@ -100,6 +100,21 @@ fn original_aranos_character_pose_movement_jump_and_camera() {
     assert!(hero.speed>0. && hero.pos.iter().all(|x|x.is_finite()));
     assert_eq!(ma::evaluate(&class,&anim.state).len(),111);
     println!("ORIGINAL_GC_MOTION_RESET_CPU_PASS source=2b2cd8 original_source_hashes=true same_hero_pad=true input_and_animation_preserved=true next_hero_animation_physics_collision_tick=true; FULL_TELEPORT_AND_CLASS1330_REMAIN_UNPORTED");
+    assert_eq!(rc_formats::sha1::hex(&rc_formats::sha1::sha1(rc_formats::font::read_overlay(&sections,0x2a4e48,0xa4).unwrap())),
+        "f6b026f3152d80dd5fc04f2d25fca29a17633ade");
+    // Explicit health fixture, not a fabricated combat/damage event. Exercise
+    // the original selector through the existing state/animation interface.
+    let mut low=hero.clone();low.hp=1;
+    pad.update(Some(&PadInput::neutral().bytes()),false);
+    let env=Env{mobys:None,hero_moby:None,coll:&collision,pad:&pad,cam_yaw:camera.yaw(),cam_rows:camera.rows,mirror:false};
+    assert!(class.sequence(0x51).is_some(),"original low-health animation must be loaded");
+    assert!(low.set_state(&mut anim.ctl(&class),&env,0,true));
+    assert_eq!(anim.state.seq_b,0x51);
+    assert_eq!(hero_update(&mut low,&env,&mut anim.ctl(&class)),HeroTick::Ran);
+    assert_eq!(low.state,0);assert_eq!(anim.state.seq_b,0x51);
+    let pose=ma::evaluate(&class,&anim.state);assert_eq!(pose.len(),111);
+    assert!(pose.iter().flatten().flatten().all(|x|x.is_finite()));
+    println!("ORIGINAL_GC_LOW_HEALTH_IDLE_CPU_PASS source=2a4e48 argument=0 health_fixture=1 state_entry=0 sequence=0x51 original_pose_joints=111 next_animation_physics_collision_tick=true; DAMAGE_AND_SURFACE_REACTION_UNPORTED GPU_NOT_TESTED");
     println!("ORIGINAL_RC2_CPU_PASS joints=111 textures=4 pose_frames={pose_frames} jump_rise={} grounded_ticks={grounded} movement_distance={delta} spawn={:?} final={:?} camera={:?}; GPU_NOT_TESTED DEVICE_NOT_TESTED LEVEL_COMPLETION_NOT_TESTED",max_z-launch_z,spawn.position,hero.pos,camera.pos);
 }
 

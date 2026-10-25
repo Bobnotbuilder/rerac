@@ -43,6 +43,15 @@ impl Hero {
 mod tests {
     use super::*;
     #[test]
+    fn idle_selector_preserves_gc_guard_priority_and_independent_surface_byte() {
+        let mut h=Hero::new();h.surface=-1;
+        assert_eq!(h.idle_seq(),0,"signed semantic surface id is not byte1492");
+        h.surface_flag_1492=0xff;assert_eq!(h.idle_seq(),0x67);
+        h.hp=1;assert_eq!(h.idle_seq(),0x51);
+        h.mode=1;assert_eq!(h.idle_seq(),0);
+        h.mode=2;assert_eq!(h.idle_seq(),0x51,"GC only excludes body1, unlike RAC1's any nonzero guard");
+    }
+    #[test]
     fn reset_preserves_unwritten_motion_and_input_fields() {
         let mut h=Hero::spawn([1.,2.,3.],0.7);
         h.vel=[1.;3];h.disp=[2.;3];h.eff=[3.;3];h.eff_v=[4.;3];h.momentum=[5.;3];
