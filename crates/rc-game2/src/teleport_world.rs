@@ -81,17 +81,24 @@ pub struct CameraInitGlobals<'a> {
     pub word_gp_2534:&'a mut u32,
 }
 
+pub struct CameraBackup {
+    pub metadata:crate::camera_teleport::Metadata,
+    pub saved:crate::camera::SavedFollowRecord,
+}
+
 impl World {
+    pub fn camera_backup(&self)->Option<&CameraBackup> {self.teleport_camera_backup.as_ref()}
     /// Continue2da160 on the SAME native camera/history and actual World
     /// collision/hero. Caller must bind already initialized original bank and
     /// live globals; an explicit test bank does not establish real New Game.
-    /// Only executed motion/init calls are acknowledged. Backup/publication/
-    /// projection remain required, and global initializer cursor is untouched.
+    /// Only executed calls are acknowledged. Publication needs the borrowed
+    /// native output owner; projection remains required. Cursor is untouched.
     #[allow(clippy::too_many_arguments)]
     pub fn resume_1330_camera_with_native(&mut self,hero_id:MobyId,hero:&Hero,
         camera:&mut crate::camera::FollowCamera,runtime:&mut crate::camera_teleport::Runtime<'_>,
         types:&crate::camera_teleport::Types,globals:&mut CameraInitGlobals<'_>,
-        collision:&rc_formats::collision::Collision,rigid:&crate::collision::LiveRigidCollision)->Result<TeleportStep> {
+        collision:&rc_formats::collision::Collision,rigid:&crate::collision::LiveRigidCollision,
+        mut published:Option<&mut rc_game::follow_camera::CameraView>)->Result<TeleportStep> {
         use crate::{camera::{CamInput,InitOwners},camera_teleport::{Call,DataBinding,Reset}};
         let progress=self.teleport_progress.ok_or_else(||rc_formats::FormatError::Invalid("GC camera reset has no original teleport owner".into()))?;
         if progress.hero!=hero_id || progress.next!=TeleportStep::Camera || !progress.request.reset_camera {
@@ -125,6 +132,16 @@ impl World {
                         camera.reset_init_represented(&input,defaults,gravity,InitOwners {hero_moby:hero_id,
                             record_byte_7d:record.byte_7d,record_half_7e:&mut record.half_7e,
                             word_gp_2530:globals.word_gp_2530,word_gp_2534:globals.word_gp_2534})?;
+                    },
+                    Call::Backup {source:0x2d7d80,record}=>{
+                        if record!=selected {return invalid("GC pending backup owner changed");}
+                        let mut metadata=runtime.records[record];metadata.data_70=DataBinding::Backup;
+                        self.teleport_camera_backup=Some(CameraBackup {metadata,saved:camera.save_follow_record()});
+                    },
+                    Call::Publish {source:0x2da1dc,record}=>{
+                        if record!=selected {return invalid("GC pending publication owner changed");}
+                        let Some(out)=published.as_deref_mut() else {return Ok(Some(0x2da1dc));};
+                        camera.publish_reset_xyz(hero,out);
                     },
                     _=>return Ok(Some(call.source())), // mandatory unbound service, never an acknowledgement
                 }

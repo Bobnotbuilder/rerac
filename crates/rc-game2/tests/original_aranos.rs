@@ -204,6 +204,16 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     let coll=rc_formats::collision::parse_collision(&core,&data).unwrap();
     let mut world=rc_game2::world::World::load(&gameplay,&mut loaded,&mut state,rc_game::rng::Rng {state:1234},
         |p|Ok(rc_game2::collision::root_height(&coll,p))).unwrap();
+    assert!(rc_game2::teleport_actors::AranosLoaderReset::from_overlay(&[]).is_err());
+    let actor_reset=rc_game2::teleport_actors::AranosLoaderReset::from_overlay(overlay).unwrap();
+    world.teleport_globals=Some(rc_game2::teleport_world::TeleportGlobals {
+        source_1b8b80:None,word_1b9000:None,actors_3e0b28:None,actors_403d98:None});
+    let before_loader_reset=world.rng;world.apply_aranos_loader_actor_resets(&actor_reset).unwrap();
+    let null=Some(rc_game2::teleport_actors::ActorBindings {actor:None,reset_actor:None});
+    let globals=world.teleport_globals.as_ref().unwrap();
+    assert_eq!((globals.actors_3e0b28,globals.actors_403d98),(null,null));
+    assert!(globals.source_1b8b80.is_none()&&globals.word_1b9000.is_none(),"unrelated startup globals remain unbound");
+    assert_eq!(world.rng,before_loader_reset);
     let count=world.moby_to_instance.len();assert!(count>0 && count<placements.len());
     let inventory=world.initializer_inventory();
     assert!(inventory.windows(2).all(|w|w[0].0<w[1].0));
@@ -391,6 +401,8 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
         (0x2b4a08,0x950,"ef9a8191d64daecb805b15b0edd0fc5df92d0800"),
         (0x2d9760,0x2f8,"c5862fefd0118af9c1f34f2ae763888ec203404d"),
         (0x424908,0x3d0,"381500f0d52b00a32a7aceaaaf4d1f6f5a0bd4f1"),
+        (0x2d7d80,0x5c,"1aec2a14ae13d42f1fc50f25c0a2565ccdc2ce76"),
+        (0x2da1dc,0x58,"e77cfe07b456805943465143de0f0197a6f4af9e"),
         (0x302e14,0x128,"96a44da37fa49be41f710c859ff95d56d4f07fb7"),
         (0x31c9d8,0xe8,"d2d49e320c2c698a41061314d1ce9d4c9252559b"),
         (0x31cac0,0x168,"2a8521d966e163d151eee087f2060e43895a3104"),
@@ -514,6 +526,11 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     assert_eq!(rc_formats::buf::Buf(&world.objects.get(owner).unwrap().pvars).i32(0x28).unwrap(),1);
     world.teleport_globals.as_mut().unwrap().actors_403d98=Some(rc_game2::teleport_actors::ActorBindings {
         actor:Some(ghosts[3]),reset_actor:Some(actor)});
+    // Resuming a completed loader service must not wipe later published IDs.
+    let bindings_before=world.teleport_globals.as_ref().unwrap().clone();
+    world.apply_aranos_loader_actor_resets(&actor_reset).unwrap();
+    assert_eq!(world.teleport_globals.as_ref().unwrap().actors_3e0b28,bindings_before.actors_3e0b28);
+    assert_eq!(world.teleport_globals.as_ref().unwrap().actors_403d98,bindings_before.actors_403d98);
     assert_eq!(world.resume_1330_teleport_with_collision(hero_id,&mut hero,&mut pad,&mut anim,
         hero_class,Some(false),0,&coll,&rigid,query_globals).unwrap(),TeleportStep::Camera);
     assert_eq!(world.objects.get(ghosts[3]).unwrap().state,7);
@@ -551,27 +568,37 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
         let mut runtime=Runtime {records:&mut records,current:&mut current,half_1b8e90:&mut half,word_1b9004:&mut word};
         let (mut a,mut b)=(37,41);let mut globals=CameraInitGlobals {defaults:None,word_gp_2530:&mut a,word_gp_2534:&mut b};
         let before_camera_rng=world.rng;
-        assert_eq!(world.resume_1330_camera_with_native(hero_id,&hero,&mut camera_fixture,&mut runtime,&types,&mut globals,&coll,&rigid).unwrap(),TeleportStep::Camera);
+        assert_eq!(world.resume_1330_camera_with_native(hero_id,&hero,&mut camera_fixture,&mut runtime,&types,&mut globals,&coll,&rigid,None).unwrap(),TeleportStep::Camera);
         assert!(matches!(world.pending_1330,Some(rc_game2::init_1330::Pending1330::TeleportService {source:0x424908,..})));
         let motion=camera_fixture.motion_globals();
         assert_eq!(motion.delta,[hero.pos[0]-1.,hero.pos[1]-2.,hero.pos[2]-3.]);
         assert_eq!((*runtime.word_1b9004,*runtime.half_1b8e90),(0,0));
         assert_eq!((*globals.word_gp_2530,*globals.word_gp_2534),(37,41),"unbound init must not execute writes");
-        world.resume_1330_camera_with_native(hero_id,&hero,&mut camera_fixture,&mut runtime,&types,&mut globals,&coll,&rigid).unwrap();
+        world.resume_1330_camera_with_native(hero_id,&hero,&mut camera_fixture,&mut runtime,&types,&mut globals,&coll,&rigid,None).unwrap();
         assert_eq!(camera_fixture.motion_globals(),motion,"pending init cannot replay motion/history");
         globals.defaults=Some(InitDefaults {horizontal_spring:0.015,vertical_spring:0.0125,look_blend_length:90,pull_max:6.,
             sphere_step:0.1,sphere_count:8.,sphere_scale:1.,yaw_rate:f32::from_bits(0x3d1d466f),end_flags:0x14,line_flags:0xb4});
-        assert_eq!(world.resume_1330_camera_with_native(hero_id,&hero,&mut camera_fixture,&mut runtime,&types,&mut globals,&coll,&rigid).unwrap(),TeleportStep::Camera);
-        assert!(matches!(world.pending_1330,Some(rc_game2::init_1330::Pending1330::TeleportService {source:0x2d7d80,..})));
+        assert_eq!(world.resume_1330_camera_with_native(hero_id,&hero,&mut camera_fixture,&mut runtime,&types,&mut globals,&coll,&rigid,None).unwrap(),TeleportStep::Camera);
+        assert!(matches!(world.pending_1330,Some(rc_game2::init_1330::Pending1330::TeleportService {source:0x2da1dc,..})));
         assert_eq!((*globals.word_gp_2530,*globals.word_gp_2534,runtime.records[3].half_7e),(0,0,0));
         assert_eq!(camera_fixture.initialized_hero_owner(),Some(hero_id));
         assert_eq!(camera_fixture.motion_globals(),motion);assert_eq!(camera_fixture.previous_position(),camera_fixture.pos);
         assert!(camera_fixture.rows.iter().flatten().all(|x|x.is_finite()));assert!(camera_fixture.pos.iter().all(|x|x.is_finite()));
         *globals.word_gp_2530=99;runtime.records[3].half_7e=91;
-        world.resume_1330_camera_with_native(hero_id,&hero,&mut camera_fixture,&mut runtime,&types,&mut globals,&coll,&rigid).unwrap();
+        world.resume_1330_camera_with_native(hero_id,&hero,&mut camera_fixture,&mut runtime,&types,&mut globals,&coll,&rigid,None).unwrap();
         assert_eq!((*globals.word_gp_2530,runtime.records[3].half_7e),(99,91),"pending backup cannot replay completed init writes");
         assert_eq!(camera_fixture.motion_globals(),motion);assert_eq!(world.rng,before_camera_rng);
-        println!("ORIGINAL_GC_TYPE0_CAMERA_NATIVE_OWNER_CHAIN_CPU_PASS actual_world_collision=true same_camera_hero=true original_nine_classes_types_and_pvar_owners=true explicit_bank_live_defaults_fixture=true motion_then_init_no_replay=true pending=2d7d80; FULL_BANK_STARTUP_BACKUP_PUBLICATION_PROJECTION_NEWGAME_NOT_VALIDATED");
+        let saved_position=world.camera_backup().unwrap().saved.position();
+        assert_eq!(world.camera_backup().unwrap().metadata.data_70,DataBinding::Backup);
+        assert_eq!(saved_position,camera_fixture.pos);
+        camera_fixture.pos[0]+=0.5;
+        let mut published=rc_game::follow_camera::CameraView::default();published.pos[3]=rc_game::ps2v::Pf::f(19.);
+        world.resume_1330_camera_with_native(hero_id,&hero,&mut camera_fixture,&mut runtime,&types,&mut globals,&coll,&rigid,Some(&mut published)).unwrap();
+        assert_eq!(published.pos_f32(),camera_fixture.pos);assert_eq!(published.pos[3],rc_game::ps2v::Pf::f(19.));
+        assert_eq!(camera_fixture.previous_position(),camera_fixture.pos);
+        assert_eq!(world.camera_backup().unwrap().saved.position(),saved_position,"publication retry must not recapture backup");
+        assert!(matches!(world.pending_1330,Some(rc_game2::init_1330::Pending1330::TeleportService {source:0x2d79b8,..})));
+        println!("ORIGINAL_GC_TYPE0_CAMERA_NATIVE_OWNER_CHAIN_CPU_PASS actual_world_collision=true same_camera_hero=true original_nine_classes_types_and_pvar_owners=true explicit_bank_live_defaults_fixture=true motion_init_backup_publication_no_replay=true pending=2d79b8_requires2e5640; FULL_BANK_STARTUP_PROJECTION_GPU_NEWGAME_NOT_VALIDATED");
     }
     // Later recovered services are independently exercised on real owners;
     // their success does not bypass the earlier State service above.
@@ -615,7 +642,7 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     assert_eq!(world.objects.get(hero_id).unwrap().light,points[sample].light);
     assert_eq!(world.objects.get(hero_id).unwrap().ambient[..3],points[sample].ambient);
     assert!(points[sample].effects().iter().any(|e|matches!(e,rc_game2::env_sample::Effect::Music {mode:1,volume:0x400,..})));
-    println!("ORIGINAL_GC_TELEPORT_PREFIX_CHAIN_CPU_PASS same_world_hero_pad_animation=true owned_trails_deleted=3 original_modifiers=40 retry_preserves_order=true dry_world_probe=true optional_actor_calls=true pending=2d7d80_explicit_camera_bank_fixture cursor=24 state0_rng_draws=1 sample_count={} sample={} effects={:?}; SYNTHETIC_RUNTIME_INPUTS_NOT_NEW_GAME FULL_TELEPORT_WORLD_GAMEPLAY_GPU_NOT_COMPLETE",points.len(),sample,points[sample].effects());
+    println!("ORIGINAL_GC_TELEPORT_PREFIX_CHAIN_CPU_PASS same_world_hero_pad_animation=true owned_trails_deleted=3 original_modifiers=40 retry_preserves_order=true dry_world_probe=true optional_actor_calls=true pending=2d79b8_explicit_camera_bank_fixture cursor=24 state0_rng_draws=1 sample_count={} sample={} effects={:?}; SYNTHETIC_RUNTIME_INPUTS_NOT_NEW_GAME FULL_TELEPORT_WORLD_GAMEPLAY_GPU_NOT_COMPLETE",points.len(),sample,points[sample].effects());
     // Independent upcoming-owner validation. The actual global initializer
     // remains blocked at24; this does not execute the missing1330 tail or
     // claim that the original full initialization sequence has advanced.

@@ -174,6 +174,16 @@ pub struct InitOwners<'a> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InitResetCoverage { NativeTypeZero }
 
+/// Immutable saved native follow/record state for2d7d80. The merged camera
+/// also contains incidental globals: these stay PRIVATE and must never be
+/// restored wholesale or exposed as original follow data. No update API and
+/// no owned Hero/objects, only the same native record's copied values/ids.
+#[derive(Clone,Debug)]
+pub struct SavedFollowRecord {state:FollowCamera}
+impl SavedFollowRecord {
+    pub fn position(&self)->V3 {self.state.pos}
+}
+
 impl CamInput<'_> {
     /// `0x2de878(a, b, flags, Ratchet, 0)`: the hit point.
     fn line(&self, a: V3, b: V3, flags: u32) -> Option<V3> { self.coll.and_then(|c| coll_line_m(c, self.mobys, a, b, QueryFlags(flags), self.hero_moby)).map(|o| o.point) }
@@ -336,6 +346,23 @@ pub struct FollowCamera {
 }
 
 impl FollowCamera {
+    ///2d7d80 native data/record snapshot. The current native spring-back path
+    /// reads these three cached fields from D0; use current values, not the
+    /// previous backup's d0_* caches incidentally present in the saved struct.
+    pub fn save_follow_record(&mut self)->SavedFollowRecord {
+        let saved=SavedFollowRecord {state:self.clone()};
+        (self.d0_dist,self.d0_pivot_h,self.d0_look_h)=(self.dist,self.pivot_h,self.look_h);
+        saved
+    }
+
+    ///2da1dc native XYZ publication through the EXISTING CameraView owner.
+    /// Renderer consumers use pos_f32(); raw source positionW remains outside
+    /// this V3 contract. Preserve opaque outputW and hero_sW; do not invent
+    /// original writes to output Euler/rows/class that this source does not do.
+    pub fn publish_reset_xyz(&mut self,hero:&Hero,out:&mut rc_game::follow_camera::CameraView) {
+        for axis in 0..3 {out.pos[axis]=rc_game::ps2v::Pf::f(self.pos[axis]);}
+        self.prev_pos=self.pos;self.hero_s=hero.pos;
+    }
     /// The camera's reset (`0x2da160`): the follow camera current, the motion pre-step, the init `0x424908`, the
     /// defaults kept (`0x2d7d80`).
     pub fn new(inp: &CamInput) -> FollowCamera {
@@ -1208,6 +1235,21 @@ mod reset_tests {
         InitDefaults {horizontal_spring:0.025,vertical_spring:0.02,
             look_blend_length:17,pull_max:9.,sphere_step:0.15,sphere_count:12.,
             sphere_scale:2.,yaw_rate:0.03,end_flags:0x36,line_flags:0x12}
+    }
+    #[test]
+    fn backup_uses_current_defaults_and_publication_preserves_unwritten_fields() {
+        use rc_game::{follow_camera::CameraView,ps2v::Pf};
+        let mut c=FollowCamera::default();c.pos=[3.,4.,5.];
+        c.dist=7.;c.pivot_h=2.5;c.look_h=1.75;c.hero_s_w=Some(17.);
+        let saved=c.save_follow_record();
+        assert_eq!((c.d0_dist,c.d0_pivot_h,c.d0_look_h),(7.,2.5,1.75));
+        c.pos[0]=30.;assert_eq!(saved.position(),[3.,4.,5.]);
+        let mut h=Hero::new();h.pos=[8.,9.,10.];
+        let mut out=CameraView {pos:[Pf::f(19.);4],euler:[Pf::f(23.);4],rows:[[Pf::f(29.);4];3],class:27};let before=out;
+        c.publish_reset_xyz(&h,&mut out);
+        assert_eq!(out.pos_f32(),c.pos);assert_eq!(out.pos[3],before.pos[3]);
+        assert_eq!((out.euler,out.rows,out.class),(before.euler,before.rows,before.class));
+        assert_eq!((c.prev_pos,c.hero_s,c.hero_s_w),(c.pos,h.pos,Some(17.)));
     }
     #[test]
     fn represented_init_uses_live_defaults_and_actual_owner_writes() {

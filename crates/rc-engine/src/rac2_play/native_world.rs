@@ -8,6 +8,7 @@ use crate::{level_load::LoadedLevel,moby_render::MobyOcclusion,moby_anim::MobyAn
 
 pub struct LevelContract {pub core:LevelCore,pub updates:AranosClassUpdates,pub rigid:rc_game2::collision::LiveRigidCollision,
     pub controller_data:rc_game2::controller_132d::AranosControllerData,
+    pub actor_reset:rc_game2::teleport_actors::AranosLoaderReset,
     pub initial_modifier_records:Vec<u8>}
 pub fn enabled()->bool {std::env::var("RC2_NATIVE_WORLD_SAVE_FIXTURE").is_ok_and(|v|v=="1")}
 
@@ -54,6 +55,10 @@ impl NativeWorld {
         world.teleport_globals=Some(rc_game2::teleport_world::TeleportGlobals {
             source_1b8b80:Some([[0;16];8]),word_1b9000:Some(0),
             actors_3e0b28:None,actors_403d98:None});
+        // Execute the four verified loader-boundary pointer resets on the
+        // existing global owner. Other fixture/runtime/NewGame inputs remain
+        // explicitly synthetic; this is not completion of entire37f858.
+        world.apply_aranos_loader_actor_resets(&contract.actor_reset)?;
         let bindings=classes.iter().zip(animations).map(|(c,a)|(c.binding(),a)).collect();drop(classes);
         eprintln!("RC2_INTERNAL_WORLD_SAVE_FIXTURE: spawned={} rejected={} provenance=SYNTHETIC_SAVE_AND_RNG_INPUTS original_data=true not_original_New_Game_not_release",world.moby_to_instance.len(),world.instance_to_moby.iter().filter(|i|i.is_none()).count());
         Ok(Self {world,bindings,empty,blocked:false,ready:false})

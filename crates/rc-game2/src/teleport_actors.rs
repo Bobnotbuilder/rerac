@@ -13,6 +13,25 @@ pub struct ActorBindings {
     pub reset_actor:Option<MobyId>,
 }
 
+/// Verified Aranos loader-reset source profile; no Default or public raw
+/// constructor. This proves the four leaf identities, not whole37f858 or
+/// original New Game/save state. World applies them at its loader boundary.
+#[derive(Clone,Copy,Debug)]
+pub struct AranosLoaderReset { _verified:() }
+impl AranosLoaderReset {
+    pub fn from_overlay(overlay:&[u8])->Result<Self> {
+        let sections=rc_formats::font::parse_overlay_sections(overlay)?;
+        for (pc,hash) in [(0x403ec0,"d839d04c936e7acd545f34eee0d6a60b129769d3"),
+            (0x404330,"af872012d8848c38a9ef3c790eea212a16609f87"),
+            (0x3e0b88,"aa6240fb354dcfb139222b0e24adb68717c53b01"),
+            (0x3b9610,"42f25c239ff000b7b238e226a883102cc6694c00")] {
+            let bytes=rc_formats::font::read_overlay(&sections,pc,8).ok_or_else(||rc_formats::FormatError::Invalid("GC actor reset leaf absent".into()))?;
+            if rc_formats::sha1::hex(&rc_formats::sha1::sha1(bytes))!=hash {return invalid("GC actor loader-reset source differs from Aranos contract");}
+        }
+        Ok(Self {_verified:()})
+    }
+}
+
 impl ActorBindings {
     /// 0x3e0b28, including complete leaf 0x3b9578. Globals are GP+13fc
     /// (actor) and GP+0b80 (reset actor); trailing write is owned pvars+20.

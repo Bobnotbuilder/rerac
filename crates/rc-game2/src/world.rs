@@ -25,11 +25,13 @@ pub struct World {
     pub state_1330:Option<crate::state_1330::State1330>,
     pub pending_1330:Option<crate::init_1330::Pending1330>,
     pub teleport_globals:Option<crate::teleport_world::TeleportGlobals>,
+    teleport_actor_loader_reset_done:bool,
     pub(crate) teleport_ground_progress:Option<crate::hero::ground_original::GroundProgress>,
     pub(crate) teleport_state_progress:Option<crate::hero::teleport_state::StateZeroProgress>,
     pub teleport_modifiers:Option<crate::teleport_modifiers::ModifierTable>,
     pub(crate) teleport_progress:Option<crate::teleport_world::TeleportProgress>,
     pub(crate) teleport_camera_progress:Option<crate::camera_teleport::Reset>,
+    pub(crate) teleport_camera_backup:Option<crate::teleport_world::CameraBackup>,
     cuboids:Vec<rc_formats::volumes::Shape>,
     prefix_1330_owners:Vec<MobyId>,
     /// Native ids in the original twenty-entry 0x220d50 attachment list.
@@ -173,6 +175,8 @@ impl World {
             group_iterator:crate::group_iter::GroupIterator::from_gameplay(gameplay)?,
             gc:vec![GcState::default();count],preceding_owners,grid,effects:None,controller_data:None,controller_132d:None,
             teleport_camera_progress:None,
+            teleport_camera_backup:None,
+            teleport_actor_loader_reset_done:false,
             state_1330:None,pending_1330:None,teleport_progress:None,teleport_modifiers:None,teleport_globals:None,teleport_state_progress:None,teleport_ground_progress:None,cuboids,prefix_1330_owners:Vec::new(),
             actor_attachments:[None;20],dynamic_local_fields:Vec::new(),
             rng,hits:Default::default(),crate_initializers:Default::default(),crate_stacks:Default::default(),crate_grouped:Default::default(),pending_crate:None,init_list,init_cursor:0,initialized:false})
@@ -449,6 +453,21 @@ impl World {
         Ok(Active {updates:slots.into_iter().flatten().collect(),targets})
     }
 
+    ///303dc0->37f858 unconditionally calls403ec0,404330,3e0b88,3b9610
+    /// before30534c->32e290. These four complete leaves only clear pointers;
+    /// no RNG, allocation or callback. This does NOT implement whole37f858.
+    /// Later publisher callbacks must update these SAME native bindings.
+    pub fn apply_aranos_loader_actor_resets(&mut self,_source:&crate::teleport_actors::AranosLoaderReset)->Result<()> {
+        if self.teleport_actor_loader_reset_done {return Ok(());}
+        if self.init_cursor!=0 || self.initialized {return invalid("GC actor loader reset requested after initialization began");}
+        let globals=self.teleport_globals.as_mut().ok_or_else(||rc_formats::FormatError::Invalid("GC actor reset requires actual global owner".into()))?;
+        // Each adjacent pair is two unconditional stores without intervening
+        // observable effects. Bind the distinct actor/reset-pointer owners.
+        globals.actors_403d98=Some(crate::teleport_actors::ActorBindings {actor:None,reset_actor:None});
+        globals.actors_3e0b28=Some(crate::teleport_actors::ActorBindings {actor:None,reset_actor:None});
+        self.teleport_actor_loader_reset_done=true;Ok(())
+    }
+
     pub fn tick(&mut self,counter:u32,camera:[f32;4],classes:&[LoadedClass<'_>],
         mut callback:impl FnMut(&mut Self,MobyId,u32)->bool)->std::result::Result<Active,TickError> {
         if !self.initialized {return Err(TickError::NotInitialized);}
@@ -488,7 +507,7 @@ mod tests {
             moby_to_instance:(0..n).collect(),pvars:PvarPlan {blocks:Vec::new(),pointer_fields:Vec::new(),moby_fields:Vec::new(),shared_data:Vec::new(),shared_fields:Vec::new()},
             pvar_indices:vec![-1;n],groups:vec![Vec::new();2],group_iterator:crate::group_iter::GroupIterator::new(Some(2)),gc:vec![GcState::default();n],preceding_owners:Vec::new(),
             grid:rc_game::collision_query::MobyGrid::new(),effects:None,controller_data:None,controller_132d:None,
-            state_1330:None,pending_1330:None,teleport_progress:None,teleport_camera_progress:None,teleport_modifiers:None,teleport_globals:None,teleport_state_progress:None,teleport_ground_progress:None,cuboids:Vec::new(),prefix_1330_owners:Vec::new(),
+            state_1330:None,pending_1330:None,teleport_progress:None,teleport_camera_progress:None,teleport_camera_backup:None,teleport_modifiers:None,teleport_globals:None,teleport_actor_loader_reset_done:false,teleport_state_progress:None,teleport_ground_progress:None,cuboids:Vec::new(),prefix_1330_owners:Vec::new(),
             actor_attachments:[None;20],dynamic_local_fields:Vec::new(),
             rng:rc_game::rng::Rng::new(),hits:Default::default(),crate_initializers:Default::default(),crate_stacks:Default::default(),crate_grouped:Default::default(),pending_crate:None,init_list:Vec::new(),init_cursor:0,initialized:false}
     }
