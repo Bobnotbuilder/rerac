@@ -1,3 +1,13 @@
+## Teleport working-tree recovery checkpoint — 25 October 2026
+
+Started from clean localdb7831db1c5afb51179cfeeaac0351e445650db4/publicb65d4220cf6ed6a98857c5c9c7e2ab4ec677f0ec; preserved all files and history. Fresh offline native CPU build passes with738 source files synchronized. RC2units53PASS, owned-ISOoriginalCPU10PASS, iOSPythoncontracts59PASS, recoveryPython17PASS. This does NOT establish current iOS runtime or complete teleport.
+
+The existing engine opt-in World initializer now borrows its actual Hero/Pad/animation owners. Resumable2b9e68 executes pose/native-float basis,2b2cd8 motion reset, both324140 actual-object teardowns, source flags,2af848 put-away and2a53b8 global modifier reset in order. Original-data integration deletes3 real allocated trail owners, preserves an out-of-count slot and deletion+2tick lifetime, unlinks a real global modifier identity from the existing Moby list, and proves retries do not replay effects or consume RNG. The same original cursor24/class1330 remains blocked at2c4560(0,2). New StateZeroProgress is compiled but is not yet connected to World; its full branch is not certified by the helper tests.
+
+Later optional-actor, animation-key, packed environment-sample and script-queue services have native adapters. Their independent tests do NOT bypass earlier services or certify music/reverb/fog dispatch, full camera reset or class1330 completion. Type0 camera record reset preserves existing globals/history; camera bank/projection remains required. Dependency inventory:442 initializer owners/51 groups/86 shared direct services, next shared crate callback39c870 afterowner24. See RC2_INITIALIZER_DEPENDENCIES.md.
+
+Next executable step: integrate StateZeroProgress with actual World.gc source+9c, owned explicit1b8b80/1b9000 globals, same WorldRng and tracked-object cleanup. Preserve mode2 guard/rejection, one source RNG draw and pending body/surface/audio branches. Then bind2d2760, original ground probe, distinct optional actors, full2da160 camera and313008 audio/fog effects. Do not substitute boolean set_state, camera.new or mono RAC1 music sequencing. Full teleport, remaining1330 poses/scripts/tail,132d state1, New Game, gameplay and Aranos acceptance remain INCOMPLETE. No user-facing IPA, productionPlay disabled, no current device/GPU claim. GAME_SPECIFIC; validation SHARED_TESTING candidate only, no Shared Core promotion, R1/save/identity changes.
+
 ## Class1330 recovery continuation — current, 25 October 2026
 
 ## Final native validation receipt — source a4c188bf9ca2aa4e96143103adc9a363539bf180

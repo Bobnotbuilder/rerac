@@ -18,6 +18,7 @@ pub struct TeleportRequest {
 pub enum Pending1330 {
     RuntimeState,
     Teleport(TeleportRequest),
+    TeleportService {request:TeleportRequest,source:u32},
     ActorAndRemainingServices,
     InvalidOwnedData,
 }

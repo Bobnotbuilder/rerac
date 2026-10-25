@@ -23,6 +23,8 @@ pub struct World {
     /// Explicit runtime inputs; absence does not mean original New Game zeros.
     pub state_1330:Option<crate::state_1330::State1330>,
     pub pending_1330:Option<crate::init_1330::Pending1330>,
+    pub teleport_modifiers:Option<crate::teleport_modifiers::ModifierTable>,
+    pub(crate) teleport_progress:Option<crate::teleport_world::TeleportProgress>,
     cuboids:Vec<rc_formats::volumes::Shape>,
     prefix_1330_owners:Vec<MobyId>,
     /// Native ids in the original twenty-entry 0x220d50 attachment list.
@@ -154,9 +156,17 @@ impl World {
         pvar_indices.push(-1);
         Ok(Self {objects:Objects::new(records,dynamic_capacity),instance_to_moby,moby_to_instance,pvars,pvar_indices,groups,
             gc:vec![GcState::default();count],preceding_owners,grid,effects:None,controller_data:None,controller_132d:None,
-            state_1330:None,pending_1330:None,cuboids,prefix_1330_owners:Vec::new(),
+            state_1330:None,pending_1330:None,teleport_progress:None,teleport_modifiers:None,cuboids,prefix_1330_owners:Vec::new(),
             actor_attachments:[None;20],dynamic_local_fields:Vec::new(),
             rng,hits:Default::default(),init_list,init_cursor:0,initialized:false})
+    }
+
+    /// Read-only source identities in the exact loader-owned initialization
+    /// order. This inventories required work; it never executes or skips it.
+    pub fn initializer_inventory(&self)->Vec<(MobyId,i16,Option<u32>)> {
+        self.init_list.iter().map(|&id| {
+            let m=self.objects.get(id).expect("GC initializer owner");(id,m.o_class,m.update_fn)
+        }).collect()
     }
 
     pub fn local_pvar_bytes(&self,id:MobyId,field:usize,len:usize)->Result<&[u8]> {
@@ -452,7 +462,7 @@ mod tests {
             moby_to_instance:(0..n).collect(),pvars:PvarPlan {blocks:Vec::new(),pointer_fields:Vec::new(),shared_data:Vec::new(),shared_fields:Vec::new()},
             pvar_indices:vec![-1;n],groups:vec![Vec::new();2],gc:vec![GcState::default();n],preceding_owners:Vec::new(),
             grid:rc_game::collision_query::MobyGrid::new(),effects:None,controller_data:None,controller_132d:None,
-            state_1330:None,pending_1330:None,cuboids:Vec::new(),prefix_1330_owners:Vec::new(),
+            state_1330:None,pending_1330:None,teleport_progress:None,teleport_modifiers:None,cuboids:Vec::new(),prefix_1330_owners:Vec::new(),
             actor_attachments:[None;20],dynamic_local_fields:Vec::new(),
             rng:rc_game::rng::Rng::new(),hits:Default::default(),init_list:Vec::new(),init_cursor:0,initialized:false}
     }

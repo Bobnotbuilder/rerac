@@ -7,7 +7,8 @@ use rc_game2::{objects::{LoadedClass,ClassBinding},spawn::SpawnState,world::{Wor
 use crate::{level_load::LoadedLevel,moby_render::MobyOcclusion,moby_anim::MobyAnim};
 
 pub struct LevelContract {pub core:LevelCore,pub updates:AranosClassUpdates,pub rigid:rc_game2::collision::LiveRigidCollision,
-    pub controller_data:rc_game2::controller_132d::AranosControllerData}
+    pub controller_data:rc_game2::controller_132d::AranosControllerData,
+    pub initial_modifier_records:Vec<u8>}
 pub fn enabled()->bool {std::env::var("RC2_NATIVE_WORLD_SAVE_FIXTURE").is_ok_and(|v|v=="1")}
 
 pub struct NativeWorld {
@@ -43,6 +44,13 @@ impl NativeWorld {
         // supplied and no original callback is skipped to unblock gameplay.
         world.state_1330=Some(rc_game2::state_1330::State1330 {byte_1a7a12:0,byte_1a7be8:0,
             words_139948:[0;29],halfword_152c26:0});
+        let hero=world.objects.records().iter().position(|m|m.o_class==0 && m.state<0x80)
+            .context("GC fixture requires actual hero owner")?;
+        // Explicit initial-image and null-pointer fixtures, NOT recovered
+        // original New Game/runtime modifier/global state.
+        world.teleport_modifiers=Some(rc_game2::teleport_modifiers::ModifierTable::read(
+            &contract.initial_modifier_records,rc_game2::teleport_modifiers::ModifierBindings {
+                hero:Some(hero),source_18b134:None,source_18b040:None})?);
         let bindings=classes.iter().zip(animations).map(|(c,a)|(c.binding(),a)).collect();drop(classes);
         eprintln!("RC2_INTERNAL_WORLD_SAVE_FIXTURE: spawned={} rejected={} provenance=SYNTHETIC_SAVE_AND_RNG_INPUTS original_data=true not_original_New_Game_not_release",world.moby_to_instance.len(),world.instance_to_moby.iter().filter(|i|i.is_none()).count());
         Ok(Self {world,bindings,empty,blocked:false,ready:false})
@@ -55,10 +63,25 @@ impl NativeWorld {
         self.blocked=true;
     }
 
-    pub fn initialize(&mut self,lv:&LoadedLevel)->bool {
+    pub fn initialize(&mut self,lv:&LoadedLevel,placement:usize,hero:&mut rc_game2::hero::Hero,
+        pad:&mut rc_game::pad::PadState,anim:&mut rc_game::hero::anim::RatchetAnim,
+        hero_class:&MobyAnimClass)->bool {
         if self.blocked {return false;}if self.ready {return true;}
         let classes=self.bindings.iter().map(|(b,a)|b.bind(a.map_or(&self.empty,|i|&lv.mobys.anim[i]))).collect::<Vec<_>>();
-        let result=self.world.initialize(&classes,|w,id,source|w.native_update(id,source,0));
+        let hero_id=self.world.instance_to_moby.get(placement).copied().flatten();
+        let result=self.world.initialize(&classes,|w,id,source| {
+            let done=w.native_update(id,source,0);
+            if !done && source==0x3846d0 && matches!(w.pending_1330,
+                Some(rc_game2::init_1330::Pending1330::Teleport(_)) |
+                Some(rc_game2::init_1330::Pending1330::TeleportService {..})) {
+                if let Some(hero_id)=hero_id {
+                    if let Err(error)=w.resume_1330_teleport(hero_id,hero,pad,anim,hero_class,None,0) {
+                        eprintln!("RC2_TELEPORT_BINDING_BLOCKED: {error}");
+                    }
+                }
+            }
+            done // Only the complete original callback may advance the cursor.
+        });
         drop(classes);
         if let Err(error)=result {self.report(error);return false;}
         self.ready=true;true

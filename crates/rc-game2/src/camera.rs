@@ -288,6 +288,19 @@ impl FollowCamera {
         c
     }
 
+    /// The represented type-0 record portion of `0x2da160`, after the host
+    /// has selected/activated the original follow record: motion pre-step,
+    /// type init, saved defaults, then published hero position. Unlike `new`,
+    /// this preserves the existing motion globals/history for the pre-step.
+    /// Camera-bank release/selection, full record backup and projection reset
+    /// are separate required host services; this method does not complete them.
+    pub fn reset_follow_record(&mut self, inp: &CamInput) {
+        self.pre_motion(inp);
+        self.init(inp);
+        (self.d0_dist, self.d0_pivot_h, self.d0_look_h) = (self.dist, self.pivot_h, self.look_h);
+        self.hero_s = inp.hero.pos;
+    }
+
     /// `0x424908` (not switched in from another camera's pose).
     fn init(&mut self, inp: &CamInput) {
         let h = inp.hero;
@@ -1060,4 +1073,30 @@ fn seg_dist(p: V3, a: V3, b: V3) -> (f32, V3) {
     let t = if l2 == 0.0 { 0.0 } else { (dot(sub(p, a), ab) / l2).clamp(0.0, 1.0) };
     let c = add(a, scale(ab, t));
     (len(sub(p, c)), c)
+}
+
+#[cfg(test)]
+mod reset_tests {
+    use super::*;
+    #[test]
+    fn reset_retains_motion_history_and_snaps_existing_type0_record() {
+        let mut h=Hero::new();h.pos=[10.,20.,30.];h.rot=[0.,0.,0.75];
+        h.rows=[[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]];
+        let input=CamInput {hero:&h,coll:None,mobys:None,hero_moby:None,rstick:[0.;2],yaw_normal:true,pitch_normal:true};
+        let mut c=FollowCamera::new(&input);
+        c.prev_hero=[7.,16.,999.];c.yaw_hist=[1.,2.,3.,4.,5.];
+        c.hero_s=[-4.,-5.,31.];c.hero_s_v=0.25;
+        c.line_flags=0x12;c.sph_flags=0x34;c.end_flags=0x56;
+        c.script=0xffff;c.dist=99.;c.row_blend=20;
+        c.reset_follow_record(&input);
+        assert_eq!(c.yaw_hist,[2.,3.,4.,5.,0.75]);
+        assert_eq!(c.h_speed,5.);assert_eq!(c.move_dir,[0.6,0.8,0.]);
+        assert_eq!(c.prev_hero,h.pos);assert_eq!(c.hero_s,h.pos);
+        assert!(c.hero_s_v!=0.0,"existing vertical spring must not be reseeded by new()");
+        assert_eq!((c.line_flags,c.sph_flags,c.end_flags),(0x12,0x34,0x56));
+        assert_eq!(c.script,0);assert_eq!(c.row_blend,0);
+        assert_eq!((c.d0_dist,c.d0_pivot_h,c.d0_look_h),(4.64,2.,1.5));
+        assert!((c.pos[0]-5.36).abs()<1e-5);assert_eq!(c.pos[1],20.);assert_eq!(c.pos[2],32.);
+        assert!(c.rows.iter().flatten().all(|v|v.is_finite()));
+    }
 }

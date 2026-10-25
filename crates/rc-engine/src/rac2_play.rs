@@ -100,7 +100,7 @@ fn tick(
     if let Some(world)=p.native_world.as_mut() {
         // Internal original-data world path. No hero input advances across a
         // missing mandatory class initializer; never claim a complete level.
-        if !world.initialize(lv) {return;}
+        if !world.initialize(lv,p.instance,&mut p.hero,&mut p.pad,&mut p.anim,&lv.mobys.anim[p.class]) {return;}
     }
     let Some(coll) = lv.collision.as_ref() else { return };
     let input = match &script.0 {

@@ -105,6 +105,8 @@ pub fn load(root: &Path, index: u32) -> Result<LoadedLevel> {
         Some(crate::rac2_play::native_world::LevelContract {
             updates:rc_formats::rac2::classes::AranosClassUpdates::parse(index,lump(Lump::Overlay)?)?,
             controller_data:rc_game2::controller_132d::AranosControllerData::parse(index,lump(Lump::Overlay)?)?,
+            initial_modifier_records:rc_formats::font::read_overlay(
+                &rc_formats::font::parse_overlay_sections(lump(Lump::Overlay)?)?,0x25bd90,40*0xb0)?.to_vec(),
             rigid:rc_game2::collision::LiveRigidCollision::load(&core,&core_data)?,core,
         })
     } else {None};

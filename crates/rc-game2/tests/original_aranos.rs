@@ -205,6 +205,16 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     let mut world=rc_game2::world::World::load(&gameplay,&mut loaded,&mut state,rc_game::rng::Rng {state:1234},
         |p|Ok(rc_game2::collision::root_height(&coll,p))).unwrap();
     let count=world.moby_to_instance.len();assert!(count>0 && count<placements.len());
+    let inventory=world.initializer_inventory();
+    assert!(inventory.windows(2).all(|w|w[0].0<w[1].0));
+    assert!(inventory.iter().any(|&(id,class,source)|id==24 && class==0x1330 && source==Some(0x3846d0)));
+    if let Some(path)=std::env::var_os("RC2_INITIALIZER_INVENTORY") {
+        let rows=inventory.iter().enumerate().map(|(ordinal,&(id,class,source))|format!(
+            "{{\"ordinal\":{ordinal},\"owner\":{id},\"class\":\"{:04x}\",\"source\":{},\"pvar_bytes\":{}}}",
+            class,source.map_or("null".to_owned(),|s|format!("\"{s:08x}\"")),world.objects.get(id).unwrap().pvars.len())).collect::<Vec<_>>();
+        std::fs::write(path,format!("{{\"provenance\":\"ORIGINAL_ISO_EXPLICIT_SYNTHETIC_SAVE_RNG_NOT_NEW_GAME\",\"initializers\":[{}]}}",rows.join(","))).unwrap();
+    }
+
     for (id,&placement) in world.moby_to_instance.iter().enumerate() {
         assert_eq!(world.instance_to_moby[placement],Some(id));
         let source=&placements[placement];let m=world.objects.get(id).unwrap();
@@ -370,6 +380,85 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     assert_eq!(world.rng.state,after_init_seed,"allocation/connection consumes no RNG");
     assert_eq!(world.initialize(&loaded,|w,id,source|w.native_update(id,source,0)).unwrap_err(),after_controller);
     println!("ORIGINAL_GC_1330_ACTOR_ALLOCATION_CPU_PASS same_world=true owner={owner} actor={actor} attachment_classes={:?} delete_then_allocate=true actual_pvar_aliases=true; POSE_TELEPORT_FULL_CALLBACK_UNPORTED",plan.iter().map(|x|x.class).collect::<Vec<_>>());
+    // Resume the actual pending teleport through the same single Hero/Pad,
+    // actual allocated trail owners and native modifier lists. Runtime globals
+    // below are labelled fixtures, never an authentic New Game capture.
+    use rc_game2::{teleport_world::{TrackedObjects,TeleportStep},teleport_modifiers::{ModifierTable,ModifierBindings,node_key}};
+    let sections=rc_formats::font::parse_overlay_sections(overlay).unwrap();
+    for (pc,len,hash) in [(0x2b9e68,0x19c,"9c3da7ddfaf7e84a720e3f3045b1b8d28c0bdbcc"),
+        (0x324140,0x80,"db03f977f180f26c1c2fb18e1fa9bd45cd38f72b"),
+        (0x2a53b8,0xc8,"be628d4bf91e7f8679801ad8ccdec1989903f435"),
+        (0x2a4fe8,0x60,"297dcf36bea51409c328e506152f3b28b34d453f"),
+        (0x3124f8,0x98,"3903c6d12343762e498dc06efa96ab4daa35c91e"),
+        (0x2af848,0x90,"81c0610c2cc7d4b4e3ee9fa27a4fd7dfe8920289"),
+        (0x2d2760,0x128,"f424b06c0a4de6cca6abade5c1668ee8916d4531")] {
+        assert_eq!(rc_formats::sha1::hex(&rc_formats::sha1::sha1(rc_formats::font::read_overlay(&sections,pc,len).unwrap())),hash);
+    }
+    let hero_id=world.objects.records().iter().position(|m|m.o_class==0 && m.state<0x80).unwrap();
+    let hero_class=&animations[classes.iter().position(|c|c.o_class==0).unwrap()];
+    let mut hero=Hero::spawn([1.,2.,3.],0.);let mut pad=PadState::default();let mut anim=RatchetAnim::new(hero_class);
+    hero.vel=[9.;3];hero.speed=3.;hero.teleport.source_18a1c0=123;
+    hero.teleport.source_18a1c4=0xff;hero.teleport.byte_18c30f=7;
+    hero.putaway.byte_22b8=1;hero.putaway.byte_22ba=1;hero.putaway.word_24b0=anim.state.seq_b as i32;
+    pad.hist_count=30;pad.hist_index=20;pad.held=0x4000;
+    let wrench=loaded.iter().find(|c|c.class()==0x47).unwrap();
+    let ghosts=(0..4).map(|_|world.objects.create(wrench,0).unwrap()).collect::<Vec<_>>();
+    hero.teleport.trails[0]=TrackedObjects {slots:[Some(ghosts[0]),None,Some(ghosts[1]),Some(ghosts[3]),None,None,None,None,None,None],count:3,active:1};
+    hero.teleport.trails[1]=TrackedObjects {slots:[Some(ghosts[2]),None,None,None,None,None,None,None,None,None],count:1,active:5};
+    assert_eq!(world.resume_1330_teleport(hero_id,&mut hero,&mut pad,&mut anim,hero_class,None,0).unwrap(),TeleportStep::PutAway);
+    assert_eq!(hero.pos,request.position[..3]);assert_eq!(world.objects.get(hero_id).unwrap().position,request.position);
+    assert_eq!(hero.rot,request.euler[..3]);assert_eq!(hero.teleport.position_w,request.position[3].to_bits());
+    assert_eq!(hero.vel,[0.;3]);assert_eq!((pad.hist_count,pad.hist_index,pad.held),(0,0,0x4000));
+    assert_eq!((hero.air_ticks,hero.teleport.source_18a1c0,hero.teleport.source_18a1c4,hero.teleport.byte_18c30f),(1,0,0xfc,0));
+    for &id in &ghosts[..3] {assert_eq!((world.objects.get(id).unwrap().state,world.objects.get(id).unwrap().delete_tick),(0xfe,2));assert!(world.grid.cells_of(id as u16).is_empty());}
+    assert!(world.objects.get(ghosts[3]).unwrap().state<0x80,"out-of-count slot must survive");
+    assert_eq!((hero.teleport.trails[0].count,hero.teleport.trails[1].count),(3,1));
+    assert_eq!(hero.teleport.trails[0].slots[3],Some(ghosts[3]));
+    assert_eq!(world.resume_1330_teleport(hero_id,&mut hero,&mut pad,&mut anim,hero_class,Some(false),0).unwrap(),TeleportStep::Modifiers);
+    assert_eq!(hero.putaway.byte_22b8,0);assert_eq!(world.objects.get(hero_id).unwrap().anim,anim.state);
+    // Original initialized table bytes, then an explicit live-link fixture.
+    let mut modifiers=ModifierTable::read(rc_formats::font::read_overlay(&sections,0x25bd90,40*0xb0).unwrap(),
+        ModifierBindings {hero:Some(hero_id),source_18b134:Some(actor),source_18b040:None}).unwrap();
+    modifiers.records[0][1]=1;modifiers.records[0][0xa2..0xa4].copy_from_slice(&0i16.to_le_bytes());
+    modifiers.records[0][0x40..0x50].fill(0xa5);
+    let hm=world.objects.get_mut(hero_id).unwrap();hm.joint_mod_keys.push(node_key(0));hm.joint_mods.push(ma::JointModifier::compose(0));
+    world.teleport_modifiers=Some(modifiers);
+    pad.hist_count=9;hero.vel=[4.;3]; // Retry must not replay completed resets.
+    let before_seed=world.rng.state;
+    let same_cursor=world.initialize(&loaded,|w,id,source| {
+        let complete=w.native_update(id,source,0);
+        if !complete && source==0x3846d0 {
+            assert_eq!(w.resume_1330_teleport(hero_id,&mut hero,&mut pad,&mut anim,hero_class,Some(false),0).unwrap(),TeleportStep::State);
+        }
+        complete
+    }).unwrap_err();
+    assert_eq!(same_cursor,after_controller);assert_eq!(world.rng.state,before_seed);
+    assert_eq!(hero.vel,[4.;3]);assert_eq!(pad.hist_count,9);
+    assert!(world.objects.get(hero_id).unwrap().joint_mod_keys.is_empty());
+    assert_eq!(world.teleport_modifiers.as_ref().unwrap().records[0][..0x50],[0;0x50]);
+    assert!(matches!(world.pending_1330,Some(rc_game2::init_1330::Pending1330::TeleportService {source:0x2c4560,..})));
+    assert_eq!(world.tick(1,[0.;4],&loaded,|_,_,_|panic!("world cannot tick")),Err(rc_game2::world::TickError::NotInitialized));
+    // Later recovered services are independently exercised on real owners;
+    // their success does not bypass the earlier State service above.
+    let bindings=rc_game2::teleport_actors::ActorBindings {actor:Some(actor),reset_actor:Some(owner)};
+    bindings.service_3e0b28(&mut world.objects,0,0).unwrap();
+    assert_eq!(world.objects.get(actor).unwrap().state,7);
+    assert_eq!(rc_formats::buf::Buf(&world.objects.get(owner).unwrap().pvars).i32(0x28).unwrap(),1);
+    let bindings=rc_game2::teleport_actors::ActorBindings {actor:Some(ghosts[3]),reset_actor:Some(actor)};
+    bindings.service_403d98(&mut world.objects,0,0).unwrap();
+    assert_eq!(world.objects.get(ghosts[3]).unwrap().state,7);
+    let loop_sound=rc_game2::hero::teleport::reset_teleport_animation(&mut anim,hero_class,0,0).unwrap();
+    world.objects.get_mut(hero_id).unwrap().anim=anim.state;world.objects.get_mut(hero_id).unwrap().b7c=loop_sound;
+    assert_eq!(ma::evaluate(hero_class,&anim.state).len(),111);
+    // Final313008 sample behavior on authentic gameplay records; CPU Moby
+    // light only. Requests are NOT executed music/fog or GPU validation.
+    let points=rc_game2::env_sample::read(&gameplay).unwrap();
+    let sample=rc_game2::env_sample::nearest(&points,hero.pos).expect("Aranos cuboid40 environment sample");
+    points[sample].apply_moby(world.objects.get_mut(hero_id).unwrap());
+    assert_eq!(world.objects.get(hero_id).unwrap().light,points[sample].light);
+    assert_eq!(world.objects.get(hero_id).unwrap().ambient[..3],points[sample].ambient);
+    assert!(points[sample].effects().iter().any(|e|matches!(e,rc_game2::env_sample::Effect::Music {mode:1,volume:0x400,..})));
+    println!("ORIGINAL_GC_TELEPORT_PREFIX_CHAIN_CPU_PASS same_world_hero_pad_animation=true owned_trails_deleted=3 original_modifiers=40 retry_preserves_order=true pending=2c4560 cursor=24 rng_unchanged=true sample_count={} sample={} effects={:?}; SYNTHETIC_RUNTIME_INPUTS_NOT_NEW_GAME FULL_TELEPORT_WORLD_GAMEPLAY_GPU_NOT_COMPLETE",points.len(),sample,points[sample].effects());
 }
 
 #[test]
