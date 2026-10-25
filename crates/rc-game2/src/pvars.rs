@@ -10,6 +10,9 @@ pub struct PvarPlan {
     /// Source adds a block address at these fields. Native code keeps each raw
     /// block-relative offset and this metadata, rather than storing PS2/host pointers.
     pub pointer_fields:Vec<(i32,i32)>,
+    /// Verified loader moby-reference fields. Native0 is a real owner; -1
+    /// represents null only at these explicitly typed locations.
+    pub moby_fields:Vec<(usize,usize)>,
     pub shared_data:Vec<u8>,
     pub shared_fields:Vec<(usize,usize)>,
 }
@@ -78,11 +81,13 @@ impl PvarPlan {
             blocks[index as usize]=gameplay::unrelocated_pvar(gameplay,index)?.map(<[u8]>::to_vec);
         }
         let fixups=gameplay::pvar_fixups(gameplay)?;
+        let mut moby_fields=Vec::new();
         for &(index,offset) in &fixups.moby_links {
             if index as usize>=blocks.len() {return invalid("GC moby-link pvar index out of range");}
             let Some(Some(block))=blocks.get_mut(index as usize) else {continue;};
             let offset=usize::try_from(offset).map_err(|_|rc_formats::FormatError::Invalid("negative GC moby-link field".into()))?;
             let old=Buf(block).i32(offset)?;
+            moby_fields.push((index as usize,offset));
             if old>=0 {
                 let Some(mapped)=instance_to_moby.get(old as usize) else {return invalid("GC pvar link references absent placement");};
                 let mapped=mapped.map_or(-1,|id|id as i32);
@@ -94,7 +99,9 @@ impl PvarPlan {
             if index as usize>=blocks.len() {return invalid("GC relative-pointer pvar index out of range");}
             let Some(Some(block))=blocks.get(index as usize) else {continue;};
             let field=usize::try_from(offset).map_err(|_|rc_formats::FormatError::Invalid("negative GC relative-pointer field".into()))?;
-            Buf(block).i32(field)?;pointer_fields.push((index,offset));
+            Buf(block).i32(field)?;
+            if moby_fields.contains(&(index as usize,field)) {return invalid("GC local and moby reference relocation overlap");}
+            pointer_fields.push((index,offset));
         }
         let shared=gameplay::shared_pvars(gameplay)?;let mut shared_fields=Vec::new();
         for (index,field,offset) in shared.fields {
@@ -103,8 +110,9 @@ impl PvarPlan {
             let field=usize::try_from(field).map_err(|_|rc_formats::FormatError::Invalid("GC shared field precedes pvar block".into()))?;
             Buf(block).i32(field)?;block[field..field+4].copy_from_slice(&offset.to_le_bytes());
             pointer_fields.retain(|&(i,o)|i!=index as i32 || o!=field as i32);
+            moby_fields.retain(|&(i,o)|i!=index as usize || o!=field);
             shared_fields.push((index as usize,field));
         }
-        Ok(Self {blocks,pointer_fields,shared_data:shared.data,shared_fields})
+        Ok(Self {blocks,pointer_fields,moby_fields,shared_data:shared.data,shared_fields})
     }
 }

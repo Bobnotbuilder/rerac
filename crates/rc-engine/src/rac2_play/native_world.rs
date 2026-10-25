@@ -73,7 +73,7 @@ impl NativeWorld {
         let classes=self.bindings.iter().map(|(b,a)|b.bind(a.map_or(&self.empty,|i|&lv.mobys.anim[i]))).collect::<Vec<_>>();
         let hero_id=self.world.instance_to_moby.get(placement).copied().flatten();
         let result=self.world.initialize(&classes,|w,id,source| {
-            let done=w.native_update(id,source,0);
+            let mut done=w.native_update(id,source,0);
             if !done && source==0x3846d0 && matches!(w.pending_1330,
                 Some(rc_game2::init_1330::Pending1330::Teleport(_)) |
                 Some(rc_game2::init_1330::Pending1330::TeleportService {..})) {
@@ -85,6 +85,14 @@ impl NativeWorld {
                             source_1b8ff0:0,source_1a79f8:0,source_gp_minus_6000:0}) {
                         eprintln!("RC2_TELEPORT_BINDING_BLOCKED: {error}");
                     }
+                }
+            }
+            if !done && source==rc_game2::crate_init::UPDATE {
+                match w.resume_crate_initializer(id,lv.collision.as_ref().expect("GC fixture collision"),
+                    &lv.rc2_world_contract.as_ref().expect("GC fixture contract").rigid,0,None) {
+                    Ok(rc_game2::crate_init::InitResult::Complete)=>done=true,
+                    Ok(rc_game2::crate_init::InitResult::Pending(_))=>eprintln!("RC2_CRATE_INITIALIZER_BLOCKED: {:?}",w.pending_crate),
+                    Err(error)=>eprintln!("RC2_CRATE_INITIALIZER_BINDING_ERROR: {error}"),
                 }
             }
             done // Only the complete original callback may advance the cursor.

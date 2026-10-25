@@ -38,6 +38,9 @@ pub struct World {
     /// per subsystem. The caller supplies its loader-boundary state.
     pub rng:rc_game::rng::Rng,
     hits:crate::hits::HitLog,
+    pub(crate) crate_initializers:std::collections::HashMap<(MobyId,u64),crate::crate_init::CrateInitProgress>,
+    pub(crate) crate_stacks:std::collections::HashMap<(MobyId,u64),crate::crate_init::StackInitProgress>,
+    pub pending_crate:Option<(MobyId,u32)>,
     init_list:Vec<MobyId>,
     init_cursor:usize,
     initialized:bool,
@@ -157,11 +160,17 @@ impl World {
         *state=next_state;
         let mut pvar_indices=moby_to_instance.iter().map(|&i|if instances[i].base.o_class==0 {-1}else{instances[i].base.pvar_index}).collect::<Vec<_>>();
         pvar_indices.push(-1);
-        Ok(Self {objects:Objects::new(records,dynamic_capacity),instance_to_moby,moby_to_instance,pvars,pvar_indices,groups,
+        let mut objects=Objects::new(records,dynamic_capacity);
+        for (id,&index) in pvar_indices.iter().enumerate() {
+            for &(block,field) in &pvars.moby_fields {
+                if index>=0 && block==index as usize {objects.mark_moby_reference(id,field)?;}
+            }
+        }
+        Ok(Self {objects,instance_to_moby,moby_to_instance,pvars,pvar_indices,groups,
             gc:vec![GcState::default();count],preceding_owners,grid,effects:None,controller_data:None,controller_132d:None,
             state_1330:None,pending_1330:None,teleport_progress:None,teleport_modifiers:None,teleport_globals:None,teleport_state_progress:None,teleport_ground_progress:None,cuboids,prefix_1330_owners:Vec::new(),
             actor_attachments:[None;20],dynamic_local_fields:Vec::new(),
-            rng,hits:Default::default(),init_list,init_cursor:0,initialized:false})
+            rng,hits:Default::default(),crate_initializers:Default::default(),crate_stacks:Default::default(),pending_crate:None,init_list,init_cursor:0,initialized:false})
     }
 
     /// Read-only source identities in the exact loader-owned initialization
@@ -277,6 +286,15 @@ impl World {
         self.hits.deliver(crate::hits::MobyId(target as u32),&mut slot,damage,
             attacker.map(|i|crate::hits::MobyId(i as u32)),flags,point,direction);
         m.hit_slot=slot.raw();Ok(())
+    }
+
+    /// Original31dce8 on the actual owner's slot and the one GC hit log.
+    /// Shared by class adapters; a matching record is not consumed here.
+    pub fn find_hit(&mut self,id:MobyId,mask:u32,keep_rejected:bool)->Result<Option<crate::hits::HitRecord>> {
+        let m=self.objects.get_mut(id).ok_or_else(||rc_formats::FormatError::Invalid("GC hit owner absent".into()))?;
+        let mut slot=crate::hits::HitSlot::from_raw(m.hit_slot);
+        let found=self.hits.find(crate::hits::MobyId(id as u32),&mut slot,mask,keep_rejected).copied();
+        m.hit_slot=slot.raw();Ok(found)
     }
 
     /// Source-bound native dispatch. 0x383b90 is completely ported.
@@ -462,12 +480,12 @@ mod tests {
     use super::*;
     fn fixture(records:Vec<Moby>)->World {
         let n=records.len();World {objects:Objects::new(records,0),instance_to_moby:(0..n).map(Some).collect(),
-            moby_to_instance:(0..n).collect(),pvars:PvarPlan {blocks:Vec::new(),pointer_fields:Vec::new(),shared_data:Vec::new(),shared_fields:Vec::new()},
+            moby_to_instance:(0..n).collect(),pvars:PvarPlan {blocks:Vec::new(),pointer_fields:Vec::new(),moby_fields:Vec::new(),shared_data:Vec::new(),shared_fields:Vec::new()},
             pvar_indices:vec![-1;n],groups:vec![Vec::new();2],gc:vec![GcState::default();n],preceding_owners:Vec::new(),
             grid:rc_game::collision_query::MobyGrid::new(),effects:None,controller_data:None,controller_132d:None,
             state_1330:None,pending_1330:None,teleport_progress:None,teleport_modifiers:None,teleport_globals:None,teleport_state_progress:None,teleport_ground_progress:None,cuboids:Vec::new(),prefix_1330_owners:Vec::new(),
             actor_attachments:[None;20],dynamic_local_fields:Vec::new(),
-            rng:rc_game::rng::Rng::new(),hits:Default::default(),init_list:Vec::new(),init_cursor:0,initialized:false}
+            rng:rc_game::rng::Rng::new(),hits:Default::default(),crate_initializers:Default::default(),crate_stacks:Default::default(),pending_crate:None,init_list:Vec::new(),init_cursor:0,initialized:false}
     }
     fn object(id:u32,slot:u8)->Moby {
         let mut m=Moby::init_instance(id,slot as i16,None);m.class_slot=slot;m.mode=mode::TARGETABLE;m.visible=1;m

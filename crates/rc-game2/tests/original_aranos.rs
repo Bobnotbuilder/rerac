@@ -558,6 +558,28 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     assert_eq!(world.objects.get(hero_id).unwrap().ambient[..3],points[sample].ambient);
     assert!(points[sample].effects().iter().any(|e|matches!(e,rc_game2::env_sample::Effect::Music {mode:1,volume:0x400,..})));
     println!("ORIGINAL_GC_TELEPORT_PREFIX_CHAIN_CPU_PASS same_world_hero_pad_animation=true owned_trails_deleted=3 original_modifiers=40 retry_preserves_order=true dry_world_probe=true optional_actor_calls=true pending=2da160 cursor=24 state0_rng_draws=1 sample_count={} sample={} effects={:?}; SYNTHETIC_RUNTIME_INPUTS_NOT_NEW_GAME FULL_TELEPORT_WORLD_GAMEPLAY_GPU_NOT_COMPLETE",points.len(),sample,points[sample].effects());
+    // Independent upcoming-owner validation. The actual global initializer
+    // remains blocked at24; this does not execute the missing1330 tail or
+    // claim that the original full initialization sequence has advanced.
+    let crate_id=world.initializer_inventory().into_iter().find(|&(id,_,source)|id>24 && source==Some(0x39c870)).unwrap().0;
+    let crate_before=world.objects.get(crate_id).unwrap().clone();let rng_before_crate=world.rng;
+    let crate_result=world.resume_crate_initializer(crate_id,&coll,&rigid,0,None).unwrap();
+    assert_eq!((crate_id,crate_before.o_class,crate_before.group as u8),(25,0x1f4,19));
+    assert_eq!(crate_result,rc_game2::crate_init::InitResult::Pending(0x39d0c0));
+    assert_eq!(world.pending_crate,Some((25,0x31c9d8)));
+    assert_eq!(world.rng,rng_before_crate,"grouped init must not take ungrouped RNG shortcut");
+    let m=world.objects.get_mut(crate_id).unwrap();assert_eq!(m.state,1);
+    assert_eq!(rc_formats::buf::Buf(&m.pvars).u32(0xac).unwrap(),0x14);
+    assert_eq!(&m.pvars[0x90..0xa0],&[0;16]);
+    m.pvars[0x90..0xa0].fill(0x5a);
+    assert_eq!(world.resume_crate_initializer(crate_id,&coll,&rigid,0,None).unwrap(),crate_result);
+    assert_eq!(&world.objects.get(crate_id).unwrap().pvars[0x90..0xa0],&[0x5a;16],"completed velocity reset cannot replay");
+    assert_eq!(world.rng,rng_before_crate);
+    assert_eq!(world.tick(1,[0.;4],&loaded,|_,_,_|panic!("world cannot tick")),Err(rc_game2::world::TickError::NotInitialized));
+    println!("ORIGINAL_GC_CRATE_WORLD_PREFIX_CPU_PASS owner={crate_id} class={:#x} group={} result={crate_result:?} pending={:?} rng_changed={} state={} pvar_ac={:#x}; INDEPENDENT_CLASS_CHAIN_NOT_INITIALIZER_CURSOR_ADVANCE_NOT_GAMEPLAY",crate_before.o_class,crate_before.group as u8,
+        world.pending_crate,world.rng!=rng_before_crate,world.objects.get(crate_id).unwrap().state,
+        rc_formats::buf::Buf(&world.objects.get(crate_id).unwrap().pvars).u32(0xac).unwrap());
+
 }
 
 #[test]

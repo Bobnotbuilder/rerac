@@ -26,10 +26,17 @@ pub trait CrateServices {
     /// Must use the existing GC hit log/actual target slot. State0 ignores the
     /// record, but original rejected-mask clearing still must occur.
     fn hit_31dce8(&mut self,owner:MobyId,mask:u32,keep_rejected:bool)->Result<()>;
-    /// Resolve this runtime pointer from its actual ownership binding. None
-    /// means unresolved; false is the ORIGINAL range/class rejection, not a
-    /// generic missing-resource fallback. Zero raw pointers never call this.
-    fn crate_link(&mut self,owner:MobyId,field:usize,raw:u32)->Result<Option<bool>>;
+    /// Outer None is unresolved provenance; inner None is a proven null.
+    /// World overrides this for loader-fixed native ids: 0 can be owner0,
+    /// with -1 null. Only unrelocated generic fixtures use raw0=null here.
+    fn resolve_stack_link(&mut self,owner:MobyId,field:usize)->Result<Option<Option<MobyId>>> {
+        let raw=word(self.objects(),owner,field)?;
+        Ok(if raw==0 {Some(None)}else{None})
+    }
+    fn write_stack_link(&mut self,owner:MobyId,field:usize,target:Option<MobyId>)->Result<bool> {
+        if target.is_some() {return Ok(false);}
+        self.objects_mut().get_mut(owner).unwrap().pvars[field..field+4].fill(0);Ok(true)
+    }
     fn stack_39d0c0(&mut self,owner:MobyId)->Result<bool>;
     /// None means unsupported; Some(0) is a source-supported allocation
     /// failure, and Some(nonzero) must name an actual newly allocated actor
@@ -48,8 +55,8 @@ impl Default for CrateInitProgress {
     fn default()->Self {Self {next:Step::Validate,owner:None}}
 }
 
-fn word(services:&dyn CrateServices,id:MobyId,offset:usize)->Result<u32> {
-    let Some(m)=services.objects().get(id) else {return invalid("GC crate owner absent");};
+fn word(objects:&Objects,id:MobyId,offset:usize)->Result<u32> {
+    let Some(m)=objects.get(id) else {return invalid("GC crate owner absent");};
     Buf(&m.pvars).u32(offset)
 }
 fn set_word(services:&mut dyn CrateServices,id:MobyId,offset:usize,value:u32) {
@@ -69,7 +76,7 @@ impl CrateInitProgress {
                     self.owner=Some(id);Step::Physics
                 },
                 Step::Physics=>{
-                    if word(services,id,0xac)?&0xc!=0 && word(services,id,0xb4)?!=services.counter()
+                    if word(services.objects(),id,0xac)?&0xc!=0 && word(services.objects(),id,0xb4)?!=services.counter()
                         && services.objects().get(id).unwrap().state!=0
                         && !services.physics_39dfd8(id)? {return Ok(InitResult::Pending(0x39dfd8));}
                     //39dfd8 itself returns at39e014 when state0 (no effects
@@ -78,7 +85,8 @@ impl CrateInitProgress {
                     Step::Support
                 },
                 Step::Support=>{
-                    if word(services,id,0xa0)?==0 {
+                    let Some(above)=services.resolve_stack_link(id,0xa0)? else {return Ok(InitResult::Pending(0x3204e8));};
+                    if above.is_none() {
                         let m=services.objects_mut().get_mut(id).unwrap();
                         let flags=u16::from_le_bytes(m.pvars[0x3e..0x40].try_into().unwrap())|1;
                         m.pvars[0x3e..0x40].copy_from_slice(&flags.to_le_bytes());
@@ -88,12 +96,11 @@ impl CrateInitProgress {
                 },
                 Step::Hit=>{services.hit_31dce8(id,HIT_MASK,false)?;Step::Above},
                 Step::Above|Step::Below=>{
-                    let field=if self.next==Step::Above {0xa0}else{0xa4};let raw=word(services,id,field)?;
-                    if raw!=0 {
-                        match services.crate_link(id,field,raw)? {
-                            None=>return Ok(InitResult::Pending(0x3204e8)),
-                            Some(false)=>set_word(services,id,field,0),Some(true)=>{}
-                        }
+                    let field=if self.next==Step::Above {0xa0}else{0xa4};
+                    let Some(link)=services.resolve_stack_link(id,field)? else {return Ok(InitResult::Pending(0x3204e8));};
+                    if link.is_some() && !source_crate_pointer(services.objects(),link)
+                        && !services.write_stack_link(id,field,None)? {
+                        return Ok(InitResult::Pending(0x3204e8));
                     }
                     if field==0xa0 {Step::Below}else{Step::Clear}
                 },
@@ -102,10 +109,10 @@ impl CrateInitProgress {
                     services.objects_mut().get_mut(id).unwrap().state=1;
                     set_word(services,id,0xa8,0);
                     if services.objects().get(id).unwrap().o_class==0x1ff {
-                        let next=word(services,id,0xb4)?.wrapping_add(1);set_word(services,id,0xb4,next);
+                        let next=word(services.objects(),id,0xb4)?.wrapping_add(1);set_word(services,id,0xb4,next);
                     }
-                    if word(services,id,0xcc)?==0 {
-                        let flags=word(services,id,0xac)?|0x14;set_word(services,id,0xac,flags);
+                    if word(services.objects(),id,0xcc)?==0 {
+                        let flags=word(services.objects(),id,0xac)?|0x14;set_word(services,id,0xac,flags);
                         if flags&1==0 {Step::Stack}else{Step::Zero}
                     }else{Step::Zero}
                 },
@@ -144,6 +151,9 @@ pub trait StackServices:CrateServices {
     /// Original1a73e0[mission] value, not an assumed unlocked/save value.
     fn mission_word(&mut self,mission:u8)->Result<Option<i32>>;
     fn delete_311688(&mut self,owner:MobyId)->Result<()>;
+    /// Required grouped branch, implemented through GroupedStackProgress and
+    /// the same World service owner. Default is unresolved, never success.
+    fn grouped_39d0c0(&mut self,_owner:MobyId)->Result<bool> {Ok(false)}
 }
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
@@ -172,7 +182,10 @@ impl StackInitProgress {
                     StackStep::Group
                 },
                 StackStep::Group=>{
-                    if s.objects().get(id).unwrap().group as u8!=0xff {return Ok(InitResult::Pending(0x31c9d8));}
+                    if s.objects().get(id).unwrap().group as u8!=0xff {
+                        if !s.grouped_39d0c0(id)? {return Ok(InitResult::Pending(0x31c9d8));}
+                        self.next=StackStep::Done;return Ok(InitResult::Complete);
+                    }
                     StackStep::Rotate
                 },
                 StackStep::Rotate=>{
@@ -210,18 +223,19 @@ impl StackInitProgress {
                 },
                 StackStep::Resolve=>{
                     let Some(hit)=self.hit.as_ref() else {
-                        s.objects_mut().get_mut(id).unwrap().pvars[0xa4..0xa8].fill(0);
+                        if !s.write_stack_link(id,0xa4,None)? {return Ok(InitResult::Pending(0x39d254));}
                         self.next=StackStep::Done;return Ok(InitResult::Complete);
                     };
                     if hit.moby.is_none() {
                         let m=s.objects_mut().get_mut(id).unwrap();m.position[2]=hit.point[2];
-                        m.pvars[0xa4..0xa8].fill(0);
+                        if !s.write_stack_link(id,0xa4,None)? {return Ok(InitResult::Pending(0x39d274));}
                         self.next=StackStep::Done;return Ok(InitResult::Complete);
                     }
                     if source_crate_pointer(s.objects(),hit.moby) {
                         self.next=StackStep::Done;return Ok(InitResult::Complete);
                     }
-                    let m=s.objects_mut().get_mut(id).unwrap();m.pvars[0xa4..0xa8].fill(0);
+                    if !s.write_stack_link(id,0xa4,None)? {return Ok(InitResult::Pending(0x39d28c));}
+                    let m=s.objects_mut().get_mut(id).unwrap();
                     let flags=Buf(&m.pvars).u32(0xac)?|8;m.pvars[0xac..0xb0].copy_from_slice(&flags.to_le_bytes());
                     StackStep::Carrier
                 },
@@ -233,12 +247,56 @@ impl StackInitProgress {
     }
 }
 
+/// Complete39d6f4..39d748 carrier inheritance after the caller has resolved
+/// the real below owner. Reuses actual pvar buffers and typed links. Unlike
+/// RAC1 stack_init, GC does NOT copy below.pvarcc into the upper crate.
+pub fn inherit_carrier_pose(upper:MobyId,below:MobyId,s:&mut dyn StackServices)->Result<InitResult> {
+    let Some(carrier)=s.resolve_stack_link(below,0xf0)? else {return Ok(InitResult::Pending(0x39d6fc));};
+    let Some(carrier)=carrier else {return Ok(InitResult::Complete);};
+    let Some(source)=s.objects().get(below) else {return invalid("GC below carrier owner absent");};
+    if source.pvars.len()<0xf8 || s.objects().get(upper).is_none_or(|m|m.pvars.len()<0xf8) {
+        return invalid("GC carrier inheritance pvar block too short");
+    }
+    let d0:[u8;16]=source.pvars[0xd0..0xe0].try_into().unwrap();
+    let e0:[u8;16]=source.pvars[0xe0..0xf0].try_into().unwrap();
+    let height=Buf(&source.pvars).f32(0xf4)?;
+    let m=s.objects_mut().get_mut(upper).unwrap();m.update_dist=0xff;
+    let flags=Buf(&m.pvars).u32(0xac)?|8;m.pvars[0xac..0xb0].copy_from_slice(&flags.to_le_bytes());
+    m.pvars[0xd0..0xe0].copy_from_slice(&d0);m.pvars[0xe0..0xf0].copy_from_slice(&e0);
+    if !s.write_stack_link(upper,0xf0,Some(carrier))? {return Ok(InitResult::Pending(0x39d738));}
+    let height=(rc_game::ps2v::Pf::f(height)+rc_game::ps2v::Pf::ONE).to_f32();
+    s.objects_mut().get_mut(upper).unwrap().pvars[0xf4..0xf8].copy_from_slice(&height.to_le_bytes());
+    Ok(InitResult::Complete)
+}
+
+/// Complete39d774..39d838 once the actual1fda00 table entry has been resolved
+/// to its native mutable point words. RAC1 crate_::path_counter supplies the
+/// identical control-flow reuse map; its private R1World wrapper is not used.
+/// Caller must supply this owner's real selected table, never a fixture clone
+/// standing in for shared state. XYZ and all other owned pvars stay untouched.
+pub fn advance_path_counter(objects:&mut Objects,owner:MobyId,points:&mut [[u32;4]])->Result<()> {
+    let Some(m)=objects.get_mut(owner) else {return invalid("GC path-counter owner absent");};
+    if m.pvars.len()<0xc4 || points.len()>i32::MAX as usize {return invalid("GC path-counter extent unsupported");}
+    let count=points.len() as i32;let state=points.first().map_or(0,|p|p[3] as i32);
+    if count==0 || matches!(state,1|3|0x111) {m.pvars[0xc0..0xc4].copy_from_slice(&(-1i32).to_le_bytes());return Ok(());}
+    if (state.wrapping_sub(0x11) as u32)<0x100 {
+        if state.wrapping_sub(0x10)<count {points[0][3]=state.wrapping_add(1) as u32;}
+        else {m.pvars[0xc0..0xc4].copy_from_slice(&(-1i32).to_le_bytes());}
+    }else{
+        points[0][3]=0x11;
+        // Source really clears the first word again as well as all others.
+        // Preserve that order rather than repairing the original behavior.
+        for point in points {point[3]=0;}
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use rc_game::moby_runtime::Moby;
     struct Fixture {objects:Objects,counter:u32,events:Vec<u32>,rng:rc_game::rng::Rng,
-        queries:std::collections::VecDeque<Option<rc_game::collision_query::CollOutput>>,mission:Option<i32>}
+        queries:std::collections::VecDeque<Option<rc_game::collision_query::CollOutput>>,mission:Option<i32>,native_ids:bool}
     impl CrateServices for Fixture {
         fn objects(&self)->&Objects {&self.objects}
         fn objects_mut(&mut self)->&mut Objects {&mut self.objects}
@@ -247,9 +305,19 @@ mod tests {
         fn hit_31dce8(&mut self,_id:MobyId,mask:u32,keep:bool)->Result<()> {
             assert_eq!(mask,HIT_MASK);assert!(!keep);self.events.push(0x31dce8);Ok(())
         }
-        fn crate_link(&mut self,_id:MobyId,_field:usize,_raw:u32)->Result<Option<bool>> {self.events.push(0x3204e8);Ok(None)}
         fn stack_39d0c0(&mut self,_id:MobyId)->Result<bool> {self.events.push(0x39d0c0);Ok(false)}
         fn icon_39ff50(&mut self,_id:MobyId,_mode:i32)->Result<Option<u32>> {self.events.push(0x39ff50);Ok(None)}
+        fn resolve_stack_link(&mut self,id:MobyId,field:usize)->Result<Option<Option<MobyId>>> {
+            let raw=Buf(&self.objects.get(id).unwrap().pvars).i32(field)?;
+            if self.native_ids {return Ok(Some(if raw==-1 {None}else{Some(raw as usize)}));}
+            Ok(if raw==0 {Some(None)}else{None})
+        }
+        fn write_stack_link(&mut self,id:MobyId,field:usize,target:Option<MobyId>)->Result<bool> {
+            let value=if self.native_ids {target.map_or(-1,|id|id as i32)}else{
+                if target.is_some() {return Ok(false);}0
+            };
+            self.objects.get_mut(id).unwrap().pvars[field..field+4].copy_from_slice(&value.to_le_bytes());Ok(true)
+        }
     }
     impl StackServices for Fixture {
         fn rng(&mut self)->&mut rc_game::rng::Rng {&mut self.rng}
@@ -265,7 +333,7 @@ mod tests {
         let mut m=Moby::zeroed();m.o_class=class;m.state=0;m.update_fn=Some(UPDATE);m.hit_slot=9;
         m.pvars=vec![0;0x100];m.pvars[0x40..0x50].fill(0xa5);m.pvars[0x90..0xa0].fill(0xff);
         m.pvars[0xfc..0x100].copy_from_slice(&0xdead_beefu32.to_le_bytes());
-        Fixture {objects:Objects::new(vec![m],0),counter:0,events:vec![],rng:rc_game::rng::Rng {state:1234},queries:Default::default(),mission:None}
+        Fixture {objects:Objects::new(vec![m],0),counter:0,events:vec![],rng:rc_game::rng::Rng {state:1234},queries:Default::default(),mission:None,native_ids:false}
     }
     #[test]
     fn required_stack_blocks_after_actual_owned_state_and_flags_without_replay() {
@@ -273,29 +341,29 @@ mod tests {
         assert_eq!(progress.resume(0,&mut f).unwrap(),InitResult::Pending(0x39d0c0));
         let m=f.objects.get(0).unwrap();assert_eq!(m.state,1);
         assert_eq!(&m.pvars[0x90..0xa0],&[0;16]);assert_eq!(&m.pvars[0x40..0x50],&[0xa5;16]);
-        assert_eq!(word(&f,0,0xac).unwrap(),0x14);assert_eq!(word(&f,0,0xb4).unwrap(),1);
-        assert_eq!(word(&f,0,0xfc).unwrap(),0xdead_beef);assert_eq!(m.hit_slot,9);
+        assert_eq!(word(&f.objects,0,0xac).unwrap(),0x14);assert_eq!(word(&f.objects,0,0xb4).unwrap(),1);
+        assert_eq!(word(&f.objects,0,0xfc).unwrap(),0xdead_beef);assert_eq!(m.hit_slot,9);
         assert_eq!(f.events,vec![0x31dce8,0x39d0c0]);
         assert_eq!(progress.resume(0,&mut f).unwrap(),InitResult::Pending(0x39d0c0));
-        assert_eq!(word(&f,0,0xb4).unwrap(),1,"class1ff increment must not replay");
+        assert_eq!(word(&f.objects,0,0xb4).unwrap(),1,"class1ff increment must not replay");
         assert_eq!(f.events,vec![0x31dce8,0x39d0c0,0x39d0c0]);
     }
     #[test]
     fn source_skip_stack_branch_finishes_bolt_crate_but_not_required_icon() {
         let mut f=fixture(0x1f4);set_word(&mut f,0,0xcc,1);let mut p=CrateInitProgress::default();
         assert_eq!(p.resume(0,&mut f).unwrap(),InitResult::Complete);
-        assert_eq!(word(&f,0,0xac).unwrap(),0,"cc branch skips BOTH flags and stack");
-        assert_eq!(word(&f,0,0xfc).unwrap(),0);assert_eq!(f.objects.get(0).unwrap().hit_slot,9);
+        assert_eq!(word(&f.objects,0,0xac).unwrap(),0,"cc branch skips BOTH flags and stack");
+        assert_eq!(word(&f.objects,0,0xfc).unwrap(),0);assert_eq!(f.objects.get(0).unwrap().hit_slot,9);
         assert_eq!(f.events,vec![0x31dce8]);
         let mut f=fixture(0x1f5);set_word(&mut f,0,0xcc,1);
         assert_eq!(CrateInitProgress::default().resume(0,&mut f).unwrap(),InitResult::Pending(0x39ff50));
-        assert_eq!(f.events,vec![0x31dce8,0x39ff50]);assert_eq!(word(&f,0,0xfc).unwrap(),0);
+        assert_eq!(f.events,vec![0x31dce8,0x39ff50]);assert_eq!(word(&f.objects,0,0xfc).unwrap(),0);
     }
     #[test]
     fn original_physics_state_zero_return_does_not_invent_a_physics_dependency() {
         let mut f=fixture(0x1f4);set_word(&mut f,0,0xac,4);f.counter=1;
         assert_eq!(CrateInitProgress::default().resume(0,&mut f).unwrap(),InitResult::Pending(0x39d0c0));
-        assert_eq!(f.objects.get(0).unwrap().state,1);assert_eq!(word(&f,0,0x3c).unwrap(),0x10000);
+        assert_eq!(f.objects.get(0).unwrap().state,1);assert_eq!(word(&f.objects,0,0x3c).unwrap(),0x10000);
         assert_eq!(f.events,vec![0x31dce8,0x39d0c0]);
     }
     #[test]
@@ -306,6 +374,18 @@ mod tests {
         f.objects.get_mut(0).unwrap().o_class=541;assert!(!source_crate_pointer(&f.objects,Some(0)));
         f.objects.get_mut(0).unwrap().o_class=-1;assert!(!source_crate_pointer(&f.objects,Some(0)));
         assert!(!source_crate_pointer(&f.objects,None));assert!(!source_crate_pointer(&f.objects,Some(999)));
+    }
+    #[test]
+    fn verified_native_id_zero_is_owner_not_null_and_clear_uses_bound_null_encoding() {
+        let mut f=fixture(0x1f4);let mut crate_m=f.objects.get(0).unwrap().clone();
+        crate_m.pvars[0xa4..0xa8].copy_from_slice(&(-1i32).to_le_bytes());
+        crate_m.pvars[0xcc..0xd0].copy_from_slice(&1u32.to_le_bytes());
+        let mut hero=Moby::zeroed();hero.o_class=0;
+        f.objects=Objects::new(vec![hero,crate_m],0);f.native_ids=true;
+        assert_eq!(CrateInitProgress::default().resume(1,&mut f).unwrap(),InitResult::Complete);
+        let m=f.objects.get(1).unwrap();
+        assert_eq!(Buf(&m.pvars).i32(0xa0).unwrap(),-1);
+        assert_eq!(Buf(&m.pvars).u16(0x3e).unwrap(),0,"nonnull owner0 is tested before sourceclass rejection clears it");
     }
     fn floor(moby:Option<usize>)->rc_game::collision_query::CollOutput {
         rc_game::collision_query::CollOutput {moby,primitive:None,kind:0x101f,point:[10.,20.,6.],pushed_centre:None,
@@ -320,7 +400,7 @@ mod tests {
         let m=f.objects.get(0).unwrap();assert_eq!(m.position,[10.,20.,6.,42.]);assert_eq!(m.rotation[3],13.);
         assert_eq!(m.rotation[2],if turn {crate::hero::physics::add_rot(0.2,f32::from_bits(0x3fc90fdc))}else{0.2});
         assert_eq!(Buf(&m.pvars).u16(0xc4).unwrap(),23);assert_eq!(Buf(&m.pvars).f32(0xb0).unwrap(),1.);
-        assert_eq!(word(&f,0,0xac).unwrap(),5);assert_eq!(f.events,vec![0x2de878]);
+        assert_eq!(word(&f.objects,0,0xac).unwrap(),5);assert_eq!(f.events,vec![0x2de878]);
         assert_eq!(progress.resume(0,&mut f).unwrap(),InitResult::Complete);assert_eq!(f.rng,expected);assert_eq!(f.events.len(),1);
     }
     #[test]
@@ -331,7 +411,7 @@ mod tests {
         assert_eq!(f.objects.get(0).unwrap().rotation[2],0.);
         let mut f=fixture(0x1f4);let expected=f.rng;let mut p=StackInitProgress::default();
         assert_eq!(p.resume(0,&mut f).unwrap(),InitResult::Pending(0x31c9d8));
-        assert_eq!(word(&f,0,0xac).unwrap(),4);assert_eq!(f.rng,expected);assert!(f.events.is_empty());
+        assert_eq!(word(&f.objects,0,0xac).unwrap(),4);assert_eq!(f.rng,expected);assert!(f.events.is_empty());
     }
     #[test]
     fn mission_and_carrier_dependencies_retain_real_effects_without_query_replay() {
@@ -342,7 +422,38 @@ mod tests {
         let mut f=fixture(0x1ff);f.objects.get_mut(0).unwrap().group=-1;
         let mut carrier=Moby::zeroed();carrier.o_class=100;f.objects=Objects::new(vec![f.objects.get(0).unwrap().clone(),carrier],0);
         f.queries.push_back(Some(floor(Some(1))));let mut p=StackInitProgress::default();
-        assert_eq!(p.resume(0,&mut f).unwrap(),InitResult::Pending(0x322028));assert_eq!(word(&f,0,0xac).unwrap(),13);
+        assert_eq!(p.resume(0,&mut f).unwrap(),InitResult::Pending(0x322028));assert_eq!(word(&f.objects,0,0xac).unwrap(),13);
         assert_eq!(p.resume(0,&mut f).unwrap(),InitResult::Pending(0x322028));assert_eq!(f.events,vec![0x2de878]);
+    }
+    #[test]
+    fn grouped_carrier_inheritance_copies_exact_pose_lanes_without_rac1_cc_write() {
+        let mut f=fixture(0x1f4);let mut lower=f.objects.get(0).unwrap().clone();
+        for i in 0..32 {lower.pvars[0xd0+i]=i as u8+1;}
+        lower.pvars[0xf0..0xf4].copy_from_slice(&2i32.to_le_bytes());
+        lower.pvars[0xf4..0xf8].copy_from_slice(&2.5f32.to_le_bytes());
+        lower.pvars[0xcc..0xd0].copy_from_slice(&0xdefu32.to_le_bytes());
+        let mut upper=f.objects.get(0).unwrap().clone();upper.pvars[0xcc..0xd0].copy_from_slice(&0xabcu32.to_le_bytes());
+        let carrier=Moby::zeroed();f.objects=Objects::new(vec![upper,lower,carrier],0);f.native_ids=true;
+        assert_eq!(inherit_carrier_pose(0,1,&mut f).unwrap(),InitResult::Complete);
+        let (u,l)=(f.objects.get(0).unwrap(),f.objects.get(1).unwrap());
+        assert_eq!(&u.pvars[0xd0..0xf0],&l.pvars[0xd0..0xf0]);
+        assert_eq!(Buf(&u.pvars).i32(0xf0).unwrap(),2);assert_eq!(Buf(&u.pvars).f32(0xf4).unwrap(),3.5);
+        assert_eq!(Buf(&u.pvars).u32(0xcc).unwrap(),0xabc);assert_eq!(u.update_dist,0xff);
+        assert_eq!(Buf(&u.pvars).u32(0xac).unwrap(),8);
+    }
+    #[test]
+    fn shared_path_counter_preserves_xyz_and_original_first_point_clear_quirk() {
+        let mut f=fixture(0x1f4);set_word(&mut f,0,0xc0,7);
+        let mut points=[[1,2,3,0x11],[4,5,6,77]];
+        advance_path_counter(&mut f.objects,0,&mut points).unwrap();assert_eq!(points[0][3],0x12);
+        assert_eq!(word(&f.objects,0,0xc0).unwrap(),7);
+        advance_path_counter(&mut f.objects,0,&mut points).unwrap();assert_eq!(word(&f.objects,0,0xc0).unwrap(),u32::MAX);
+        points[0][3]=0;advance_path_counter(&mut f.objects,0,&mut points).unwrap();
+        assert_eq!(points,[[1,2,3,0],[4,5,6,0]],"source sets11 then clears everypointW includingfirst");
+        for state in [1,3,0x111] {
+            set_word(&mut f,0,0xc0,7);points[0][3]=state;
+            advance_path_counter(&mut f.objects,0,&mut points).unwrap();assert_eq!(word(&f.objects,0,0xc0).unwrap(),u32::MAX);
+            assert_eq!(points[0][3],state);
+        }
     }
 }

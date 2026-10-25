@@ -10,6 +10,7 @@ pub mod state_1330;
 pub mod camera;
 pub mod camera_teleport;
 pub mod crate_init;
+pub mod crate_world;
 pub mod collision;
 pub mod controller_132d;
 pub mod effects;
