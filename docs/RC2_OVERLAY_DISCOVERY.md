@@ -1,3 +1,11 @@
+## Current camera/crate recovery checkpoint — 25 October 2026
+
+Runtime source local `8575fa238907857200b35d000afc99c04dd38ee9` / public `3969ce23e1f30d852e64550be3b54a20729b3e80`; original-data batch regression local `f65cc4afb49aeb723ae62f7910f64f7ccf584bef`. Continued from preserved `3c9d1d97c7705c902019a94aa973f5638c165676` without resetting or discarding files. **Aranos remains INCOMPLETE; global initializer cursor24/class1330/state0 has not advanced.** This entry supersedes older current-status entries below only for the scope stated here.
+
+No additional overlay extraction or game-asset regeneration was performed for this continuation. Existing private USA v2.00 boot/LEVEL0 provenance and generated Aranos code remain authoritative; generated C++ is analysis evidence and is not linked as an emulated runtime. The recovered GC camera/LOD, group iterator, crate and collision semantics are native adapters through the existing engine. Static coverage does not establish full game-code coverage or behaviour. See current function map/regression/handoff for the tested scope.
+
+First CPU fixture blocker: `GC_ARANOS_CLASS_1330_SOURCE_2DA160_CAMERA_BANK_PROJECTION_SERVICES_UNPORTED`. Bind the original camera bank and persistent options, existing FollowCamera motion/init, actual backup/publication and existing renderer projection/frustum/fog/LOD owners in source order. The engine opt-in still lacks original optional-actor global bindings and stops earlier at3e0b28; test bindings do not establish New Game. Then complete required313008 music/reverb/fog host bindings and1330 real joint poses/scripts/common tail before advancing24. Preserve132d state-one query383fc0/queued3842f8 as separate unresolved work. Additional mandatory gaps: authentic New Game/save/RNG inputs, dynamic actor GPU synchronization, supported hero/item/wrench/hit/damage update loop, enemies, destruction/bolts/pickups/interactions, HUD/audio/particles/cinematics, checkpoints/save/death/respawn and legitimate Aranos-to-Oozla progression. FIRST_FATAL_BLOCKER is null/NOT_EXECUTED for current device gameplay, not a newly observed crash.
+
 # RC2 executable overlays and recovery workflow
 
 ## Final native validation receipt — source a4c188bf9ca2aa4e96143103adc9a363539bf180

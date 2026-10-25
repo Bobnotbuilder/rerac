@@ -625,6 +625,34 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     println!("ORIGINAL_GC_CRATE_WORLD_PREFIX_CPU_PASS owner={crate_id} class={:#x} group={} result={crate_result:?} pending={:?} rng_changed={} state={} pvar_ac={:#x}; INDEPENDENT_CLASS_CHAIN_NOT_INITIALIZER_CURSOR_ADVANCE_NOT_GAMEPLAY",crate_before.o_class,crate_before.group as u8,
         world.pending_crate,world.rng!=rng_before_crate,world.objects.get(crate_id).unwrap().state,
         rc_formats::buf::Buf(&world.objects.get(crate_id).unwrap().pvars).u32(0xac).unwrap());
+    // Batch the next shared callback dependencies on the SAME World owners.
+    // This independent service probe stops at its first mandatory missing
+    // effect; initialize() remains at24 throughout, never skipping1330.
+    let crate_inventory:Vec<_>=world.initializer_inventory().into_iter()
+        .filter(|&(id,_,source)|id>24 && source==Some(0x39c870)).collect();
+    let mut completed_crates=Vec::new();let mut first_crate_pending=None;
+    for (id,class,_) in &crate_inventory {
+        let result=world.resume_crate_initializer(*id,&coll,&rigid,0,None).unwrap();
+        match result {
+            rc_game2::crate_init::InitResult::Complete=>completed_crates.push(*id),
+            rc_game2::crate_init::InitResult::Pending(source)=>{
+                first_crate_pending=Some((*id,*class,source,world.pending_crate));break;
+            },
+        }
+    }
+    println!("ORIGINAL_GC_CRATE_BATCH_DEPENDENCIES total={} completed={completed_crates:?} first_pending={first_crate_pending:?}; INDEPENDENT_SERVICES_NOT_ORIGINAL_INITIALIZER_ORDER_NOT_GAMEPLAY",crate_inventory.len());
+    assert_eq!(crate_inventory.len(),56);
+    assert_eq!(completed_crates,vec![25,26,27,28,29,30,31,32,33,34,35]);
+    assert_eq!(first_crate_pending,Some((36,0x1f4,0x39d0c0,Some((36,0x39d3d0)))));
+    // The actual save/mission word is unavailable. Suspension is mandatory,
+    // not a fabricated zero. A retry cannot draw RNG or replay preceding passes.
+    let pending_rng=world.rng;let pending_iterator=world.group_iterator.clone();
+    let pending_pvars=world.objects.get(36).unwrap().pvars.clone();
+    assert_eq!(world.resume_crate_initializer(36,&coll,&rigid,0,None).unwrap(),rc_game2::crate_init::InitResult::Pending(0x39d0c0));
+    assert_eq!(world.pending_crate,Some((36,0x39d3d0)));
+    assert_eq!(world.rng,pending_rng);assert_eq!(world.group_iterator,pending_iterator);
+    assert_eq!(world.objects.get(36).unwrap().pvars,pending_pvars);
+    assert_eq!(world.tick(1,[0.;4],&loaded,|_,_,_|panic!("world cannot tick")),Err(rc_game2::world::TickError::NotInitialized));
 
 }
 

@@ -14,7 +14,7 @@ The next batch after object24/class1330 is shared crate callback39c870, beginnin
 | 00383ce0 | 18 | 12fa | 9 | STATE0_TYPE89_RESOURCE_DEPENDENT_LATER_DESTRUCTION_MISSING |
 | 00383eb8 | 1 | 132d | 3 | STATE0_SUPPORTED_STATE1_QUERY_AND_DRAW_MISSING |
 | 003846d0 | 1 | 1330 | 46 | STATE0_PREFIX_ONLY_TELEPORT_AND_TAIL_REQUIRED |
-| 0039c870 | 56 | 01f4, 01f5, 01ff | 36 | UNKNOWN_REQUIRES_EVIDENCE |
+| 0039c870 | 56 | 01f4, 01f5, 01ff | 36 | STATE0_SHARED_ADAPTER_ORIGINAL_WORLD_TESTED_PENDING_SAVE36_NOT_GLOBAL_CURSOR_ADVANCE |
 | 0039f588 | 1 | 02a7 | 14 | UNKNOWN_REQUIRES_EVIDENCE |
 | 0039fbd8 | 4 | 0325 | 8 | UNKNOWN_REQUIRES_EVIDENCE |
 | 003a2030 | 1 | 0340 | 4 | UNKNOWN_REQUIRES_EVIDENCE |
@@ -61,3 +61,5 @@ The next batch after object24/class1330 is shared crate callback39c870, beginnin
 | 0041b170 | 1 | 0c3f | 0 | UNKNOWN_REQUIRES_EVIDENCE |
 
 The graph retains named external symbols such as DPRINT without inventing addresses. Direct call-site order is static address order, not an executed branch trace. Indirect dispatch and inferred function boundaries remain incomplete. The registry third word remains opaque. Null update identity does not establish absence of all loader services. Private reports contain complete ordered owner references and shared-service groups.
+
+Current batch receipt: all ten group19 state0 bodies execute through real World owners with three correct linked stacks and nine RNG draws. Broader independent-service probe completes25–35, then36 waits original mission/save word at39d3d0. Actual initializer remains24. See current regression/handoff; carrier, icon, path and state1/destruction remain mandatory.
