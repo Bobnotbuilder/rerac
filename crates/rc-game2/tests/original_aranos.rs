@@ -389,6 +389,9 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
         (0x2c4560,0x48d0,"883096221b3af3f45d95cf5ab164c4c32bd1b58b"),
         (0x2b48b0,0x158,"d9ef2d41e7d89f5c4c1601871a8baf308d4d9b25"),
         (0x2b4a08,0x950,"ef9a8191d64daecb805b15b0edd0fc5df92d0800"),
+        (0x302e14,0x128,"96a44da37fa49be41f710c859ff95d56d4f07fb7"),
+        (0x31c9d8,0xe8,"d2d49e320c2c698a41061314d1ce9d4c9252559b"),
+        (0x31cac0,0x168,"2a8521d966e163d151eee087f2060e43895a3104"),
         (0x31ff00,0x100,"7fec8f06f6efaf38fd117436fcf0efbf581ee078"),
         (0x324140,0x80,"db03f977f180f26c1c2fb18e1fa9bd45cd38f72b"),
         (0x2a53b8,0xc8,"be628d4bf91e7f8679801ad8ccdec1989903f435"),
@@ -563,18 +566,61 @@ fn original_gc_static_world_spawn_ownership_and_first_native_callback_boundary()
     // claim that the original full initialization sequence has advanced.
     let crate_id=world.initializer_inventory().into_iter().find(|&(id,_,source)|id>24 && source==Some(0x39c870)).unwrap().0;
     let crate_before=world.objects.get(crate_id).unwrap().clone();let rng_before_crate=world.rng;
+    for (class,blob) in rc_formats::moby_collision::parse_level(&core,&data).unwrap() {
+        if matches!(class,0x1f4|0x1ff) {println!("ORIGINAL_CRATE_COLLISION_RESOURCE class={class:#x} joints={:?} vertices={} faces={} prims={:?}",
+            blob.joint_counts,blob.vertices.len(),blob.faces.len(),blob.prims.iter().map(|p|(p.kind(),p.mask())).collect::<Vec<_>>());}
+    }
+    for &id in &[25usize,26,27,28,46,47,48,49,50,71] {println!("GROUP_INITIAL_POS id={id} p={:?}",world.objects.get(id).unwrap().position);}
+
+    assert_eq!((world.groups.len(),world.group_iterator.limit),(192,Some(33)));
+    let mut actual_group=Vec::new();let mut member=world.group_begin(19,0,0).unwrap();
+    while let Some(id)=member {actual_group.push(id);member=world.group_next(id,0,0).unwrap();}
+    assert_eq!(actual_group,vec![25,26,27,28,46,47,48,49,50,71]);
+    assert_eq!(world.group_iterator.last_index,Some(71));
+    let exhausted=world.group_iterator.clone();assert_eq!(world.group_begin(34,0,0).unwrap(),None);
+    assert_eq!(world.group_iterator,exhausted,"invalid source count must preserve prior globals");
+    assert_eq!(world.group_begin(33,0,0).unwrap(),None,"source accepts count itself, initialized null table slot");
+    assert_eq!(world.group_iterator.current,Some(None));assert_eq!(world.group_iterator.last_index,Some(71));
+    assert_eq!(world.rng,rng_before_crate);
+
     let crate_result=world.resume_crate_initializer(crate_id,&coll,&rigid,0,None).unwrap();
+    println!("GROUPED_WORLD_OBSERVATION result={crate_result:?} pending={:?} rng_before={:?} rng_after={:?}",world.pending_crate,rng_before_crate,world.rng);
     assert_eq!((crate_id,crate_before.o_class,crate_before.group as u8),(25,0x1f4,19));
-    assert_eq!(crate_result,rc_game2::crate_init::InitResult::Pending(0x39d0c0));
-    assert_eq!(world.pending_crate,Some((25,0x31c9d8)));
-    assert_eq!(world.rng,rng_before_crate,"grouped init must not take ungrouped RNG shortcut");
+    assert_eq!(crate_result,rc_game2::crate_init::InitResult::Complete);
+    assert_eq!(world.pending_crate,None);
+    let mut rng_after_group=rng_before_crate;for _ in 0..9 {rng_after_group.randi(2);}
+    assert_eq!(world.rng,rng_after_group,"original grouped first pass draws once for each of nine bolt crates");
+    for &id in &actual_group {
+        let m=world.objects.get(id).unwrap();
+        assert_eq!(rc_formats::buf::Buf(&m.pvars).u16(0xc4).unwrap(),id as u16);
+        assert_ne!(rc_formats::buf::Buf(&m.pvars).u32(0xac).unwrap()&1,0);
+        println!("GROUPED_WORLD_GRAPH id={id} pos={:?} above={:?} below={:?} carrier={:?}",m.position,
+            world.objects.moby_reference(id,0xa0).unwrap(),world.objects.moby_reference(id,0xa4).unwrap(),world.objects.moby_reference(id,0xf0).unwrap());
+    }
+    // These assertions fail with the old whole-class rejection for ANY
+    // primitive: the upper boxes incorrectly collapsed onto the floor.
+    for (lower,upper) in [(25usize,71usize),(27,28),(49,50)] {
+        assert_eq!(world.objects.moby_reference(lower,0xa0).unwrap(),Some(Some(upper)));
+        assert_eq!(world.objects.moby_reference(upper,0xa4).unwrap(),Some(Some(lower)));
+        let a=world.objects.get(lower).unwrap();let b=world.objects.get(upper).unwrap();
+        assert_eq!(b.position[2],a.position[2]+1.0);
+        assert_eq!([b.position[0],b.position[1],b.position[3]],[a.position[0],a.position[1],a.position[3]]);
+    }
     let m=world.objects.get_mut(crate_id).unwrap();assert_eq!(m.state,1);
-    assert_eq!(rc_formats::buf::Buf(&m.pvars).u32(0xac).unwrap(),0x14);
+    assert_eq!(rc_formats::buf::Buf(&m.pvars).u32(0xac).unwrap(),0x15);
     assert_eq!(&m.pvars[0x90..0xa0],&[0;16]);
     m.pvars[0x90..0xa0].fill(0x5a);
     assert_eq!(world.resume_crate_initializer(crate_id,&coll,&rigid,0,None).unwrap(),crate_result);
     assert_eq!(&world.objects.get(crate_id).unwrap().pvars[0x90..0xa0],&[0x5a;16],"completed velocity reset cannot replay");
-    assert_eq!(world.rng,rng_before_crate);
+    assert_eq!(world.rng,rng_after_group);
+    // Complete each remaining actual owner's state0 branch. Already settled
+    // group flags avoid rerunning the shared three passes or its RNG draws.
+    for &id in &actual_group[1..] {
+        assert_eq!(world.resume_crate_initializer(id,&coll,&rigid,0,None).unwrap(),rc_game2::crate_init::InitResult::Complete);
+        assert_eq!(world.objects.get(id).unwrap().state,1);
+        assert_eq!(world.rng,rng_after_group);
+    }
+    assert_eq!(rc_formats::buf::Buf(&world.objects.get(71).unwrap().pvars).i16(0xc6).unwrap(),100);
     assert_eq!(world.tick(1,[0.;4],&loaded,|_,_,_|panic!("world cannot tick")),Err(rc_game2::world::TickError::NotInitialized));
     println!("ORIGINAL_GC_CRATE_WORLD_PREFIX_CPU_PASS owner={crate_id} class={:#x} group={} result={crate_result:?} pending={:?} rng_changed={} state={} pvar_ac={:#x}; INDEPENDENT_CLASS_CHAIN_NOT_INITIALIZER_CURSOR_ADVANCE_NOT_GAMEPLAY",crate_before.o_class,crate_before.group as u8,
         world.pending_crate,world.rng!=rng_before_crate,world.objects.get(crate_id).unwrap().state,

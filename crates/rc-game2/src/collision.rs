@@ -2,7 +2,7 @@
 //!
 //! The initial RC2 port supplied only the baked world mesh to hero/camera
 //! queries. Separate original class collision meshes therefore never took part.
-//! This adapter registers unconditional, unrooted rigid triangle placements.
+//! This adapter registers unconditional, unrooted rigid triangle/static primitive placements.
 //! Spawn scripts, posed primitives, class initialization and moving-platform
 //! carry remain separate missing capabilities; no render mesh becomes a collider.
 use rc_formats::{buf::{invalid, Buf, Result}, gameplay::MobyInstance, level::LevelCore,
@@ -50,7 +50,13 @@ fn rigid_classes(core:&LevelCore,data:&[u8])->Result<(HashMap<i32,MobyClassHeade
     if core.game!=rc_formats::Game::Rac2 {return invalid("GC rigid collision requires an explicitly tagged GC core");}
     let mut classes=HashMap::new();let mut headers=HashMap::new();
     for (id,blob) in moby_collision::parse_level(core,data)? {
-        if blob.faces.is_empty() || !blob.prims.is_empty() || blob.joint_counts!=[0,0] {continue;}
+        // A static sphere/cylinder primitive does NOT invalidate the same
+        // class's triangle mesh. GC2df394 skips primitives for flag2 queries,
+        // but those triangles are required for authentic crate stacks. Reuse
+        // the existing native primitive kernel for kinds1/3 without a pose.
+        // Joint-dependent kinds/counts remain excluded rather than zero-posed.
+        if (blob.faces.is_empty() && blob.prims.is_empty()) || blob.joint_counts!=[0,0]
+            || blob.prims.iter().any(|p|!matches!(p.kind(),1|3)) {continue;}
         let raw=core.block(data,&format!("moby_class/{id:04}")).expect("parsed class block");
         headers.insert(id,Buf(raw).pod(0,"GC collision class header")?);classes.insert(id as i16,blob);
     }

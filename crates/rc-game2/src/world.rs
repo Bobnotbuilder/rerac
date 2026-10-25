@@ -14,6 +14,7 @@ pub struct World {
     pub pvars:PvarPlan,
     pvar_indices:Vec<i32>,
     pub groups:Vec<Vec<MobyId>>,
+    pub group_iterator:crate::group_iter::GroupIterator,
     pub gc:Vec<GcState>,
     pub preceding_owners:Vec<PrecedingOwner>,
     pub grid:rc_game::collision_query::MobyGrid,
@@ -40,6 +41,7 @@ pub struct World {
     hits:crate::hits::HitLog,
     pub(crate) crate_initializers:std::collections::HashMap<(MobyId,u64),crate::crate_init::CrateInitProgress>,
     pub(crate) crate_stacks:std::collections::HashMap<(MobyId,u64),crate::crate_init::StackInitProgress>,
+    pub(crate) crate_grouped:std::collections::HashMap<(MobyId,u64),crate::crate_init::GroupedStackProgress>,
     pub pending_crate:Option<(MobyId,u32)>,
     init_list:Vec<MobyId>,
     init_cursor:usize,
@@ -167,10 +169,11 @@ impl World {
             }
         }
         Ok(Self {objects,instance_to_moby,moby_to_instance,pvars,pvar_indices,groups,
+            group_iterator:crate::group_iter::GroupIterator::from_gameplay(gameplay)?,
             gc:vec![GcState::default();count],preceding_owners,grid,effects:None,controller_data:None,controller_132d:None,
             state_1330:None,pending_1330:None,teleport_progress:None,teleport_modifiers:None,teleport_globals:None,teleport_state_progress:None,teleport_ground_progress:None,cuboids,prefix_1330_owners:Vec::new(),
             actor_attachments:[None;20],dynamic_local_fields:Vec::new(),
-            rng,hits:Default::default(),crate_initializers:Default::default(),crate_stacks:Default::default(),pending_crate:None,init_list,init_cursor:0,initialized:false})
+            rng,hits:Default::default(),crate_initializers:Default::default(),crate_stacks:Default::default(),crate_grouped:Default::default(),pending_crate:None,init_list,init_cursor:0,initialized:false})
     }
 
     /// Read-only source identities in the exact loader-owned initialization
@@ -481,11 +484,11 @@ mod tests {
     fn fixture(records:Vec<Moby>)->World {
         let n=records.len();World {objects:Objects::new(records,0),instance_to_moby:(0..n).map(Some).collect(),
             moby_to_instance:(0..n).collect(),pvars:PvarPlan {blocks:Vec::new(),pointer_fields:Vec::new(),moby_fields:Vec::new(),shared_data:Vec::new(),shared_fields:Vec::new()},
-            pvar_indices:vec![-1;n],groups:vec![Vec::new();2],gc:vec![GcState::default();n],preceding_owners:Vec::new(),
+            pvar_indices:vec![-1;n],groups:vec![Vec::new();2],group_iterator:crate::group_iter::GroupIterator::new(Some(2)),gc:vec![GcState::default();n],preceding_owners:Vec::new(),
             grid:rc_game::collision_query::MobyGrid::new(),effects:None,controller_data:None,controller_132d:None,
             state_1330:None,pending_1330:None,teleport_progress:None,teleport_modifiers:None,teleport_globals:None,teleport_state_progress:None,teleport_ground_progress:None,cuboids:Vec::new(),prefix_1330_owners:Vec::new(),
             actor_attachments:[None;20],dynamic_local_fields:Vec::new(),
-            rng:rc_game::rng::Rng::new(),hits:Default::default(),crate_initializers:Default::default(),crate_stacks:Default::default(),pending_crate:None,init_list:Vec::new(),init_cursor:0,initialized:false}
+            rng:rc_game::rng::Rng::new(),hits:Default::default(),crate_initializers:Default::default(),crate_stacks:Default::default(),crate_grouped:Default::default(),pending_crate:None,init_list:Vec::new(),init_cursor:0,initialized:false}
     }
     fn object(id:u32,slot:u8)->Moby {
         let mut m=Moby::init_instance(id,slot as i16,None);m.class_slot=slot;m.mode=mode::TARGETABLE;m.visible=1;m

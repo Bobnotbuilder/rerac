@@ -173,6 +173,51 @@ pub fn native_projection_parameters(input:ProjectionInputs)->ProjectionParameter
         near:input.near,far:input.far,fog_far}
 }
 
+/// GC Tfrag distance profile read by36a058 / raw-threshold TfragProc.
+/// These are parameters for the EXISTING native tfrag LOD uniform/shader,
+/// not a second terrain renderer or a claim that its GPU update occurred.
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub struct LodProfile {pub distance_bits:[u32;3],pub scale_bits:u32}
+
+impl LodProfile {
+    ///36a058's CVT.W.S threshold writes are independent of the unknown FCSR
+    /// rounding mode when their actual f32 operands are exact in-range integers.
+    /// Return None for fractional/nonfinite/out-of-range cases, never choose an
+    /// invented rounding mode. This does not add another raw group/LOD owner.
+    pub fn exact_raw_thresholds(&self)->Option<[i32;3]> {
+        use rc_game::ps2v::Pf;
+        let mut out=[0;3];
+        for (i,&distance) in self.distance_bits.iter().enumerate() {
+            let bits=(Pf::b(distance)*Pf::b(0x4480_0000)).0;
+            if bits&0x7f80_0000==0x7f80_0000 {return None;}
+            let value=f32::from_bits(bits);
+            if !value.is_finite() || value.fract()!=0. || (value as f64)<i32::MIN as f64 || (value as f64)>i32::MAX as f64 {return None;}
+            out[i]=value as i32;
+        }
+        Some(out)
+    }
+}
+
+///300d18's initial [6L,4L,2L] uses the already compatible shared format helper.
+/// The actual original block header is required; no invented base distance.
+pub fn initial_lod_profile(block:&rc_formats::tfrag::TfragBlockHeader)->LodProfile {
+    LodProfile {distance_bits:block.lod_distances().map(f32::to_bits),scale_bits:1f32.to_bits()}
+}
+///36a1c0's dynamic profile. Preserve source multiplication order rather than
+/// scaling the three precomputed distances: `(L*6)*s` can round differently
+/// from original `L*(s*6)`. Use exact_raw_thresholds only when operands prove
+/// round-mode independence; other conversions need the original FCSR context.
+pub fn rescaled_lod_profile(block:&rc_formats::tfrag::TfragBlockHeader,horizontal_tangent:u32,force_unscaled:i32)->LodProfile {
+    use rc_game::ps2v::Pf;
+    let mut scale=Pf::b(0x3f1e_b852)/Pf::b(horizontal_tangent);
+    if scale<Pf::ONE {scale=Pf::ONE;}
+    if Pf::b(0x4080_0000)<scale {scale=Pf::b(0x4080_0000);}
+    if force_unscaled!=0 {scale=Pf::ONE;}
+    let base=Pf::f(block.unknown_8);
+    LodProfile {distance_bits:[(base*(scale*Pf::b(0x40c0_0000))).0,
+        (base*(scale*Pf::b(0x4080_0000))).0,((base+base)*scale).0],scale_bits:scale.0}
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,6 +234,24 @@ mod tests {
         input.word_1a7b98=0;input.horizontal_tangent=0;input.byte_1a7bb9=1;input.fog_far=4096f32.to_bits();
         assert_eq!(native_projection_parameters(input).tan_y,0);
         assert_eq!(native_projection_parameters(input).fog_far,input.fog_far);
+    }
+    #[test]
+    fn lod_bridge_reuses_original_block_and_source_clamp_force_order() {
+        let block=rc_formats::tfrag::TfragBlockHeader {table_offset:16,tfrag_count:1,unknown_8:12.,unknown_c:0};
+        assert_eq!(initial_lod_profile(&block).distance_bits.map(f32::from_bits),[72.,48.,24.]);
+        assert_eq!(rescaled_lod_profile(&block,0.31f32.to_bits(),0).distance_bits.map(f32::from_bits),[144.,96.,48.]);
+        assert_eq!(rescaled_lod_profile(&block,0.1f32.to_bits(),0).distance_bits.map(f32::from_bits),[288.,192.,96.]);
+        assert_eq!(rescaled_lod_profile(&block,1f32.to_bits(),0).distance_bits.map(f32::from_bits),[72.,48.,24.]);
+        assert_eq!(rescaled_lod_profile(&block,0.1f32.to_bits(),-1).distance_bits.map(f32::from_bits),[72.,48.,24.]);
+    }
+    #[test]
+    fn threshold_conversion_accepts_only_rounding_independent_operands() {
+        let p=LodProfile {distance_bits:[72f32.to_bits(),48f32.to_bits(),24f32.to_bits()],scale_bits:1f32.to_bits()};
+        assert_eq!(p.exact_raw_thresholds(),Some([73728,49152,24576]));
+        let mut p=p;p.distance_bits[0]=(0.5f32/1024.).to_bits();assert_eq!(p.exact_raw_thresholds(),None);
+        p.distance_bits[0]=2097152f32.to_bits();assert_eq!(p.exact_raw_thresholds(),None);
+        p.distance_bits[0]=(-2097152f32).to_bits();assert_eq!(p.exact_raw_thresholds().unwrap()[0],i32::MIN);
+        p.distance_bits[0]=f32::NAN.to_bits();assert_eq!(p.exact_raw_thresholds(),None);
     }
     fn metadata()->Metadata {Metadata {class_86:7,type_8c:0,active_8e:6,byte_7d:9,half_7e:12,data_70:DataBinding::Original(0x1234)}}
     #[test]

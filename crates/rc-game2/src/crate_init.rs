@@ -154,6 +154,38 @@ pub trait StackServices:CrateServices {
     /// Required grouped branch, implemented through GroupedStackProgress and
     /// the same World service owner. Default is unresolved, never success.
     fn grouped_39d0c0(&mut self,_owner:MobyId)->Result<bool> {Ok(false)}
+    fn group_begin(&mut self,_group:i32,_a2:i32,_a3:i32)->Result<Option<MobyId>> {invalid("GC stack group iterator unbound")}
+    fn group_next(&mut self,_from:MobyId,_a2:i32,_a3:i32)->Result<Option<MobyId>> {invalid("GC stack group iterator unbound")}
+    /// Some(false): actual322028 returned no carrier. None: unported.
+    /// Some(true) must execute322570 and write D0/E0/F4, including the
+    /// original optional previous-stack-top occlusion owner, without repair.
+    fn carrier_attach(&mut self,_owner:MobyId,_hit:MobyId,_occlusion_owner:Option<MobyId>)->Result<Option<bool>> {Ok(None)}
+    /// Must mutate this actual shared1fda00 entry, e.g. advance_path_counter.
+    fn path_counter(&mut self,_owner:MobyId,_index:i32)->Result<bool> {Ok(false)}
+}
+
+fn rotate_bolt(id:MobyId,s:&mut dyn StackServices) {
+    if s.objects().get(id).unwrap().o_class==0x1f4 {
+        let turn=s.rng().randi(2)!=0;let m=s.objects_mut().get_mut(id).unwrap();
+        if turn && m.rotation[0]==0. && m.rotation[1]==0. {
+            m.rotation[2]=crate::hero::physics::add_rot(m.rotation[2],f32::from_bits(0x3fc9_0fdc));
+        }
+    }
+}
+fn settle_fields(id:MobyId,s:&mut dyn StackServices)->Result<()> {
+    let m=s.objects_mut().get_mut(id).unwrap();let index=m.index as u16;
+    m.pvars[0xc4..0xc6].copy_from_slice(&index.to_le_bytes());
+    m.pvars[0xb0..0xb4].copy_from_slice(&1f32.to_le_bytes());
+    let flags=Buf(&m.pvars).u32(0xac)?|1;m.pvars[0xac..0xb0].copy_from_slice(&flags.to_le_bytes());Ok(())
+}
+fn saved_delete(id:MobyId,s:&mut dyn StackServices)->Result<Option<bool>> {
+    let m=s.objects().get(id).unwrap();let (class,mission)=(m.o_class,m.mission);
+    if matches!(class,0x1f5|0x200) && mission!=0xff {
+        let threshold=Buf(&m.pvars).i32(0xf8)?;
+        let Some(saved)=s.mission_word(mission)? else {return Ok(None);};
+        if saved<threshold {s.delete_311688(id)?;return Ok(Some(true));}
+    }
+    Ok(Some(false))
 }
 
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
@@ -189,32 +221,18 @@ impl StackInitProgress {
                     StackStep::Rotate
                 },
                 StackStep::Rotate=>{
-                    if s.objects().get(id).unwrap().o_class==0x1f4 {
-                        // The draw occurs BEFORE testing the two tilt angles,
-                        // even on a tilted crate. Preserve the single stream.
-                        let turn=s.rng().randi(2)!=0;
-                        let m=s.objects_mut().get_mut(id).unwrap();
-                        if turn && m.rotation[0]==0. && m.rotation[1]==0. {
-                            m.rotation[2]=crate::hero::physics::add_rot(m.rotation[2],f32::from_bits(0x3fc9_0fdc));
-                        }
-                    }
+                    rotate_bolt(id,s);
                     StackStep::Mission
                 },
                 StackStep::Mission=>{
-                    let m=s.objects().get(id).unwrap();let (class,mission)=(m.o_class,m.mission);
-                    if matches!(class,0x1f5|0x200) && mission!=0xff {
-                        let threshold=Buf(&m.pvars).i32(0xf8)?;
-                        let Some(saved)=s.mission_word(mission)? else {return Ok(InitResult::Pending(0x39d1b4));};
-                        if saved<threshold {s.delete_311688(id)?;self.next=StackStep::Done;return Ok(InitResult::Complete);}
+                    match saved_delete(id,s)? {
+                        None=>return Ok(InitResult::Pending(0x39d1b4)),
+                        Some(true)=>{self.next=StackStep::Done;return Ok(InitResult::Complete);},Some(false)=>{}
                     }
                     StackStep::Fields
                 },
                 StackStep::Fields=>{
-                    let m=s.objects_mut().get_mut(id).unwrap();let index=m.index as u16;
-                    m.pvars[0xc4..0xc6].copy_from_slice(&index.to_le_bytes());
-                    m.pvars[0xb0..0xb4].copy_from_slice(&1f32.to_le_bytes());
-                    let flags=Buf(&m.pvars).u32(0xac)?|1;
-                    m.pvars[0xac..0xb0].copy_from_slice(&flags.to_le_bytes());StackStep::Probe
+                    settle_fields(id,s)?;StackStep::Probe
                 },
                 StackStep::Probe=>{
                     let p=s.objects().get(id).unwrap().position;
@@ -241,6 +259,210 @@ impl StackInitProgress {
                 },
                 StackStep::Carrier=>return Ok(InitResult::Pending(0x322028)),
                 StackStep::Done=>return Ok(InitResult::Complete),
+            };
+            self.next=following;
+        }
+    }
+}
+
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+enum GroupStep {Begin,FirstBegin,FirstCheck,Rotate,Mission,Fields,Probe,Resolve,LinkBelow,Pose,LinkAbove,FirstNext,
+    SecondBegin,SecondCheck,SecondProbe,SecondResolve,SecondCarrierLink,ChainBegin,ChainInherit,ChainPath,ChainNext,SecondNext,
+    ThirdBegin,ThirdOuter,ThirdInnerBegin,ThirdInner,ThirdInnerNext,ThirdOuterNext,Done}
+
+/// The original three passes, using ONE caller-provided World iterator.
+/// No cloned group owns any moby; all saved fields are native owner references
+/// and source continuation locals. In particular pass3's inner walk clobbers
+/// the same iterator that its outer walk must subsequently seek within.
+#[derive(Clone,Debug)]
+pub struct GroupedStackProgress {
+    next:GroupStep,owner:Option<MobyId>,group:i32,current:Option<MobyId>,bottom:Option<MobyId>,
+    below:Option<MobyId>,above:Option<MobyId>,stack_top:Option<MobyId>,outer:Option<MobyId>,inner:Option<MobyId>,
+    hit:Option<rc_game::collision_query::CollOutput>,chain_seen:Vec<MobyId>,
+    pub last_distance:Option<f32>,
+}
+impl Default for GroupedStackProgress {
+    fn default()->Self {Self {next:GroupStep::Begin,owner:None,group:0,current:None,bottom:None,below:None,above:None,
+        stack_top:None,outer:None,inner:None,hit:None,chain_seen:Vec::new(),last_distance:None}}
+}
+impl GroupedStackProgress {
+    /// Starts at39d2e4, AFTER StackInitProgress wrote caller.ac|4. Every
+    /// group_begin/group_next uses original arguments(0,0); their global
+    /// cursor/current/index effects belong to the existing World service.
+    pub fn resume(&mut self,owner:MobyId,s:&mut dyn StackServices)->Result<InitResult> {
+        if self.owner.is_some_and(|id|id!=owner) {return invalid("GC grouped stack caller changed");}
+        loop {
+            let following=match self.next {
+                GroupStep::Begin=>{
+                    let Some(m)=s.objects().get(owner) else {return invalid("GC grouped stack owner absent");};
+                    if m.pvars.len()<0x100 || Buf(&m.pvars).u32(0xac)?&4==0 {return invalid("GC grouped stack requires completed source prefix");}
+                    self.group=m.group as u8 as i32;
+                    if self.group==0xff {return invalid("GC ungrouped owner routed to grouped stack");}
+                    self.owner=Some(owner);GroupStep::FirstBegin
+                },
+                GroupStep::FirstBegin=>{self.current=s.group_begin(self.group,0,0)?;GroupStep::FirstCheck},
+                GroupStep::FirstCheck=>{
+                    match self.current {
+                        None=>GroupStep::SecondBegin,
+                        Some(id) if !source_crate_pointer(s.objects(),Some(id))=>GroupStep::FirstNext,
+                        Some(id)=>{
+                            if s.objects().get(id).unwrap().pvars.len()<0x100 {return invalid("GC group crate pvar block too short");}
+                            GroupStep::Rotate
+                        }
+                    }
+                },
+                GroupStep::Rotate=>{rotate_bolt(self.current.unwrap(),s);GroupStep::Mission},
+                GroupStep::Mission=>{
+                    match saved_delete(self.current.unwrap(),s)? {
+                        None=>return Ok(InitResult::Pending(0x39d3d0)),Some(true)=>GroupStep::FirstNext,Some(false)=>GroupStep::Fields
+                    }
+                },
+                GroupStep::Fields=>{settle_fields(self.current.unwrap(),s)?;GroupStep::Probe},
+                GroupStep::Probe=>{
+                    let p=s.objects().get(self.current.unwrap()).unwrap().position;
+                    self.hit=s.line([p[0],p[1],p[2]+0.5],[p[0],p[1],f32::from_bits(0x3dcc_cccd)],2,None)?;
+                    GroupStep::Resolve
+                },
+                GroupStep::Resolve=>{
+                    let id=self.current.unwrap();
+                    match self.hit.as_ref() {
+                        None=>{
+                            if !s.write_stack_link(id,0xa4,None)? {return Ok(InitResult::Pending(0x39d490));}
+                            GroupStep::FirstNext
+                        },
+                        Some(hit) if hit.moby.is_none()=>{
+                            s.objects_mut().get_mut(id).unwrap().position[2]=hit.point[2];
+                            if !s.write_stack_link(id,0xa4,None)? {return Ok(InitResult::Pending(0x39d490));}
+                            GroupStep::FirstNext
+                        },
+                        Some(hit)=>{
+                            let target=hit.moby.unwrap();
+                            let Some(other)=s.objects().get(target) else {return invalid("GC stack collision owner absent");};
+                            let crate_hit=source_crate_pointer(s.objects(),Some(target));
+                            let special=(other.o_class as u16 as u32).wrapping_sub(0x128)<2;
+                            let same_group=other.group==s.objects().get(id).unwrap().group;
+                            if !crate_hit && !special {
+                                if !s.write_stack_link(id,0xa4,None)? {return Ok(InitResult::Pending(0x39d4bc));}
+                                let m=s.objects_mut().get_mut(id).unwrap();m.update_dist=0xff;
+                                let flags=Buf(&m.pvars).u32(0xac)?|8;m.pvars[0xac..0xb0].copy_from_slice(&flags.to_le_bytes());
+                                GroupStep::FirstNext
+                            }else if other.pvars.is_empty() || !same_group {
+                                if !s.write_stack_link(id,0xa4,None)? {return Ok(InitResult::Pending(0x39d4f4));}
+                                GroupStep::FirstNext
+                            }else if crate_hit {self.below=Some(target);GroupStep::LinkBelow}
+                            else{
+                                if !s.write_stack_link(id,0xa4,None)? {return Ok(InitResult::Pending(0x39d504));}
+                                s.objects_mut().get_mut(id).unwrap().position[2]=hit.point[2];GroupStep::FirstNext
+                            }
+                        }
+                    }
+                },
+                GroupStep::LinkBelow=>{
+                    if !s.write_stack_link(self.current.unwrap(),0xa4,self.below)? {return Ok(InitResult::Pending(0x39d50c));}
+                    GroupStep::Pose
+                },
+                GroupStep::Pose=>{
+                    let lower=s.objects().get(self.below.unwrap()).unwrap();
+                    let position=rc_game::hero::physics::vadd(lower.position.map(rc_game::ps2v::Pf::f),lower.rows[2].map(rc_game::ps2v::Pf::f));
+                    s.objects_mut().get_mut(self.current.unwrap()).unwrap().position=position.map(rc_game::ps2v::Pf::to_f32);
+                    GroupStep::LinkAbove
+                },
+                GroupStep::LinkAbove=>{
+                    let id=self.current.unwrap();
+                    if !source_crate_pointer(s.objects(),Some(id)) {return Ok(InitResult::Pending(0x2eeb90));}
+                    if !s.write_stack_link(self.below.unwrap(),0xa0,Some(id))? {return Ok(InitResult::Pending(0x39d550));}
+                    GroupStep::FirstNext
+                },
+                GroupStep::FirstNext=>{self.current=s.group_next(self.current.unwrap(),0,0)?;GroupStep::FirstCheck},
+                GroupStep::SecondBegin=>{self.bottom=s.group_begin(self.group,0,0)?;GroupStep::SecondCheck},
+                GroupStep::SecondCheck=>{
+                    match self.bottom {
+                        None=>GroupStep::ThirdBegin,
+                        Some(id) if !source_crate_pointer(s.objects(),Some(id))=>GroupStep::SecondNext,
+                        Some(id)=>{
+                            let Some(below)=s.resolve_stack_link(id,0xa4)? else {return Ok(InitResult::Pending(0x39d5d4));};
+                            if below.is_some() {GroupStep::SecondNext}else{GroupStep::SecondProbe}
+                        }
+                    }
+                },
+                GroupStep::SecondProbe=>{
+                    let id=self.bottom.unwrap();let m=s.objects().get(id).unwrap();let p=m.position;
+                    let up=(rc_game::ps2v::Pf::f(Buf(&m.pvars).f32(0xb0)?)*rc_game::ps2v::Pf::f(0.5)).to_f32();
+                    //Sourcea3 is sp40, the previous stack's top, not always0.
+                    self.hit=s.line([p[0],p[1],p[2]+up],[p[0],p[1],f32::from_bits(0x3dcc_cccd)],2,self.stack_top)?;
+                    GroupStep::SecondResolve
+                },
+                GroupStep::SecondResolve=>{
+                    if let Some(target)=self.hit.as_ref().and_then(|h|h.moby) {
+                        match s.carrier_attach(self.bottom.unwrap(),target,self.stack_top)? {
+                            None=>return Ok(InitResult::Pending(0x322028)),Some(false)=>GroupStep::ChainBegin,
+                            Some(true)=>{
+                                let m=s.objects_mut().get_mut(self.bottom.unwrap()).unwrap();
+                                let flags=Buf(&m.pvars).u32(0xac)?|8;m.pvars[0xac..0xb0].copy_from_slice(&flags.to_le_bytes());
+                                GroupStep::SecondCarrierLink
+                            }
+                        }
+                    }else{GroupStep::ChainBegin}
+                },
+                GroupStep::SecondCarrierLink=>{
+                    let target=self.hit.as_ref().and_then(|h|h.moby);
+                    if !s.write_stack_link(self.bottom.unwrap(),0xf0,target)? {return Ok(InitResult::Pending(0x39d6a0));}
+                    GroupStep::ChainBegin
+                },
+                GroupStep::ChainBegin=>{
+                    self.current=self.bottom;self.stack_top=self.bottom;
+                    self.chain_seen.clear();self.chain_seen.push(self.bottom.unwrap());GroupStep::ChainInherit
+                },
+                GroupStep::ChainInherit=>{
+                    let id=self.current.unwrap();
+                    let Some(below)=s.resolve_stack_link(id,0xa4)? else {return Ok(InitResult::Pending(0x39d6e4));};
+                    if let Some(lower)=below {
+                        let Some(m)=s.objects().get(lower) else {return invalid("GC stack below owner absent");};
+                        if !m.pvars.is_empty() {
+                            if let result@InitResult::Pending(_)=inherit_carrier_pose(id,lower,s)? {return Ok(result);}
+                        }
+                    }
+                    GroupStep::ChainPath
+                },
+                GroupStep::ChainPath=>{
+                    let id=self.current.unwrap();let Some(above)=s.resolve_stack_link(id,0xa0)? else {return Ok(InitResult::Pending(0x39d76c));};
+                    self.above=above;let m=s.objects().get(id).unwrap();
+                    let needs=Buf(&m.pvars).i16(0xc6)?!=0 || matches!(m.o_class,0x1f5|0x200);
+                    if needs && above.is_some() {
+                        let index=Buf(&m.pvars).i32(0xc0)?;
+                        if index!=-1 && !s.path_counter(id,index)? {return Ok(InitResult::Pending(0x39d784));}
+                    }
+                    GroupStep::ChainNext
+                },
+                GroupStep::ChainNext=>{
+                    if let Some(above)=self.above {
+                        if self.chain_seen.contains(&above) {return invalid("GC stack above cycle watchdog");}
+                        self.chain_seen.push(above);self.current=Some(above);self.stack_top=Some(above);GroupStep::ChainInherit
+                    }else{GroupStep::SecondNext}
+                },
+                GroupStep::SecondNext=>{self.bottom=s.group_next(self.bottom.unwrap(),0,0)?;GroupStep::SecondCheck},
+                GroupStep::ThirdBegin=>{self.outer=s.group_begin(self.group,0,0)?;GroupStep::ThirdOuter},
+                GroupStep::ThirdOuter=>{
+                    match self.outer {None=>GroupStep::Done,Some(id) if source_crate_pointer(s.objects(),Some(id))=>GroupStep::ThirdInnerBegin,
+                        Some(_)=>GroupStep::ThirdOuterNext}
+                },
+                GroupStep::ThirdInnerBegin=>{self.inner=s.group_next(self.outer.unwrap(),0,0)?;GroupStep::ThirdInner},
+                GroupStep::ThirdInner=>{
+                    match self.inner {
+                        None=>GroupStep::ThirdOuterNext,
+                        Some(id)=>{
+                            if source_crate_pointer(s.objects(),Some(id)) {
+                                let a=s.objects().get(self.outer.unwrap()).unwrap().position.map(rc_game::ps2v::Pf::f);
+                                let b=s.objects().get(id).unwrap().position.map(rc_game::ps2v::Pf::f);
+                                self.last_distance=Some(rc_game::hero::physics::dist3(a,b).to_f32());
+                            }
+                            GroupStep::ThirdInnerNext
+                        }
+                    }
+                },
+                GroupStep::ThirdInnerNext=>{self.inner=s.group_next(self.inner.unwrap(),0,0)?;GroupStep::ThirdInner},
+                GroupStep::ThirdOuterNext=>{self.outer=s.group_next(self.outer.unwrap(),0,0)?;GroupStep::ThirdOuter},
+                GroupStep::Done=>return Ok(InitResult::Complete),
             };
             self.next=following;
         }
@@ -296,7 +518,8 @@ mod tests {
     use super::*;
     use rc_game::moby_runtime::Moby;
     struct Fixture {objects:Objects,counter:u32,events:Vec<u32>,rng:rc_game::rng::Rng,
-        queries:std::collections::VecDeque<Option<rc_game::collision_query::CollOutput>>,mission:Option<i32>,native_ids:bool}
+        queries:std::collections::VecDeque<Option<rc_game::collision_query::CollOutput>>,mission:Option<i32>,native_ids:bool,
+        groups:Vec<Vec<MobyId>>,walk:Vec<(char,usize)>,current:Option<MobyId>,ignores:Vec<Option<MobyId>>}
     impl CrateServices for Fixture {
         fn objects(&self)->&Objects {&self.objects}
         fn objects_mut(&mut self)->&mut Objects {&mut self.objects}
@@ -322,18 +545,29 @@ mod tests {
     impl StackServices for Fixture {
         fn rng(&mut self)->&mut rc_game::rng::Rng {&mut self.rng}
         fn line(&mut self,a:[f32;3],b:[f32;3],flags:u32,ignore:Option<MobyId>)->Result<Option<rc_game::collision_query::CollOutput>> {
-            assert_eq!(flags,2);assert_eq!(ignore,None);assert_eq!(b[2],f32::from_bits(0x3dcc_cccd));
+            assert_eq!(flags,2);self.ignores.push(ignore);assert_eq!(b[2],f32::from_bits(0x3dcc_cccd));
             assert_eq!([a[0],a[1]],[b[0],b[1]]);self.events.push(0x2de878);
             Ok(self.queries.pop_front().expect("stack probe replay"))
         }
         fn mission_word(&mut self,_mission:u8)->Result<Option<i32>> {self.events.push(0x39d1b4);Ok(self.mission)}
         fn delete_311688(&mut self,id:MobyId)->Result<()> {self.events.push(0x311688);self.objects.delete(id,self.counter,|_|{})}
+        fn group_begin(&mut self,group:i32,a2:i32,a3:i32)->Result<Option<MobyId>> {
+            assert_eq!((a2,a3),(0,0));self.walk.push(('b',group as usize));
+            self.current=self.groups[group as usize].iter().copied().find(|&id|self.objects.get(id).unwrap().state<0x80);Ok(self.current)
+        }
+        fn group_next(&mut self,from:MobyId,a2:i32,a3:i32)->Result<Option<MobyId>> {
+            assert_eq!((a2,a3),(0,0));self.walk.push(('n',from));
+            let group=self.objects.get(from).unwrap().group as u8 as usize;
+            let list=&self.groups[group];let at=list.iter().position(|&id|id==from).unwrap();
+            self.current=list[at+1..].iter().copied().find(|&id|self.objects.get(id).unwrap().state<0x80);Ok(self.current)
+        }
     }
     fn fixture(class:i16)->Fixture {
         let mut m=Moby::zeroed();m.o_class=class;m.state=0;m.update_fn=Some(UPDATE);m.hit_slot=9;
         m.pvars=vec![0;0x100];m.pvars[0x40..0x50].fill(0xa5);m.pvars[0x90..0xa0].fill(0xff);
         m.pvars[0xfc..0x100].copy_from_slice(&0xdead_beefu32.to_le_bytes());
-        Fixture {objects:Objects::new(vec![m],0),counter:0,events:vec![],rng:rc_game::rng::Rng {state:1234},queries:Default::default(),mission:None,native_ids:false}
+        Fixture {objects:Objects::new(vec![m],0),counter:0,events:vec![],rng:rc_game::rng::Rng {state:1234},queries:Default::default(),mission:None,native_ids:false,
+            groups:vec![],walk:vec![],current:None,ignores:vec![]}
     }
     #[test]
     fn required_stack_blocks_after_actual_owned_state_and_flags_without_replay() {
@@ -455,5 +689,63 @@ mod tests {
             advance_path_counter(&mut f.objects,0,&mut points).unwrap();assert_eq!(word(&f.objects,0,0xc0).unwrap(),u32::MAX);
             assert_eq!(points[0][3],state);
         }
+    }
+    fn grouped_fixture()->Fixture {
+        let mut f=fixture(0x1f4);let mut a=f.objects.get(0).unwrap().clone();let mut b=a.clone();
+        a.group=130u8 as i8;b.group=130u8 as i8;a.position=[10.,20.,7.,1.];b.position=[12.,20.,7.,1.];
+        a.pvars[0xac..0xb0].copy_from_slice(&4u32.to_le_bytes());
+        f.objects=Objects::new(vec![a,b],0);f.groups=vec![vec![];131];f.groups[130]=vec![0,1];f
+    }
+    #[test]
+    fn grouped_three_passes_preserve_unsigned_group_rng_nested_walk_and_previous_top_ignore() {
+        let mut f=grouped_fixture();f.queries=[Some(floor(None)),Some(floor(None)),None,None].into();
+        let mut expected=f.rng;expected.randi(2);expected.randi(2);
+        let mut p=GroupedStackProgress::default();assert_eq!(p.resume(0,&mut f).unwrap(),InitResult::Complete);
+        assert_eq!(f.rng,expected);assert_eq!(f.current,None);assert_eq!(p.last_distance,Some(2.));
+        assert_eq!(f.ignores,vec![None,None,None,Some(0)]);
+        assert_eq!(f.walk,vec![('b',130),('n',0),('n',1),('b',130),('n',0),('n',1),
+            ('b',130),('n',0),('n',1),('n',0),('n',1),('n',1)]);
+        assert_eq!(word(&f.objects,0,0xac).unwrap(),5);assert_eq!(word(&f.objects,1,0xac).unwrap(),1);
+        let walks=f.walk.len();assert_eq!(p.resume(0,&mut f).unwrap(),InitResult::Complete);
+        assert_eq!(f.walk.len(),walks);assert_eq!(f.rng,expected);
+    }
+    #[test]
+    fn grouped_carrier_pending_preserves_prior_queries_and_single_rng_stream() {
+        let mut f=grouped_fixture();let carrier=Moby::zeroed();let a=f.objects.get(0).unwrap().clone();let b=f.objects.get(1).unwrap().clone();
+        f.objects=Objects::new(vec![a,b,carrier],0);
+        f.queries=[Some(floor(None)),Some(floor(None)),Some(floor(Some(2)))].into();
+        let mut p=GroupedStackProgress::default();assert_eq!(p.resume(0,&mut f).unwrap(),InitResult::Pending(0x322028));
+        let rng=f.rng;let queries=f.events.len();let walks=f.walk.len();
+        assert_eq!(p.resume(0,&mut f).unwrap(),InitResult::Pending(0x322028));
+        assert_eq!(f.rng,rng);assert_eq!(f.events.len(),queries);assert_eq!(f.walk.len(),walks);
+    }
+    fn grouped_chain_fixture()->Fixture {
+        let mut f=grouped_fixture();f.native_ids=true;
+        for id in 0..2 {
+            let m=f.objects.get_mut(id).unwrap();m.rows[2]=[0.,0.,1.,0.];
+            for field in [0xa0,0xa4,0xf0] {m.pvars[field..field+4].copy_from_slice(&(-1i32).to_le_bytes());}
+        }
+        f.queries=[Some(floor(None)),Some(floor(Some(0))),None].into();f
+    }
+    #[test]
+    fn grouped_first_pass_builds_actual_stack_with_native_owner_zero_and_all_passes_finish() {
+        let mut f=grouped_chain_fixture();let mut p=GroupedStackProgress::default();
+        assert_eq!(p.resume(0,&mut f).unwrap(),InitResult::Complete);
+        assert_eq!(f.resolve_stack_link(0,0xa0).unwrap(),Some(Some(1)));
+        assert_eq!(f.resolve_stack_link(1,0xa4).unwrap(),Some(Some(0)));
+        assert_eq!(f.resolve_stack_link(1,0xa0).unwrap(),Some(None));
+        assert_eq!(f.objects.get(1).unwrap().position,[10.,20.,7.,1.]);
+        assert_eq!(f.ignores,vec![None,None,None]);assert_eq!(p.last_distance,Some(1.));
+        assert_eq!(f.walk.iter().filter(|(op,_)|*op=='b').count(),3);
+    }
+    #[test]
+    fn grouped_required_path_state_blocks_before_third_pass_without_replaying_prior_effects() {
+        let mut f=grouped_chain_fixture();
+        f.objects.get_mut(0).unwrap().pvars[0xc6..0xc8].copy_from_slice(&1i16.to_le_bytes());
+        let mut p=GroupedStackProgress::default();assert_eq!(p.resume(0,&mut f).unwrap(),InitResult::Pending(0x39d784));
+        assert_eq!(f.walk.iter().filter(|(op,_)|*op=='b').count(),2);
+        let rng=f.rng;let calls=f.events.len();let walks=f.walk.len();
+        assert_eq!(p.resume(0,&mut f).unwrap(),InitResult::Pending(0x39d784));
+        assert_eq!((f.rng,f.events.len(),f.walk.len()),(rng,calls,walks));
     }
 }

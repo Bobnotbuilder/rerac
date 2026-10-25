@@ -26,7 +26,7 @@ impl CrateServices for Services<'_> {
         let key=(id,self.world.objects.generation(id).unwrap());
         let mut progress=self.world.crate_stacks.remove(&key).unwrap_or_default();
         let result=progress.resume(id,self);self.world.crate_stacks.insert(key,progress);
-        match result? {InitResult::Complete=>Ok(true),InitResult::Pending(source)=>{self.pending=Some(source);Ok(false)}}
+        match result? {InitResult::Complete=>Ok(true),InitResult::Pending(source)=>{if self.pending.is_none() {self.pending=Some(source);}Ok(false)}}
     }
     fn icon_39ff50(&mut self,_id:MobyId,_mode:i32)->Result<Option<u32>> {self.pending=Some(0x39ff50);Ok(None)}
 }
@@ -35,6 +35,22 @@ impl StackServices for Services<'_> {
     fn line(&mut self,a:[f32;3],b:[f32;3],flags:u32,ignore:Option<MobyId>)->Result<Option<CollOutput>> {
         Ok(coll_line_m(self.collision,Some(&self.rigid.scene(self.world)),a,b,QueryFlags(flags),ignore))
     }
+    fn grouped_39d0c0(&mut self,id:MobyId)->Result<bool> {
+        let key=(id,self.world.objects.generation(id).unwrap());
+        let mut progress=self.world.crate_grouped.remove(&key).unwrap_or_default();
+        let result=progress.resume(id,self);self.world.crate_grouped.insert(key,progress);
+        match result? {InitResult::Complete=>Ok(true),InitResult::Pending(source)=>{if self.pending.is_none() {self.pending=Some(source);}Ok(false)}}
+    }
+    fn group_begin(&mut self,g:i32,a2:i32,a3:i32)->Result<Option<MobyId>> {self.world.group_begin(g,a2,a3)}
+    fn group_next(&mut self,from:MobyId,a2:i32,a3:i32)->Result<Option<MobyId>> {self.world.group_next(from,a2,a3)}
+    fn carrier_attach(&mut self,_owner:MobyId,hit:MobyId,_occlusion_owner:Option<MobyId>)->Result<Option<bool>> {
+        let Some(target)=self.world.objects.get(hit) else {return invalid("GC carrier query target absent");};
+        //322028 returnsNULL when the ACTUAL mode20 flag is clear. Do not
+        // demand a component service on this verified no-carrier branch.
+        if target.mode&0x20==0 {return Ok(Some(false));}
+        self.pending=Some(0x322028);Ok(None)
+    }
+    fn path_counter(&mut self,_owner:MobyId,_index:i32)->Result<bool> {self.pending=Some(0x39d784);Ok(false)}
     fn mission_word(&mut self,id:u8)->Result<Option<i32>> {Ok(self.missions.and_then(|m|m.get(id as usize)).copied())}
     fn delete_311688(&mut self,id:MobyId)->Result<()> {
         let grid=&mut self.world.grid;self.world.objects.delete(id,self.counter,|m|grid.remove(m))
