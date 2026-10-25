@@ -120,6 +120,26 @@ pub struct CamInput<'a> {
     pub pitch_normal: bool,
 }
 
+/// Retained source globals written by2d9760, owned by the existing camera.
+/// Native XYZ/scalar evaluation uses this module's existing f32 policy; this
+/// observation is not a certificate of VU bit parity or a complete2da160.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MotionGlobals {
+    pub delta: V3,                 //1b8e10
+    pub vertical_projection: V3,   //1b8e30
+    pub delta_length: f32,         //1b8e40
+    pub horizontal_length: f32,    //1b8e44
+    pub vertical_length: f32,      //1b8e48, signed
+    ///2d99c8 writes hero.z into1b8dac only on the interpolation branch.
+    /// Unknown retained input remains None when that branch is skipped.
+    pub smoothed_hero_w: Option<f32>,
+}
+
+/// A represented native step cannot acknowledge the entire guest service:
+/// full-vector copies retain W lanes absent from the current V3 owners.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MotionResetCoverage { XyzAndScalarsOnly }
+
 impl CamInput<'_> {
     /// `0x2de878(a, b, flags, Ratchet, 0)`: the hit point.
     fn line(&self, a: V3, b: V3, flags: u32) -> Option<V3> { self.coll.and_then(|c| coll_line_m(c, self.mobys, a, b, QueryFlags(flags), self.hero_moby)).map(|o| o.point) }
@@ -260,7 +280,12 @@ pub struct FollowCamera {
     prev_hero: V3,
     move_dir: V3,
     h_speed: f32,
+    motion_delta: V3,
+    vertical_motion: V3,
+    motion_length: f32,
+    vertical_speed: f32,
     hero_s: V3,
+    hero_s_w: Option<f32>,
     hero_s_v: f32,
     yaw_hist: [f32; 5],
     /// `0x1b17cc` / `0x1b17d0`: the line and sphere chain flags.
@@ -299,6 +324,23 @@ impl FollowCamera {
         self.init(inp);
         (self.d0_dist, self.d0_pivot_h, self.d0_look_h) = (self.dist, self.pivot_h, self.look_h);
         self.hero_s = inp.hero.pos;
+    }
+
+    /// Represented2d9760 slice, borrowing this camera's existing history.
+    /// `original_gravity` is the live vector18a0e0, NOT Hero's scalar/selector
+    /// gravity field. No guessed mapping or normal-NewGame provenance.
+    ///
+    /// Does not satisfy camera_teleport::Call::Motion: original full-vector W
+    /// lanes still need a proven representation at their downstream owners.
+    pub fn reset_motion_represented(&mut self, inp: &CamInput, original_gravity: V3) -> MotionResetCoverage {
+        self.pre_motion_with_gravity(inp, norm(original_gravity, -1.0));
+        MotionResetCoverage::XyzAndScalarsOnly
+    }
+
+    pub fn motion_globals(&self) -> MotionGlobals {
+        MotionGlobals {delta:self.motion_delta,vertical_projection:self.vertical_motion,
+            delta_length:self.motion_length,horizontal_length:self.h_speed,
+            vertical_length:self.vertical_speed,smoothed_hero_w:self.hero_s_w}
     }
 
     /// `0x424908` (not switched in from another camera's pose).
@@ -425,15 +467,26 @@ impl FollowCamera {
     /// motion (direction and length), the smoothed hero (z springs 0.0075 / 0.175 unless in a jump, `0x18c2c0` =
     /// 0x50), the yaw history.
     fn pre_motion(&mut self, inp: &CamInput) {
+        // Preserve the validated upstream on-foot wrapper. Teleport recovery
+        // supplies the actual original gravity through the separate entry.
+        self.pre_motion_with_gravity(inp, [0.0, 0.0, 1.0]);
+    }
+
+    fn pre_motion_with_gravity(&mut self, inp: &CamInput, mut u: V3) {
         let h = inp.hero;
-        let mut u = [0.0, 0.0, 1.0];
         self.up2_prev = self.up2;
         self.up2 = u;
+        // Original stack temporary is nudged only for the up spring; its
+        // subsequent projection uses that same temporary, not up2.
         if dot(self.up_s, u) < -0.98 { u = add(u, [0.2; 3]); }
         self.up_s = interp3(self.up_s, u, 0.015, 0.2, &mut self.up_vel);
         self.up_s = norm(self.up_s, 1.0);
         let delta = sub(h.pos, self.prev_hero);
-        let hm = sub(delta, scale(self.up2, dot(delta, self.up2)));
+        self.motion_delta = delta;
+        self.motion_length = len(delta);
+        self.vertical_speed = dot(delta, u);
+        self.vertical_motion = scale(u, self.vertical_speed);
+        let hm = sub(delta, self.vertical_motion);
         self.h_speed = len(hm);
         self.move_dir = if self.h_speed == 0.0 { [0.0; 3] } else { scale(hm, 1.0 / self.h_speed) };
         self.prev_hero = h.pos;
@@ -441,6 +494,7 @@ impl FollowCamera {
         self.hero_s[1] = h.pos[1];
         if !(h.cam_mode == 0x50 && h.state != 0x11) {
             self.hero_s[2] = interp(self.hero_s[2], h.pos[2], 0.0075, 0.175, 0.0, &mut self.hero_s_v);
+            self.hero_s_w = Some(h.pos[2]);
         }
         self.yaw_hist.rotate_left(1);
         self.yaw_hist[4] = h.rot[2];
@@ -1078,6 +1132,31 @@ fn seg_dist(p: V3, a: V3, b: V3) -> (f32, V3) {
 #[cfg(test)]
 mod reset_tests {
     use super::*;
+    #[test]
+    fn represented_motion_uses_explicit_gravity_and_retains_original_globals() {
+        let mut h=Hero::new();h.pos=[4.,3.,2.];h.rot[2]=0.75;
+        let input=CamInput {hero:&h,coll:None,mobys:None,hero_moby:None,rstick:[0.;2],yaw_normal:true,pitch_normal:true};
+        let mut c=FollowCamera::default();c.yaw_hist=[1.,2.,3.,4.,5.];
+        assert_eq!(c.reset_motion_represented(&input,[-2.,0.,0.]),MotionResetCoverage::XyzAndScalarsOnly);
+        let globals=c.motion_globals();
+        assert_eq!(c.up2,[1.,0.,0.]);assert_eq!(globals.delta,h.pos);
+        assert_eq!(globals.vertical_projection,[4.,0.,0.]);assert_eq!(globals.vertical_length,4.);
+        assert_eq!(globals.delta_length,29f32.sqrt());assert_eq!(globals.horizontal_length,13f32.sqrt());
+        assert_eq!(globals.smoothed_hero_w,Some(2.));assert_eq!(c.yaw_hist,[2.,3.,4.,5.,0.75]);
+        assert_eq!(c.prev_hero,h.pos);
+    }
+    #[test]
+    fn represented_motion_preserves_unknown_w_in_jump_and_uses_nudged_projection() {
+        let mut h=Hero::new();h.pos=[4.,3.,2.];h.cam_mode=0x50;h.state=0;
+        let input=CamInput {hero:&h,coll:None,mobys:None,hero_moby:None,rstick:[0.;2],yaw_normal:true,pitch_normal:true};
+        let mut c=FollowCamera::default();c.up_s=[-1.,0.,0.];c.hero_s=[0.,0.,99.];
+        c.reset_motion_represented(&input,[-1.,0.,0.]);
+        assert_eq!(c.hero_s,[4.,3.,99.]);assert_eq!(c.hero_s_w,None);
+        assert!((c.vertical_speed-5.8).abs()<1e-6);
+        assert!((c.vertical_motion[0]-6.96).abs()<1e-6);
+        c.hero_s_w=Some(17.);c.reset_motion_represented(&input,[-1.,0.,0.]);
+        assert_eq!(c.hero_s_w,Some(17.),"skip must retain source W rather than invent zero");
+    }
     #[test]
     fn reset_retains_motion_history_and_snaps_existing_type0_record() {
         let mut h=Hero::new();h.pos=[10.,20.,30.];h.rot=[0.,0.,0.75];
