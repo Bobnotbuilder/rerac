@@ -36,3 +36,14 @@ Static source identity: SCUS_972.68 USA v2.00, SHA256 `64dbf0d4c527d90a2a4ceb47b
 **Class1330 state0:**2f51a0 returns whether byte1a7a12 is nonzero, conditionally calls322730(18hex);368560 writes1 to halfword152c26. Optional camera record is selected by owned pvars+4 with stride80hex;311320(0xd54) allocates an original class,32a748 connects it to owner, and pvars+18 stores the result. Further table/pose/script state is required. These source observations do not establish an enemy/mission identity. Dependencies must be ported together before executing the callback; no substitute actor is created.
 
 Private evidence includes full generated C++, original overlay sections, analyzer logs, all30,211 logged overlay call-site records (16,341 distinct pairs), and address/word consistency receipts. Direct-call graphs omit computed dispatch; an empty callers list does not imply unreachable code. No generated proprietary C++, ELF or converted payload is committed.
+
+## Additional next-blocker global trace (no new native mechanic)
+
+The query2f51a0 tests byte1a7a12 !=0. A full generated-source constant-reference search found41 operation references, with direct writes in the following functions. Other register-relative writers may exist; this is not whole-program alias closure.
+
+| Context / file | Logged callers | Logged direct callees | Investigated effects / status |
+|---|---|---|---|
+| Boot2df7a0, B/sub_002DF7A0_0x2df7a0.cpp |287140 at287ad8;2de168 at2de24c/2de654 |283410,283460,288a20,289298,299bf8,29bb90 (10sites) | Entry reads byte1a7a12, increments it and writes at2df804; also writes1a7a3a/1a7a3b. Full function identity/argument semantics and remaining side effects UNVERIFIED; no native implementation |
+| Aranos359010, L/sub_00359010_0x359010.cpp |2f2af0 at2f3488;3579d8 at357abc/357ec4 |2eebc8,2eec18,2f43d0,2f4cb8,30b0b0,30d048 (10sites) | Corresponding entry reads/increments byte1a7a12, writes at359074. High static confidence for this slice; full routine and observable purpose UNVERIFIED; no native implementation |
+
+These entry slices explain a missing original state dependency, not a certified pause/save/debug system. Resolve exits/callers and native title-state ownership before supplying this value to class1330. Full private source references and call edges are retained in global-1a7a12-static-refs.json and sub_00359010-call-edges.json / sub_002DF7A0-call-edges.json.

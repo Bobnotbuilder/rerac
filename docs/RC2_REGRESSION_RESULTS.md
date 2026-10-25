@@ -17,7 +17,7 @@ Source local112c2aa968d18148c999237c7f1222e1e9cfa5ac / publica774e199aa7f05e92e6
 | Overlay-wrapper synthetic contracts |4 PASS; initialized bytes, memory-only NOBITS, malformed/truncated/overlapping/entry validation |
 | Existing iOS Python contracts |59 PASS |
 | Local full rc-engine cargo check --offline |BLOCKED_ENVIRONMENT: pinned winit revision94d6a23c425023810a0879aa7a03abb2e4f1decc unavailable offline |
-| Hosted native validation |Current internal run40144142983 Intel/macOS compile and hosted headless/overlay/synthetic Metal PASS; ARM64 packaging pending; prior d7105d3 run40116110147 all jobs SUCCESS |
+| Hosted native validation |Current internal run40144142983 ALL3JOBS PASS: Intel/macOS, ARM64 package/matched symbols, headless/overlay, synthetic Metal and iOS27 batched/unbatched startup/controller/resize/AA/shadow probes; prior d7105d3 run40116110147 all jobs SUCCESS |
 | Current original-data GPU / physical iPhone / Backbone |NOT_TESTED |
 | Full route, combat, scripted completion, sustained performance |NOT_TESTED / INCOMPLETE |
 
@@ -25,6 +25,8 @@ Initial controller-vector unit run failed on one phase's last bit: an independen
 
 Private logs: `evidence/ps2recomp-mechanics-{formats,rac1,game2}-20261025.log`, `mechanics-fall-original-20261025.log`, `ps2recomp-mechanics-fall-negative-control-20261025.log`, `ps2recomp-mechanics-initial-oracle-failure-20261025.log`, `ps2recomp-mechanics-ios-contracts-20261025.log`, `ps2recomp-mechanics-local-engine-check-20261025.log`. Original-data tests were actually opted into the owned ISO; generic CI without that private input reports NOT_TESTED for those fixtures.
 
-No user-facing IPA produced. Internal CI packaging is development evidence only; complete-Aranos acceptance remains false.
+No user-facing IPA released. Internal unsigned IPA and UUID-matched symbols were generated and verified; package sourcea774e199, run40144142983. It remains INTERNAL_EXPERIMENTAL and withheld; complete-Aranos acceptance remains false.
 
 Additional original-overlay consistency audit:426951 instruction-comment records/425370 unique PCs, zero word mismatches/unmapped. Boot ELF is byte-identical to the existing private extracted source. Local xctrace discovery lists only the Mac; Intel HD Graphics5000 reports Metal support, but connector artifact retrieval could not be materialized because the shell cannot resolve the temporary download host. No local GPU execution was fabricated.
+
+Final source provenance:728 validation-workspace source files checked byte-identical; native rc-game2 rebuilt offline successfully. Recovered LEVEL0.WAD byte-identical to the file in the original integration-test ISO (15465088bytes, SHA1 892d1c0f4a8d94fdf479273483d6e0eaa425000f). Native CI reports original-data fixtures NOT_TESTED where its private ISO is absent.

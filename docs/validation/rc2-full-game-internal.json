@@ -94,10 +94,10 @@
   "native_validation": {
     "current_run": 40144142983,
     "current_source": "a774e199aa7f05e92e630f3f764680303de0672d",
-    "current_status": "IN_PROGRESS",
-    "current_source_status": "INTEL_NATIVE_COMPILE_AND_HOSTED_REGRESSIONS_SYNTHETIC_GPU_PASS_ARM64_PENDING",
-    "last_all_jobs_pass_source": "d7105d3ec60bbf822c3853b242cfb77852939776",
-    "last_all_jobs_pass_run": 40116110147,
+    "current_status": "SUCCESS_ALL_JOBS",
+    "current_source_status": "PASS_INTEL_ARM64_PACKAGE_SYMBOLS_IOS27_SYNTHETIC_GRAPHICS_NOT_ORIGINAL_GAME_DEVICE_VALIDATION",
+    "last_all_jobs_pass_source": "a774e199aa7f05e92e630f3f764680303de0672d",
+    "last_all_jobs_pass_run": 40144142983,
     "first_world_source": "e64a0ee00c466af99eaa0d2b54d094aee57e5e9c",
     "first_world_run": 40115286314,
     "first_world_intel": "PASS",
@@ -197,7 +197,7 @@
     "injected_receiver_hit_is_wrench_swing": false,
     "graphics_or_device_proof_for_current_world": false,
     "Aranos_complete": false,
-    "engine_adapter_compilation": "PASS_CURRENT_SOURCE_INTEL_NATIVE_CI_ARM64_PENDING"
+    "engine_adapter_compilation": "PASS_CURRENT_SOURCE_INTEL_AND_ARM64_NATIVE_CI"
   },
   "code_checkpoints": [
     {
@@ -215,7 +215,7 @@
   ],
   "ps2recomp_mechanics_recovery": {
     "scope": "ORIGINAL_GAMEPLAY_MECHANICS_RECOVERY_INTERNAL_NOT_RELEASE",
-    "updated_utc": "2026-10-24T23:53:56.590411+00:00",
+    "updated_utc": "2026-10-25T00:14:40.050225+00:00",
     "starting_local_handoff": "4cae0b30c4d24041c8c6ceaaeca351ff9373a4d9",
     "starting_local_code": "0e217fc64071fd0828ac270935afc8253f5327c6",
     "starting_public_handoff": "5761c669226b36198b0066d0c4ac5369379ccacf",
@@ -255,7 +255,9 @@
       "boot_sha256": "64dbf0d4c527d90a2a4ceb47b23d81848b62165a6449156729ca44711aa3e3ee",
       "boot_matches_existing_private_source": true,
       "PS2Recomp_revision": "e5636981a1c9de368f6b71e819c3dc188dfedbf4",
-      "archives_crc": "PASS"
+      "archives_crc": "PASS",
+      "iso_and_recovery_LEVEL0_byte_identical": true,
+      "LEVEL0_sha1": "892d1c0f4a8d94fdf479273483d6e0eaa425000f"
     },
     "static_analysis": {
       "boot_function_starts": 2884,
@@ -288,23 +290,25 @@
       "ios_contracts_pass": 59,
       "overlay_wrapper_pass": 4,
       "fall_negative_control": "EXPECTED_FAIL",
-      "initial_math_oracle_failure": "retained; IEEE truncate-only oracle corrected with independently reconstructed existing PS2 guard-bit model; not hardware parity"
+      "initial_math_oracle_failure": "retained; IEEE truncate-only oracle corrected with independently reconstructed existing PS2 guard-bit model; not hardware parity",
+      "validation_source_files_byte_identical": 728
     },
     "native_validation": {
       "run": 40144142983,
       "source": "a774e199aa7f05e92e630f3f764680303de0672d",
       "Intel_compile": "PASS",
-      "ARM64_and_simulator": "IN_PROGRESS",
+      "ARM64_and_simulator": "PASS_INTERNAL_UNSIGNED_PACKAGE_AND_IOS27_SYNTHETIC_PROBES",
       "headless_and_synthetic_GPU": "PASS",
-      "last_all_jobs_pass_run": 40116110147,
-      "last_all_jobs_pass_source": "d7105d3ec60bbf822c3853b242cfb77852939776",
+      "last_all_jobs_pass_run": 40144142983,
+      "last_all_jobs_pass_source": "a774e199aa7f05e92e630f3f764680303de0672d",
       "local_engine_check": "BLOCKED_UNCACHED_PINNED_WINIT_OFFLINE",
       "local_binary_retrieval": "BLOCKED_DOWNLOAD_HOST_DNS",
       "device_discovery": "NO_CONNECTED_IPHONE",
       "local_Metal": "Intel HD Graphics5000 supported",
       "current_original_data_GPU": "NOT_TESTED",
       "current_physical_iPhone": "NOT_TESTED",
-      "hosted_headless_log": "evidence/ps2recomp-mechanics-hosted-headless-20261025.log"
+      "hosted_headless_log": "evidence/ps2recomp-mechanics-hosted-headless-20261025.log",
+      "hosted_device_log": "evidence/ps2recomp-mechanics-hosted-device-20261025.log"
     },
     "release_policy": "NO_USER_IPA_BEFORE_COMPLETE_ARANOS_NON_HARDWARE_GATES",
     "Aranos_complete": false,
@@ -317,6 +321,36 @@
     "Shared_Core_promoted": false,
     "installed_engine_pointer_changed": false,
     "RAC1_runtime_saves_identity_changed": false,
-    "next_objective": "Port original class1330/source3846d0 state0 dependencies: query2f51a0/conditional322730, service368560, camera access, class0xd54 allocation311320/owner link32a748 and remaining table/pose/script effects. Resume same initialization cursor at object24. Also retain class132d state1 query383fc0/queued3842f8 blocker; finish actual New Game state and hero/item/wrench/hit/damage chain before gameplay claims."
+    "next_objective": "Port original class1330/source3846d0 state0 dependencies: query2f51a0/conditional322730, service368560, camera access, class0xd54 allocation311320/owner link32a748 and remaining table/pose/script effects. Resume same initialization cursor at object24. Also retain class132d state1 query383fc0/queued3842f8 blocker; finish actual New Game state and hero/item/wrench/hit/damage chain before gameplay claims.",
+    "internal_package": {
+      "scope": "INTERNAL_EXPERIMENTAL_NOT_USER_RELEASE",
+      "source": "a774e199aa7f05e92e630f3f764680303de0672d",
+      "run": 40144142983,
+      "IPA_artifact": 12579804216,
+      "symbols_artifact": 12579564724,
+      "build_evidence_artifact": 12581280342,
+      "ipa_sha256": "07bd7d50ab8ddd7bb2cdfff0579bfbb0fb24f55dacee19123494620f2189d697",
+      "executable_and_dsym_uuid": "9355aa34-3708-3106-a056-700f00a03e41",
+      "architecture": "arm64",
+      "signed": false,
+      "bundle": "org.rerac.game.iospoc",
+      "user_delivery": false
+    },
+    "source_reconciliation": {
+      "different_tracked_blobs": 0,
+      "remote_only_preserved": [
+        "docs/assets/rerac-logo.png",
+        "tools/ghidra/names/clusters.tsv"
+      ]
+    },
+    "CPU_FIXTURE_FIRST_BLOCKER": {
+      "moby": 24,
+      "class": "0x1330",
+      "source": "0x3846d0",
+      "state": 0,
+      "initializing": true
+    },
+    "session_state": "CHECKPOINTED_INCOMPLETE",
+    "active_background_engineering": false
   }
 }

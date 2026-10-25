@@ -19,4 +19,14 @@ Current native CI40144142983 is INTERNAL_EXPERIMENTAL. Prior sourced7105d3 run40
 
 Primary classifications GAME_SPECIFIC for native mechanics; SHARED_TESTING for test/CI work; overlay wrapper is GAME_SPECIFIC analysis tooling. No Shared Core promotion/adoption/version update; no other engine adoption/review forced. Any future generic PS2 overlay recovery promotion requires its own governance and cross-title validation.
 
-Current run40144142983 Intel native compilation and headless/overlay/synthetic Metal validation PASS. ARM64 packaging/simulator job still in progress. Hosted originals report NOT_TESTED without the private ISO; the10 original-data passes above are local, explicitly opted-in tests.
+Current run40144142983 ALL3JOBS PASS: Intel native compile, ARM64 unsigned app/package/matched symbols, headless/overlay/synthetic Metal and iOS27 batched/unbatched startup/controller/resize/AA/shadow validation. Hosted originals report NOT_TESTED without the private ISO; the10 original-data passes above are local, explicitly opted-in tests.
+
+| Current feature | Implemented | Native app compiled | Original-data CPU exercised | Original-data GPU / device |
+|---|---|---|---|---|
+| Fall6 landing-lag steering gate |Yes|Intel/macOS and ARM64|Yes, full supported hero chain fixture + negative control|NOT_TESTED|
+| Class132d state0 initialization |Yes|Intel/macOS and ARM64|Yes, actual owner/pvars/RNG through world initialization|NOT_TESTED|
+| Class132d state1 query/draw |No|No implementation|Unsupported is explicitly asserted|NOT_TESTED|
+| Class1330 state0 |No|No implementation|Actual next unsupported callback asserted|NOT_TESTED|
+| Generated PS2Recomp C++ |Analysis material only|Not linked into app|Not executed|NOT_TESTED|
+
+Internal IPA SHA256 `07bd7d50ab8ddd7bb2cdfff0579bfbb0fb24f55dacee19123494620f2189d697`; ARM64 executable/dSYM UUID `9355aa34-3708-3106-a056-700f00a03e41`. Effective bundleorg.rerac.game.iospoc preserved. No user-facing package delivery: complete-Aranos release gates remain false.
