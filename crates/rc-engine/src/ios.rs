@@ -36,6 +36,7 @@ pub fn begin_launch() {
     }
     diagnostic("IOS_ENTRY", &format!("version={} source={}",
         env!("CARGO_PKG_VERSION"), option_env!("RERAC_SOURCE_COMMIT").unwrap_or("UNKNOWN")));
+    diagnostic("RC2_EXPERIMENTAL_PROGRESS_TEST", "build=10 label=RC2 Experimental Progress Test; explicit RC2Native opt-in; incomplete world/gameplay; production RC2 Play disabled");
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         diagnostic("RUST_PANIC", &info.to_string());
