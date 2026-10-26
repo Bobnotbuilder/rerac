@@ -9,9 +9,9 @@
   "target": "aarch64-apple-ios",
   "bundle_identifier": "org.rerac.game.iospoc",
   "source_implementation": "SELECTIVE_UPSTREAM_89C87E_NATIVE_RC2_FRONTEND_PLAYER_SHARED_RENDERERS_EXPERIMENTAL",
-  "previous_ci_validated_commit": "80d2fb1093429be32d0e1ff09ca828163be015cf",
+  "previous_ci_validated_commit": "629e909e664bdf6fc8da065a44f416b9fc3202f9",
   "hud_evidence": "USER_REPORTED_A15_210_SECONDS_EXACT_SOURCE_SETTINGS_UNCONFIRMED",
-  "device_build": "PENDING_CURRENT_TEST_SOURCE_HOSTED_VALIDATION",
+  "device_build": "PASS_HOSTED_CURRENT_SOURCE_RUN_40304344555",
   "new_physical_gameplay": "NOT_TESTED",
   "new_physical_fullscreen": "NOT_TESTED",
   "new_physical_energy_improvement": "NOT_MEASURED",
@@ -26,5 +26,12 @@
   "RC2_experimental_entry": "EXISTING_EXPLICIT_RC2Native_SIDECAR",
   "upstream_source": "89c87e98f9d8296187df2a6310c67b32144090d3",
   "release_label": "RC2 Experimental Progress Test",
-  "release_scope": "ONE_INTERMEDIATE_USER_AUTHORIZED_DEVICE_TEST_20261026"
+  "release_scope": "ONE_INTERMEDIATE_USER_AUTHORIZED_DEVICE_TEST_20261026",
+  "test_source_commit": "a6c155ea4e540bee5c5d5987b032898288e55d71",
+  "test_ci_run": 40304344555,
+  "test_ipa_sha256": "e0d688a89dedb0d9be3500a63ee7ee2a17f4d5b69e448d1590835368105a48aa",
+  "test_dsym_uuid": "5acd6dac-f68c-3608-9864-6ffcccfe5fca",
+  "test_download": "https://github.com/Bobnotbuilder/rerac/actions/runs/40304344555/artifacts/12641734866",
+  "test_symbols": "https://github.com/Bobnotbuilder/rerac/actions/runs/40304344555/artifacts/12642496264",
+  "test_release_status": "READY_FOR_ONE_AUTHORIZED_PHYSICAL_DEVICE_TEST_COMPLETE_ARANOS_UNMET"
 }

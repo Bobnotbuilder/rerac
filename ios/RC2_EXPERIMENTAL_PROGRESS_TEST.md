@@ -11,7 +11,7 @@ The test snapshot includes completed camera FOV/scalar helpers and earlier valid
 1. Preserve a copy of existing ReRAC Documents, especially ReRACSupport and its memory card, before an app update. Do not uninstall ReRAC.
 2. Extract the downloaded IPA artifact ZIP. Use the physical-device `.ipa` inside with the established Sideloadly workflow, using the same Apple ID and effective bundle-identity options as the installed app. Install over the existing app. The unsigned bundle identity remains `org.rerac.game.iospoc`.
 3. Keep the existing private `Documents/RC2Native` resources in place. No ISO, WAD, converted model, texture or audio is included in the download. Do not copy RC2 data over `ReRACData`.
-4. The existing explicit RC2 development entry is `Documents/RC2Native/ENABLE_NATIVE_RC2.txt`, containing exactly `RC2_NATIVE_ARANOS_EXPERIMENTAL_V1` followed by one newline. Existing valid markers need no replacement. This opt-in does not enable RC2 Play in the normal game library. Remove only this marker while the app is closed to return to the normal RAC1 launch route.
+4. The existing explicit RC2 development entry is `Documents/RC2Native/ENABLE_NATIVE_RC2.txt`, containing exactly `RC2_NATIVE_ARANOS_EXPERIMENTAL_V1` followed by one newline. Existing valid markers need no replacement. This opt-in does not enable RC2 Play in the normal game library. Temporarily rename only this marker while the app is closed to return to the normal RAC1 launch route.
 5. Launch with Backbone connected. Check title/menu, New Game, original Aranos/character rendering, movement, jumping, follow camera, ground/raised geometry and frontend/cinematic audio. Report what actually works on this device; none of these current-source device results is assumed from automated tests.
 
 ## Boundaries
@@ -27,3 +27,18 @@ After reproducing an issue, close the app and copy `Documents/ReRACSupport/start
 For a short collision/input capture only, `Documents/RC2Native/ENABLE_COLLISION_TRACE.txt` may contain exactly `RC2_COLLISION_INPUT_TRACE_V1` plus newline. This enables verbose per-tick diagnostics and can affect performance; remove only that optional marker after the capture. Settings for this RC2 route remain in `RC2NativeSupport/settings.json`; RAC1 saves remain in `ReRACSupport/memcard`. RC2 saving is not implemented.
 
 Physical iPhone 13 Pro Max/Backbone validation, speaker output and frame-time/memory/stability measurements remain the user's next test. Automated Metal checks use synthetic assets; hosted runners do not contain the private original-game ISO.
+
+
+## Verified delivery
+
+All three current-source CI jobs passed in run40304344555. [Download IPA artifact ZIP](https://github.com/Bobnotbuilder/rerac/actions/runs/40304344555/artifacts/12641734866); extract ReRAC-iOS-arm64-unsigned.ipa. [Matching dSYM/debug symbols](https://github.com/Bobnotbuilder/rerac/actions/runs/40304344555/artifacts/12642496264). [Device build and simulator evidence](https://github.com/Bobnotbuilder/rerac/actions/runs/40304344555/artifacts/12642967349). These are physical-device unsigned app artifacts, not simulator packages.
+
+SHA-256 of the IPA inside the ZIP (not the outer artifact ZIP):
+
+```text
+e0d688a89dedb0d9be3500a63ee7ee2a17f4d5b69e448d1590835368105a48aa
+```
+
+Executable and dSYM UUID: 5acd6dac-f68c-3608-9864-6ffcccfe5fca (arm64, matching PASS). Hosted verification checked the actual app and IPA contents, iOS platform2, identifierorg.rerac.game.iospoc, unsigned code, bundled shaders, system frameworks and archive integrity. The managed shell could not download the binary locally because of DNS restrictions; the successful hosted verifier and retained logs supply these checks.
+
+Current tests:100 GC units,715 RAC1 units,179 format units/1optional ignored,59iOS contracts; separate local owned-ISO10Aranos+2music cases passed. Simulator checks covered startup/import without game data, synthetic controller-to-pad, display/resize and batched/unbatchedAA/shadow probes. These are not original-game GPU or physical-device gameplay validation. Physical iPhone13ProMax/Backbone, speaker output and performance remain NOT_TESTED.
